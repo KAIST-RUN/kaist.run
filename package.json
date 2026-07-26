@@ -11,6 +11,7 @@
     "check-content": "node scripts/check-content.mjs"
   },
   "dependencies": {
+    "@swc/helpers": "^0.5.23",
     "gray-matter": "^4.0.3",
     "next": "16.2.12",
     "next-intl": "^4.13.4",
