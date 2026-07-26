@@ -25,13 +25,9 @@ jobs:
           cache: "npm"
       - run: npm ci
       - name: Setup Pages
-        id: setup_pages
         uses: actions/configure-pages@v5
       - name: Build with Next.js
         run: npm run build
-        env:
-          PAGES_BASE_PATH: ${{ steps.setup_pages.outputs.base_path }}
-          NEXT_PUBLIC_BASE_PATH: ${{ steps.setup_pages.outputs.base_path }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
