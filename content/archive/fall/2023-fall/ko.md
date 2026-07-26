@@ -1,0 +1,16 @@
+---
+title: "2023 KAIST 13th ICPC Mock Competition"
+season: fall
+year: 2023
+date: "2023-10-09"
+resources:
+  - file: editorial.pdf
+    label: "풀이"
+judges:
+  - name: "BOJ"
+    url: "https://www.acmicpc.net/category/detail/3999"
+  - name: "QOJ"
+    url: "https://qoj.ac/contest/1806"
+---
+
+2023 KAIST 13th ICPC Mock Competition은 10월 9일(한글날) 정오부터 KAIST N1 102호에서 진행되었습니다. 대회 안내는 [공지사항](/ko/notices/2023-fall-contest)에서 확인하실 수 있습니다.

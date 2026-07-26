@@ -1,0 +1,49 @@
+{
+  "site": {
+    "name": "RUN",
+    "tagline": "KAIST Algorithmic Problem Solving Club"
+  },
+  "nav": {
+    "about": "About",
+    "notices": "Notices",
+    "archive": "Contest Archive",
+    "contact": "Contact"
+  },
+  "theme": {
+    "light": "Light mode",
+    "dark": "Dark mode",
+    "toggle": "Toggle theme"
+  },
+  "locale": {
+    "switch": "Switch language",
+    "ko": "한국어",
+    "en": "English"
+  },
+  "home": {
+    "bannerLabel": "Notice",
+    "since": "SINCE 2005",
+    "heroSubtitle": "Solving problems together, growing together.",
+    "description": "RUN was founded to study algorithmic problem solving and prepare for related competitions.",
+    "recentNews": "Recent News",
+    "viewAll": "View all"
+  },
+  "notices": {
+    "title": "Notices",
+    "empty": "No notices yet.",
+    "back": "Back to list",
+    "readMore": "Read more"
+  },
+  "archive": {
+    "title": "Contest Archive",
+    "description": "These are the competitions hosted by RUN.",
+    "spring": "KAIST RUN Spring Contest",
+    "fall": "KAIST ICPC Mock Competition",
+    "resources": "Resources",
+    "judges": "Online Judges",
+    "empty": "No contests yet.",
+    "back": "Back to list"
+  },
+  "footer": {
+    "rights": "KAIST RUN. All rights reserved."
+  }
+}
