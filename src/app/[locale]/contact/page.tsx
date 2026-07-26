@@ -59,9 +59,9 @@ export default async function ContactPage({
   const year = new Date().getFullYear();
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12 sm:px-10">
-      <div className="rounded-3xl border border-black/10 p-8 sm:p-12 dark:border-white/15">
-        <h1 className="text-3xl font-bold">{contact.title}</h1>
+    <main className="animate-fade-in-up mx-auto max-w-3xl px-6 py-12 sm:px-10 sm:py-16 lg:max-w-4xl lg:px-12">
+      <div className="rounded-3xl border border-black/10 p-8 sm:p-12 lg:p-16 dark:border-white/15">
+        <h1 className="text-3xl font-bold sm:text-4xl">{contact.title}</h1>
         <p className="mt-2 text-sm font-bold opacity-60">
           {year} © {t("name")}
         </p>
@@ -103,7 +103,7 @@ export default async function ContactPage({
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 text-sm hover:opacity-70 sm:text-base"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-black/10 dark:border-white/15">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/10 dark:border-white/15">
                       <SocialIcon platform={social.platform} />
                     </span>
                     {social.label}

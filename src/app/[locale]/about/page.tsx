@@ -18,10 +18,10 @@ export default async function AboutPage({
   const html = await markdownToHtml(about.content);
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12 sm:px-10">
-      <h1 className="text-3xl font-bold">{about.title}</h1>
+    <main className="animate-fade-in-up mx-auto max-w-2xl px-6 py-12 sm:px-10 sm:py-16 lg:max-w-3xl lg:px-12">
+      <h1 className="text-3xl font-bold sm:text-4xl">{about.title}</h1>
       <div
-        className="prose prose-neutral mt-6 max-w-none dark:prose-invert"
+        className="prose prose-neutral mt-6 max-w-none sm:prose-lg dark:prose-invert"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </main>

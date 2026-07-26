@@ -19,7 +19,7 @@ export default function ThemeToggle() {
       onClick={() => setTheme(isDark ? "light" : "dark")}
       aria-label={t("toggle")}
       title={t("toggle")}
-      className="flex h-8 w-8 items-center justify-center rounded-full border border-black/10 text-sm transition-opacity hover:opacity-70 dark:border-white/10"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/10 text-sm transition-opacity hover:opacity-70 dark:border-white/10"
     >
       {!mounted ? null : isDark ? "🌙" : "☀️"}
     </button>

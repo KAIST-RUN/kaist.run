@@ -33,12 +33,15 @@ export default async function ArchiveEntryPage({
   const html = await markdownToHtml(entry.content);
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12 sm:px-10">
-      <Link href={`/archive/${season}`} className="text-sm opacity-60 hover:opacity-100">
+    <main className="animate-fade-in-up mx-auto max-w-2xl px-6 py-12 sm:px-10 sm:py-16 lg:max-w-3xl lg:px-12">
+      <Link
+        href={`/archive/${season}`}
+        className="inline-block py-1 text-sm opacity-60 hover:opacity-100"
+      >
         ← {t("back")}
       </Link>
-      <h1 className="mt-4 text-2xl font-bold">{entry.title}</h1>
-      <p className="mt-1 text-xs opacity-60">{entry.date}</p>
+      <h1 className="mt-4 text-2xl font-bold sm:text-3xl">{entry.title}</h1>
+      <p className="mt-1 text-xs opacity-60 sm:text-sm">{entry.date}</p>
 
       {entry.resources && entry.resources.length > 0 && (
         <div className="mt-6 flex flex-col gap-2">
@@ -54,7 +57,7 @@ export default async function ArchiveEntryPage({
                       ? resource.file
                       : withBasePath(`/archive/${season}/${slug}/${resource.file}`)
                   }
-                  className="rounded-full border border-black/10 px-4 py-1.5 text-sm transition-colors hover:bg-black/[.03] dark:border-white/10 dark:hover:bg-white/[.04]"
+                  className="rounded-full border border-black/10 px-4 py-2 text-sm transition-colors hover:bg-black/[.03] dark:border-white/10 dark:hover:bg-white/[.04]"
                   {...(isExternal
                     ? { target: "_blank", rel: "noopener noreferrer" }
                     : { download: true })}
@@ -87,7 +90,7 @@ export default async function ArchiveEntryPage({
       )}
 
       <div
-        className="prose prose-neutral mt-8 max-w-none dark:prose-invert"
+        className="prose prose-neutral mt-8 max-w-none sm:prose-lg dark:prose-invert"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </main>
