@@ -17,7 +17,7 @@ export default async function HomePage({
   const recentNotices = getRecentNotices(locale as Locale, 3);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col sm:h-full">
       {pinnedNotice && (
         <Link
           href={`/notices/${pinnedNotice.slug}`}
@@ -28,8 +28,8 @@ export default async function HomePage({
         </Link>
       )}
 
-      <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-8 overflow-hidden px-6 py-6 sm:gap-10 sm:px-10">
-        <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 text-center">
+      <main className="flex min-h-0 flex-1 flex-col items-center justify-start gap-12 px-6 py-10 sm:justify-center sm:gap-10 sm:overflow-hidden sm:px-10 sm:py-6">
+        <div className="mx-auto flex max-w-3xl flex-col items-center gap-5 text-center sm:gap-4">
           <span className="animate-fade-in-up text-xs font-bold tracking-[0.2em] opacity-50 sm:text-sm">
             {t("since")}
           </span>
@@ -75,7 +75,7 @@ export default async function HomePage({
           {recentNotices.length === 0 ? (
             <p className="mt-3 text-sm opacity-50">{tNotices("empty")}</p>
           ) : (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:mt-3 sm:grid-cols-3 sm:gap-3">
               {recentNotices.map((notice, i) => (
                 <Link
                   key={notice.slug}
