@@ -2,6 +2,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { getPinnedNotice, getRecentNotices } from "@/lib/content/notices";
+import HomeStory from "@/components/home/HomeStory";
 
 export default async function HomePage({
   params,
@@ -17,7 +18,7 @@ export default async function HomePage({
   const recentNotices = getRecentNotices(locale as Locale, 3);
 
   return (
-    <div className="flex min-h-full flex-col sm:h-full">
+    <div className="flex flex-col">
       {pinnedNotice && (
         <Link
           href={`/notices/${pinnedNotice.slug}`}
@@ -28,8 +29,8 @@ export default async function HomePage({
         </Link>
       )}
 
-      <main className="flex min-h-0 flex-1 flex-col items-center justify-start gap-12 px-6 py-10 sm:justify-center sm:gap-10 sm:overflow-hidden sm:px-10 sm:py-6">
-        <div className="mx-auto flex max-w-3xl flex-col items-center gap-5 text-center sm:gap-4">
+      <section className="relative flex min-h-[85dvh] flex-col items-center justify-center px-6 py-16 sm:min-h-[90dvh] sm:px-10">
+        <div className="mx-auto flex max-w-3xl -translate-y-6 flex-col items-center gap-5 text-center sm:-translate-y-10 sm:gap-4">
           <span className="animate-fade-in-up text-xs font-bold tracking-[0.2em] opacity-50 sm:text-sm">
             {t("since")}
           </span>
@@ -61,36 +62,64 @@ export default async function HomePage({
           </p>
         </div>
 
-        <div className="w-full max-w-4xl animate-fade-in-up" style={{ animationDelay: "400ms" }}>
-          <div className="flex items-center justify-between px-1">
-            <span className="text-sm font-semibold sm:text-base">{t("recentNews")}</span>
-            <Link
-              href="/notices"
-              className="text-xs opacity-60 transition-opacity hover:opacity-100 sm:text-sm"
-            >
-              {t("viewAll")} →
-            </Link>
-          </div>
-
-          {recentNotices.length === 0 ? (
-            <p className="mt-3 text-sm opacity-50">{tNotices("empty")}</p>
-          ) : (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:mt-3 sm:grid-cols-3 sm:gap-3">
-              {recentNotices.map((notice, i) => (
-                <Link
-                  key={notice.slug}
-                  href={`/notices/${notice.slug}`}
-                  className="animate-fade-in-up flex min-w-0 flex-col gap-1 rounded-xl border border-black/10 p-4 transition-colors hover:-translate-y-0.5 hover:bg-black/[.03] hover:shadow-md dark:border-white/10 dark:hover:bg-white/[.04]"
-                  style={{ animationDelay: `${440 + i * 80}ms` }}
-                >
-                  <span className="text-xs opacity-50 sm:text-sm">{notice.date}</span>
-                  <span className="truncate text-sm font-medium sm:text-base">{notice.title}</span>
-                </Link>
-              ))}
-            </div>
-          )}
+        <div
+          className="animate-fade-in-up absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 text-xs opacity-50 sm:text-sm"
+          style={{ animationDelay: "600ms" }}
+        >
+          <span>{t("scrollHint")}</span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="animate-bounce-hint h-5 w-5"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </div>
-      </main>
+      </section>
+
+      <HomeStory
+        intro={{
+          paragraphs: t.raw("sections.intro.paragraphs"),
+        }}
+        study={{
+          title: t("sections.study.title"),
+          body: t("sections.study.body"),
+          imageAlt: t("sections.study.imageAlt"),
+          levels: t.raw("sections.study.levels"),
+        }}
+        contests={{
+          title: t("sections.contests.title"),
+          body: t("sections.contests.body"),
+          imageAlt: t("sections.contests.imageAlt"),
+          icpcName: t("sections.contests.icpcName"),
+          icpcUrl: t("sections.contests.icpcUrl"),
+          icpcFullName: t("sections.contests.icpcFullName"),
+          icpcDescription: t("sections.contests.icpcDescription"),
+          icpcRounds: t.raw("sections.contests.icpcRounds"),
+          others: t.raw("sections.contests.others"),
+        }}
+        hosting={{
+          title: t("sections.hosting.title"),
+          body: t("sections.hosting.body"),
+          photoAlt: t("sections.hosting.photoAlt"),
+          events: t.raw("sections.hosting.events"),
+        }}
+        recruit={{
+          line1: t("sections.recruit.line1"),
+          line2: t("sections.recruit.line2"),
+          buttonLabel: t("sections.recruit.buttonLabel"),
+        }}
+        news={{
+          title: t("recentNews"),
+          viewAllLabel: t("viewAll"),
+          emptyLabel: tNotices("empty"),
+          notices: recentNotices,
+        }}
+      />
     </div>
   );
 }

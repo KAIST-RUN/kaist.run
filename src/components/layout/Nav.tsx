@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 
 const ITEMS = [
-  { href: "/about", key: "about" },
+  { href: "/", key: "about" },
   { href: "/notices", key: "notices" },
   { href: "/archive", key: "archive" },
   { href: "/contact", key: "contact" },

@@ -1,0 +1,287 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { Link } from "@/i18n/navigation";
+
+type Level = { name: string; description: string };
+type Event = { season: string; name: string; description: string };
+type NoticeSummary = { slug: string; title: string; date: string };
+type ExternalContest = { name: string; url: string };
+
+export type HomeStoryProps = {
+  intro: {
+    paragraphs: string[];
+  };
+  study: {
+    title: string;
+    body: string;
+    imageAlt: string;
+    levels: Level[];
+  };
+  contests: {
+    title: string;
+    body: string;
+    imageAlt: string;
+    icpcName: string;
+    icpcUrl: string;
+    icpcFullName: string;
+    icpcDescription: string;
+    icpcRounds: string[];
+    others: ExternalContest[];
+  };
+  hosting: {
+    title: string;
+    body: string;
+    photoAlt: string;
+    events: Event[];
+  };
+  recruit: {
+    line1: string;
+    line2: string;
+    buttonLabel: string;
+  };
+  news: {
+    title: string;
+    viewAllLabel: string;
+    emptyLabel: string;
+    notices: NoticeSummary[];
+  };
+};
+
+function findScrollParent(node: HTMLElement | null): HTMLElement | null {
+  let el = node?.parentElement ?? null;
+  while (el) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+export default function HomeStory({ intro, study, contests, hosting, recruit, news }: HomeStoryProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const scrollParent = findScrollParent(root);
+    const sections = Array.from(root.querySelectorAll<HTMLElement>("[data-story-section]"));
+    const reveals = Array.from(root.querySelectorAll<HTMLElement>(".reveal"));
+
+    const revealObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            revealObserver.unobserve(entry.target);
+          }
+        }
+      },
+      { root: scrollParent, threshold: 0.2, rootMargin: "0px 0px -10% 0px" },
+    );
+    reveals.forEach((el) => revealObserver.observe(el));
+
+    const activeObserver = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting);
+        if (visible.length === 0) return;
+        const top = visible.reduce((a, b) => (a.intersectionRatio > b.intersectionRatio ? a : b));
+        const id = top.target.getAttribute("data-story-section");
+        if (id) root.setAttribute("data-active", id);
+      },
+      { root: scrollParent, threshold: [0.3, 0.5, 0.7] },
+    );
+    sections.forEach((el) => activeObserver.observe(el));
+
+    return () => {
+      revealObserver.disconnect();
+      activeObserver.disconnect();
+    };
+  }, []);
+
+  return (
+    <div ref={rootRef} className="story-bg" data-active="hero">
+      {/* 소개 */}
+      <section
+        data-story-section="intro"
+        className="mx-auto flex max-w-2xl flex-col items-center gap-4 px-6 py-20 text-center sm:px-10 sm:py-28 lg:px-12"
+      >
+        {intro.paragraphs.map((paragraph) => (
+          <p key={paragraph} className="reveal text-lg leading-relaxed opacity-80 sm:text-xl">
+            {paragraph}
+          </p>
+        ))}
+      </section>
+
+      {/* 스터디 */}
+      <section
+        data-story-section="study"
+        className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-10 px-6 py-20 sm:px-10 sm:py-28 lg:grid-cols-2 lg:gap-16 lg:px-12"
+      >
+        <div className="reveal order-2 flex flex-col gap-5 lg:order-1">
+          <h2 className="text-2xl font-bold sm:text-3xl">{study.title}</h2>
+          <p className="text-base leading-relaxed opacity-70 sm:text-lg">{study.body}</p>
+          <dl className="mt-2 flex flex-col gap-4">
+            {study.levels.map((level) => (
+              <div key={level.name}>
+                <dt className="font-semibold">{level.name}</dt>
+                <dd className="mt-0.5 text-sm opacity-70 sm:text-base">{level.description}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        <div className="reveal order-1 flex items-center justify-center lg:order-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/matwaetl.png"
+            alt={study.imageAlt}
+            className="aspect-square w-full max-w-sm object-contain"
+          />
+        </div>
+      </section>
+
+      {/* 대회 참여 */}
+      <section
+        data-story-section="contests"
+        className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-10 px-6 py-20 sm:px-10 sm:py-28 lg:grid-cols-2 lg:gap-16 lg:px-12"
+      >
+        <div className="reveal flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/icpc_logo_3d.png"
+            alt={contests.imageAlt}
+            className="w-full max-w-sm"
+          />
+        </div>
+        <div className="reveal flex flex-col gap-5">
+          <h2 className="text-2xl font-bold sm:text-3xl">{contests.title}</h2>
+          <p className="text-base leading-relaxed opacity-70 sm:text-lg">{contests.body}</p>
+
+          <div className="rounded-2xl border border-black/10 p-5 dark:border-white/15">
+            <div className="flex items-baseline gap-2">
+              <a
+                href={contests.icpcUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold underline decoration-black/20 underline-offset-4 hover:opacity-70 dark:decoration-white/30"
+              >
+                {contests.icpcName}
+              </a>
+              <span className="text-sm opacity-60">{contests.icpcFullName}</span>
+            </div>
+            <p className="mt-1 text-sm opacity-70 sm:text-base">{contests.icpcDescription}</p>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {contests.icpcRounds.map((round) => (
+                <li
+                  key={round}
+                  className="rounded-full border border-black/10 px-3 py-1 text-xs opacity-80 dark:border-white/15"
+                >
+                  {round}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <ul className="flex flex-wrap gap-2">
+            {contests.others.map((contest) => (
+              <li key={contest.name}>
+                <a
+                  href={contest.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-full bg-black/[.05] px-3 py-1 text-sm transition-colors hover:bg-black/[.1] dark:bg-white/[.08] dark:hover:bg-white/[.14]"
+                >
+                  {contest.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* 대회 개최 */}
+      <section
+        data-story-section="hosting"
+        className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-20 sm:px-10 sm:py-28 lg:px-12"
+      >
+        <div className="reveal flex flex-col gap-5 text-center">
+          <h2 className="text-2xl font-bold sm:text-3xl">{hosting.title}</h2>
+          <p className="mx-auto max-w-2xl text-base leading-relaxed opacity-70 sm:text-lg">
+            {hosting.body}
+          </p>
+        </div>
+
+        <div className="reveal grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {hosting.events.map((event) => (
+            <div key={event.name} className="rounded-2xl border border-black/10 p-6 dark:border-white/15">
+              <span className="text-xs font-bold tracking-wide opacity-50">[{event.season}]</span>
+              <h3 className="mt-1 text-lg font-semibold sm:text-xl">{event.name}</h3>
+              <p className="mt-2 text-sm opacity-70 sm:text-base">{event.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="reveal overflow-hidden rounded-2xl border border-black/10 dark:border-white/15">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/contest_photo.jpg"
+            alt={hosting.photoAlt}
+            className="aspect-[21/9] w-full object-cover"
+          />
+        </div>
+      </section>
+
+      {/* 가입 신청 */}
+      <section
+        data-story-section="recruit"
+        className="mx-auto flex max-w-2xl flex-col items-center gap-8 px-6 py-20 text-center sm:px-10 sm:py-28 lg:px-12"
+      >
+        <p className="reveal text-2xl leading-snug font-bold sm:text-3xl">
+          {recruit.line1}
+          <br />
+          {recruit.line2}
+        </p>
+        <a
+          href="/apply/"
+          className="reveal rounded-full bg-[var(--foreground)] px-8 py-3 text-sm font-semibold text-[var(--background)] transition-opacity hover:opacity-80 sm:text-base"
+        >
+          {recruit.buttonLabel}
+        </a>
+      </section>
+
+      {/* 최근 소식 */}
+      <section
+        data-story-section="news"
+        className="mx-auto max-w-4xl px-6 py-20 sm:px-10 sm:py-28 lg:px-12"
+      >
+        <div className="reveal flex items-center justify-between px-1">
+          <h2 className="text-lg font-semibold sm:text-xl">{news.title}</h2>
+          <Link
+            href="/notices"
+            className="text-sm opacity-60 transition-opacity hover:opacity-100"
+          >
+            {news.viewAllLabel} →
+          </Link>
+        </div>
+
+        {news.notices.length === 0 ? (
+          <p className="reveal mt-4 text-sm opacity-50">{news.emptyLabel}</p>
+        ) : (
+          <div className="reveal mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {news.notices.map((notice) => (
+              <Link
+                key={notice.slug}
+                href={`/notices/${notice.slug}`}
+                className="flex min-w-0 flex-col gap-1 rounded-xl border border-black/10 p-4 transition-colors hover:-translate-y-0.5 hover:bg-black/[.03] hover:shadow-md dark:border-white/10 dark:hover:bg-white/[.04]"
+              >
+                <span className="text-xs opacity-50 sm:text-sm">{notice.date}</span>
+                <span className="truncate text-sm font-medium sm:text-base">{notice.title}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

@@ -68,7 +68,6 @@ function checkSinglePage(name) {
 
 checkNotices();
 checkArchive();
-checkSinglePage("about");
 checkSinglePage("contact");
 
 if (hasError) {

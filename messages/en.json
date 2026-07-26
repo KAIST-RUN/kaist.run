@@ -25,7 +25,64 @@
     "heroSubtitle": "Solving problems together, growing together.",
     "description": "RUN was founded to study algorithmic problem solving and prepare for related competitions.",
     "recentNews": "Recent News",
-    "viewAll": "View all"
+    "viewAll": "View all",
+    "scrollHint": "Scroll to learn more",
+    "sections": {
+      "intro": {
+        "paragraphs": [
+          "RUN is KAIST's algorithmic problem solving club.",
+          "Every semester, we grow our problem-solving skills together through study sessions and contests."
+        ]
+      },
+      "study": {
+        "title": "Study Sessions",
+        "body": "RUN holds regular study sessions. Each member can choose to join the Beginner, Intermediate, or Advanced track.",
+        "imageAlt": "Study illustration (coming soon)",
+        "levels": [
+          { "name": "Beginner", "description": "Learn the fundamental techniques of problem solving." },
+          { "name": "Intermediate", "description": "Study more advanced, ICPC-level algorithms." },
+          { "name": "Advanced", "description": "Focus on contest preparation and practical problem solving." }
+        ]
+      },
+      "contests": {
+        "title": "Contest Participation",
+        "body": "RUN has consistently achieved excellent results by participating in a variety of programming contests.",
+        "imageAlt": "ICPC logo (coming soon)",
+        "icpcName": "ICPC",
+        "icpcUrl": "https://icpckorea.org/",
+        "icpcFullName": "International Collegiate Programming Contest",
+        "icpcDescription": "RUN's primary goal contest, held every fall.",
+        "icpcRounds": ["Online Qualification Round", "Regional", "World Finals"],
+        "others": [
+          { "name": "UCPC", "url": "https://ucpc.me/" },
+          { "name": "SCPC", "url": "https://www.codeground.org/" },
+          { "name": "Codeforces", "url": "https://codeforces.com/" },
+          { "name": "AtCoder", "url": "https://atcoder.jp/" }
+        ]
+      },
+      "hosting": {
+        "title": "Contest Hosting",
+        "body": "RUN members write the problems themselves to host these contests.",
+        "photoAlt": "Photo from a past contest venue (coming soon)",
+        "events": [
+          {
+            "season": "Spring",
+            "name": "KAIST RUN Spring Contest",
+            "description": "A chance to test the skills you've honed through club activities."
+          },
+          {
+            "season": "Fall",
+            "name": "KAIST ICPC Mock Competition",
+            "description": "A campus mock competition held ahead of the real ICPC."
+          }
+        ]
+      },
+      "recruit": {
+        "line1": "Anyone who enjoys algorithmic problem solving",
+        "line2": "is welcome to join RUN.",
+        "buttonLabel": "Apply to Join"
+      }
+    }
   },
   "notices": {
     "title": "Notices",

@@ -5,7 +5,7 @@
   },
   "nav": {
     "about": "소개",
-    "notices": "공지사항",
+    "notices": "공지",
     "archive": "대회 아카이브",
     "contact": "연락처"
   },
@@ -25,7 +25,64 @@
     "heroSubtitle": "함께 문제를 풀고, 함께 성장합니다.",
     "description": "RUN은 알고리즘 문제 해결에 관한 공부 및 관련 대회를 준비하기 위해 설립되었습니다.",
     "recentNews": "최근 소식",
-    "viewAll": "전체보기"
+    "viewAll": "전체보기",
+    "scrollHint": "스크롤하여 더 알아보기",
+    "sections": {
+      "intro": {
+        "paragraphs": [
+          "RUN은 KAIST의 알고리즘 문제해결 동아리입니다.",
+          "매 학기 스터디와 대회를 통해 알고리즘 문제 해결 능력을 함께 기르는 것을 목표로 합니다."
+        ]
+      },
+      "study": {
+        "title": "스터디",
+        "body": "RUN에서는 정기적으로 스터디를 진행하고 있습니다. 각 회원은 초급반, 중급반, 고급반 중 원하는 스터디를 선택해 수강할 수 있습니다.",
+        "imageAlt": "스터디 그림 (준비 중)",
+        "levels": [
+          { "name": "초급반", "description": "기본적인 문제 풀이 기법을 공부합니다." },
+          { "name": "중급반", "description": "보다 심화된 ICPC 레벨의 알고리즘을 공부합니다." },
+          { "name": "고급반", "description": "대회 준비와 실전 문제 풀이 위주로 공부합니다." }
+        ]
+      },
+      "contests": {
+        "title": "대회 참여",
+        "body": "RUN에서는 그동안 각종 프로그래밍 대회에 참가하여 우수한 성적을 거두어 왔습니다.",
+        "imageAlt": "ICPC 로고 (준비 중)",
+        "icpcName": "ICPC",
+        "icpcUrl": "https://icpckorea.org/",
+        "icpcFullName": "전국 대학생 프로그래밍 경시대회",
+        "icpcDescription": "RUN의 주 목적인 대회로, 매년 가을에 열립니다.",
+        "icpcRounds": ["Online Qualification Round", "Regional", "World Finals"],
+        "others": [
+          { "name": "UCPC", "url": "https://ucpc.me/" },
+          { "name": "SCPC", "url": "https://www.codeground.org/" },
+          { "name": "Codeforces", "url": "https://codeforces.com/" },
+          { "name": "AtCoder", "url": "https://atcoder.jp/" }
+        ]
+      },
+      "hosting": {
+        "title": "대회 개최",
+        "body": "RUN 회원들이 직접 문제를 출제하여 대회를 개최합니다.",
+        "photoAlt": "역대 대회 현장 사진 (준비 중)",
+        "events": [
+          {
+            "season": "봄",
+            "name": "KAIST RUN Spring Contest",
+            "description": "동아리 활동을 하면서 갈고 닦은 실력을 겨루는 자리입니다."
+          },
+          {
+            "season": "가을",
+            "name": "KAIST ICPC Mock Competition",
+            "description": "ICPC가 열리기 전에 교내 모의대회를 개최합니다."
+          }
+        ]
+      },
+      "recruit": {
+        "line1": "알고리즘 문제해결을 좋아하는 누구나",
+        "line2": "RUN에서 함께 활동하실 수 있습니다.",
+        "buttonLabel": "가입 신청하기"
+      }
+    }
   },
   "notices": {
     "title": "공지사항",

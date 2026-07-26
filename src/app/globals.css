@@ -13,6 +13,54 @@
   --foreground: #ededed;
 }
 
+:root {
+  --story-bg-hero: var(--background);
+  --story-bg-intro: #f7f7f9;
+  --story-bg-study: #f6f4ff;
+  --story-bg-contests: #eef8ff;
+  --story-bg-hosting: #fff8ee;
+  --story-bg-recruit: #eef9f2;
+  --story-bg-news: var(--background);
+}
+
+.dark {
+  --story-bg-hero: var(--background);
+  --story-bg-intro: #121215;
+  --story-bg-study: #16131f;
+  --story-bg-contests: #0d1a22;
+  --story-bg-hosting: #1e150b;
+  --story-bg-recruit: #0d1f16;
+  --story-bg-news: var(--background);
+}
+
+.story-bg {
+  background-color: var(--story-bg-hero);
+}
+.story-bg[data-active="intro"] {
+  background-color: var(--story-bg-intro);
+}
+.story-bg[data-active="study"] {
+  background-color: var(--story-bg-study);
+}
+.story-bg[data-active="contests"] {
+  background-color: var(--story-bg-contests);
+}
+.story-bg[data-active="hosting"] {
+  background-color: var(--story-bg-hosting);
+}
+.story-bg[data-active="recruit"] {
+  background-color: var(--story-bg-recruit);
+}
+.story-bg[data-active="news"] {
+  background-color: var(--story-bg-news);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .story-bg {
+    transition: background-color 900ms ease;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -53,5 +101,32 @@ body {
 
   .animate-fade-in-up {
     animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition:
+      opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @keyframes bounce-hint {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(6px);
+    }
+  }
+
+  .animate-bounce-hint {
+    animation: bounce-hint 1.6s ease-in-out infinite;
   }
 }
