@@ -128,14 +128,13 @@ export default function ApplyPage() {
   }
 
   return (
-    <main className="h-dvh overflow-y-auto">
-      <div className="mx-auto flex min-h-full max-w-2xl flex-col px-6 py-12 sm:px-10 sm:py-16">
-        <Link href="/" className="animate-fade-in-up flex w-fit items-center gap-2 font-bold">
-          <Logo className="h-6 w-auto" />
-          <span className="sr-only">RUN</span>
-        </Link>
+    <main className="mx-auto flex min-h-full max-w-2xl flex-col px-6 py-12 sm:px-10 sm:py-16">
+      <Link href="/" className="animate-fade-in-up flex w-fit items-center gap-2 font-bold">
+        <Logo className="h-6 w-auto" />
+        <span className="sr-only">RUN</span>
+      </Link>
 
-        {status === "submitted" ? (
+      {status === "submitted" ? (
           <div className="animate-fade-in-up flex flex-1 flex-col items-center justify-center gap-4 py-24 text-center">
             <span className="text-4xl">🎉</span>
             <h1 className="text-2xl font-bold sm:text-3xl">{t("successTitle")}</h1>
@@ -247,7 +246,6 @@ export default function ApplyPage() {
             </form>
           </>
         )}
-      </div>
 
       <iframe
         name="hidden_iframe"
