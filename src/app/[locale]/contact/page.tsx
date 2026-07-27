@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { getContact, type ContactSocial } from "@/lib/content/contact";
 import { markdownToHtml } from "@/lib/markdown";
+import Logo from "@/components/Logo";
 
 function SocialIcon({ platform }: { platform: ContactSocial["platform"] }) {
   switch (platform) {
@@ -123,7 +124,8 @@ export default async function ContactPage({
           <div className="hidden w-px shrink-0 bg-black/10 sm:block dark:bg-white/15" />
 
           <div className="flex flex-row items-end justify-between gap-4 sm:flex-col sm:items-end sm:justify-end sm:text-right">
-            <span className="text-3xl font-black tracking-tight">{t("name")}.</span>
+            <Logo className="h-8 w-auto sm:h-9" />
+            <span className="sr-only">{t("name")}</span>
             <span className="text-xs leading-snug opacity-60 sm:text-sm">{t("tagline")}</span>
           </div>
         </div>

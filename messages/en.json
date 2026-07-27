@@ -22,8 +22,6 @@
   "home": {
     "bannerLabel": "Notice",
     "since": "SINCE 2005",
-    "heroSubtitle": "Solving problems together, growing together.",
-    "description": "RUN was founded to study algorithmic problem solving and prepare for related competitions.",
     "recentNews": "Recent News",
     "viewAll": "View all",
     "scrollHint": "Scroll to learn more",
@@ -47,17 +45,43 @@
       "contests": {
         "title": "Contest Participation",
         "body": "RUN has consistently achieved excellent results by participating in a variety of programming contests.",
-        "imageAlt": "ICPC logo (coming soon)",
-        "icpcName": "ICPC",
-        "icpcUrl": "https://icpckorea.org/",
-        "icpcFullName": "International Collegiate Programming Contest",
-        "icpcDescription": "RUN's primary goal contest, held every fall.",
-        "icpcRounds": ["Online Qualification Round", "Regional", "World Finals"],
-        "others": [
-          { "name": "UCPC", "url": "https://ucpc.me/" },
-          { "name": "SCPC", "url": "https://www.codeground.org/" },
-          { "name": "Codeforces", "url": "https://codeforces.com/" },
-          { "name": "AtCoder", "url": "https://atcoder.jp/" }
+        "photoAlt": "RUN members at a contest (UCPC 2024)",
+        "list": [
+          {
+            "name": "ICPC",
+            "url": "https://icpckorea.org/",
+            "fullName": "International Collegiate Programming Contest",
+            "description": "RUN's primary goal contest, held every fall.",
+            "rounds": ["Online Qualification Round", "Regional", "World Finals"]
+          },
+          {
+            "name": "UCPC",
+            "url": "https://ucpc.me/",
+            "fullName": "Union of Clubs for Programming Contests",
+            "description": "A nationwide team contest organized jointly by Korean university programming clubs, held every summer.",
+            "rounds": ["Preliminary", "Final"]
+          },
+          {
+            "name": "SCPC",
+            "url": "https://www.codeground.org/",
+            "fullName": "Samsung Collegiate Programming Cup",
+            "description": "An algorithmic programming contest for university students hosted by Samsung.",
+            "rounds": ["Preliminary", "Final"]
+          },
+          {
+            "name": "Codeforces",
+            "url": "https://codeforces.com/",
+            "fullName": "Online competitive programming judge platform",
+            "description": "One of the world's most popular online competitive programming platforms, with regular rated contests.",
+            "rounds": ["Div. 1", "Div. 2", "Div. 3", "Div. 4"]
+          },
+          {
+            "name": "AtCoder",
+            "url": "https://atcoder.jp/",
+            "fullName": "Japanese online competitive programming platform",
+            "description": "A Japanese online competitive programming platform hosting contests of various levels every week.",
+            "rounds": ["ABC", "ARC", "AGC"]
+          }
         ]
       },
       "hosting": {

@@ -22,8 +22,6 @@
   "home": {
     "bannerLabel": "공지",
     "since": "SINCE 2005",
-    "heroSubtitle": "함께 문제를 풀고, 함께 성장합니다.",
-    "description": "RUN은 알고리즘 문제 해결에 관한 공부 및 관련 대회를 준비하기 위해 설립되었습니다.",
     "recentNews": "최근 소식",
     "viewAll": "전체보기",
     "scrollHint": "스크롤하여 더 알아보기",
@@ -47,17 +45,43 @@
       "contests": {
         "title": "대회 참여",
         "body": "RUN에서는 그동안 각종 프로그래밍 대회에 참가하여 우수한 성적을 거두어 왔습니다.",
-        "imageAlt": "ICPC 로고 (준비 중)",
-        "icpcName": "ICPC",
-        "icpcUrl": "https://icpckorea.org/",
-        "icpcFullName": "전국 대학생 프로그래밍 경시대회",
-        "icpcDescription": "RUN의 주 목적인 대회로, 매년 가을에 열립니다.",
-        "icpcRounds": ["Online Qualification Round", "Regional", "World Finals"],
-        "others": [
-          { "name": "UCPC", "url": "https://ucpc.me/" },
-          { "name": "SCPC", "url": "https://www.codeground.org/" },
-          { "name": "Codeforces", "url": "https://codeforces.com/" },
-          { "name": "AtCoder", "url": "https://atcoder.jp/" }
+        "photoAlt": "대회에 참가한 RUN 회원들 (UCPC 2024)",
+        "list": [
+          {
+            "name": "ICPC",
+            "url": "https://icpckorea.org/",
+            "fullName": "전국 대학생 프로그래밍 경시대회",
+            "description": "RUN의 주 목적인 대회로, 매년 가을에 열립니다.",
+            "rounds": ["Online Qualification Round", "Regional", "World Finals"]
+          },
+          {
+            "name": "UCPC",
+            "url": "https://ucpc.me/",
+            "fullName": "전국 대학생 프로그래밍 동아리 연합 대회",
+            "description": "전국 대학 프로그래밍 동아리들이 연합하여 여는 팀 단위 대회로, 매년 여름에 열립니다.",
+            "rounds": ["예선", "본선"]
+          },
+          {
+            "name": "SCPC",
+            "url": "https://www.codeground.org/",
+            "fullName": "Samsung Collegiate Programming Cup",
+            "description": "삼성이 주최하는 대학생 대상 알고리즘 프로그래밍 대회입니다.",
+            "rounds": ["예선", "본선"]
+          },
+          {
+            "name": "Codeforces",
+            "url": "https://codeforces.com/",
+            "fullName": "온라인 경쟁 프로그래밍 저지 플랫폼",
+            "description": "전 세계적으로 가장 인기 있는 온라인 알고리즘 대회 플랫폼으로, 정기적으로 레이팅 대회가 열립니다.",
+            "rounds": ["Div. 1", "Div. 2", "Div. 3", "Div. 4"]
+          },
+          {
+            "name": "AtCoder",
+            "url": "https://atcoder.jp/",
+            "fullName": "일본 온라인 경쟁 프로그래밍 플랫폼",
+            "description": "일본의 온라인 알고리즘 대회 플랫폼으로, 매주 다양한 레벨의 대회가 열립니다.",
+            "rounds": ["ABC", "ARC", "AGC"]
+          }
         ]
       },
       "hosting": {

@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@/i18n/navigation";
 
 type Level = { name: string; description: string };
 type Event = { season: string; name: string; description: string };
 type NoticeSummary = { slug: string; title: string; date: string };
-type ExternalContest = { name: string; url: string };
+type ExternalContest = {
+  name: string;
+  url: string;
+  description: string;
+  fullName?: string;
+  rounds?: string[];
+};
 
 export type HomeStoryProps = {
   intro: {
@@ -21,13 +27,8 @@ export type HomeStoryProps = {
   contests: {
     title: string;
     body: string;
-    imageAlt: string;
-    icpcName: string;
-    icpcUrl: string;
-    icpcFullName: string;
-    icpcDescription: string;
-    icpcRounds: string[];
-    others: ExternalContest[];
+    photoAlt: string;
+    list: ExternalContest[];
   };
   hosting: {
     title: string;
@@ -60,6 +61,8 @@ function findScrollParent(node: HTMLElement | null): HTMLElement | null {
 
 export default function HomeStory({ intro, study, contests, hosting, recruit, news }: HomeStoryProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const [expandedContest, setExpandedContest] = useState(contests.list[0]?.name ?? null);
+  const activeContest = contests.list.find((contest) => contest.name === expandedContest);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -134,7 +137,7 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
         <div className="reveal order-1 flex items-center justify-center lg:order-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/matwaetl.png"
+            src="/images/cenix.png"
             alt={study.imageAlt}
             className="aspect-square w-full max-w-sm object-contain"
           />
@@ -144,59 +147,74 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
       {/* 대회 참여 */}
       <section
         data-story-section="contests"
-        className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-10 px-6 py-20 sm:px-10 sm:py-28 lg:grid-cols-2 lg:gap-16 lg:px-12"
+        className="mx-auto grid max-w-5xl grid-cols-1 items-start gap-10 px-6 py-20 sm:px-10 sm:py-28 lg:grid-cols-2 lg:gap-16 lg:px-12"
       >
-        <div className="reveal flex items-center justify-center">
+        <div className="reveal overflow-hidden rounded-2xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/icpc_logo_3d.png"
-            alt={contests.imageAlt}
-            className="w-full max-w-sm"
+            src="/images/contest_photo2.jpg"
+            alt={contests.photoAlt}
+            className="h-auto w-full"
           />
         </div>
         <div className="reveal flex flex-col gap-5">
           <h2 className="text-2xl font-bold sm:text-3xl">{contests.title}</h2>
           <p className="text-base leading-relaxed opacity-70 sm:text-lg">{contests.body}</p>
 
-          <div className="rounded-2xl border border-black/10 p-5 dark:border-white/15">
-            <div className="flex items-baseline gap-2">
-              <a
-                href={contests.icpcUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-bold underline decoration-black/20 underline-offset-4 hover:opacity-70 dark:decoration-white/30"
-              >
-                {contests.icpcName}
-              </a>
-              <span className="text-sm opacity-60">{contests.icpcFullName}</span>
-            </div>
-            <p className="mt-1 text-sm opacity-70 sm:text-base">{contests.icpcDescription}</p>
-            <ul className="mt-3 flex flex-wrap gap-2">
-              {contests.icpcRounds.map((round) => (
-                <li
-                  key={round}
-                  className="rounded-full border border-black/10 px-3 py-1 text-xs opacity-80 dark:border-white/15"
-                >
-                  {round}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <ul className="flex flex-wrap gap-2">
-            {contests.others.map((contest) => (
-              <li key={contest.name}>
-                <a
-                  href={contest.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-full bg-black/[.05] px-3 py-1 text-sm transition-colors hover:bg-black/[.1] dark:bg-white/[.08] dark:hover:bg-white/[.14]"
+          <div className="flex flex-wrap gap-2">
+            {contests.list.map((contest) => {
+              const isExpanded = expandedContest === contest.name;
+              return (
+                <button
+                  key={contest.name}
+                  type="button"
+                  aria-expanded={isExpanded}
+                  onClick={() => setExpandedContest(contest.name)}
+                  className={`rounded-full px-3 py-1 text-sm transition-colors ${
+                    isExpanded
+                      ? "bg-[var(--foreground)] text-[var(--background)]"
+                      : "bg-black/[.05] hover:bg-black/[.1] dark:bg-white/[.08] dark:hover:bg-white/[.14]"
+                  }`}
                 >
                   {contest.name}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeContest && (
+            <div
+              key={activeContest.name}
+              className="animate-fade-scale-in rounded-2xl border border-black/10 p-5 dark:border-white/15"
+            >
+              <div className="flex items-baseline gap-2">
+                <a
+                  href={activeContest.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold underline decoration-black/20 underline-offset-4 hover:opacity-70 dark:decoration-white/30"
+                >
+                  {activeContest.name}
                 </a>
-              </li>
-            ))}
-          </ul>
+                {activeContest.fullName && (
+                  <span className="text-sm opacity-60">{activeContest.fullName}</span>
+                )}
+              </div>
+              <p className="mt-1 text-sm opacity-70 sm:text-base">{activeContest.description}</p>
+              {activeContest.rounds && (
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {activeContest.rounds.map((round) => (
+                    <li
+                      key={round}
+                      className="rounded-full border border-black/10 px-3 py-1 text-xs opacity-80 dark:border-white/15"
+                    >
+                      {round}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

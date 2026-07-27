@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { getPinnedNotice, getRecentNotices } from "@/lib/content/notices";
 import HomeStory from "@/components/home/HomeStory";
+import Logo from "@/components/Logo";
 
 export default async function HomePage({
   params,
@@ -34,13 +35,12 @@ export default async function HomePage({
           <span className="animate-fade-in-up text-xs font-bold tracking-[0.2em] opacity-50 sm:text-sm">
             {t("since")}
           </span>
-          <h1 className="flex flex-col items-center gap-1">
-            <span
-              className="animate-fade-in-up text-5xl font-black tracking-tight sm:text-7xl"
+          <h1 className="flex flex-col items-center gap-3 sm:gap-4">
+            <Logo
+              className="animate-fade-in-up h-16 w-auto sm:h-24"
               style={{ animationDelay: "80ms" }}
-            >
-              {tSite("name")}
-            </span>
+            />
+            <span className="sr-only">{tSite("name")}</span>
             <span
               className="animate-fade-in-up text-lg font-semibold tracking-tight opacity-70 sm:text-2xl"
               style={{ animationDelay: "160ms" }}
@@ -48,18 +48,6 @@ export default async function HomePage({
               {tSite("tagline")}
             </span>
           </h1>
-          <p
-            className="animate-fade-in-up text-base opacity-70 sm:text-lg"
-            style={{ animationDelay: "240ms" }}
-          >
-            {t("heroSubtitle")}
-          </p>
-          <p
-            className="animate-fade-in-up text-sm leading-relaxed opacity-60 sm:text-base"
-            style={{ animationDelay: "320ms" }}
-          >
-            {t("description")}
-          </p>
         </div>
 
         <div
@@ -94,13 +82,8 @@ export default async function HomePage({
         contests={{
           title: t("sections.contests.title"),
           body: t("sections.contests.body"),
-          imageAlt: t("sections.contests.imageAlt"),
-          icpcName: t("sections.contests.icpcName"),
-          icpcUrl: t("sections.contests.icpcUrl"),
-          icpcFullName: t("sections.contests.icpcFullName"),
-          icpcDescription: t("sections.contests.icpcDescription"),
-          icpcRounds: t.raw("sections.contests.icpcRounds"),
-          others: t.raw("sections.contests.others"),
+          photoAlt: t("sections.contests.photoAlt"),
+          list: t.raw("sections.contests.list"),
         }}
         hosting={{
           title: t("sections.hosting.title"),
