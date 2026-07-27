@@ -15,9 +15,6 @@ export default async function Header({ locale }: { locale: Locale }) {
         <Link href="/" className="flex items-center gap-2 font-bold">
           <Logo className="h-5 w-auto sm:h-6" />
           <span className="sr-only">{t("name")}</span>
-          <span className="hidden text-xs font-normal opacity-60 sm:inline sm:text-sm">
-            {t("tagline")}
-          </span>
         </Link>
         <div className="flex items-center gap-2 sm:hidden">
           <LocaleSwitcher />
