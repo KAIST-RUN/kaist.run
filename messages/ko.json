@@ -7,7 +7,8 @@
     "about": "소개",
     "notices": "공지",
     "archive": "대회 아카이브",
-    "contact": "연락처"
+    "contact": "연락처",
+    "apply": "지원"
   },
   "theme": {
     "light": "라이트 모드",
@@ -126,5 +127,56 @@
   },
   "footer": {
     "rights": "KAIST RUN. All rights reserved."
+  },
+  "apply": {
+    "pageTitle": "가입 신청",
+    "intro": "RUN에 관심 가져주셔서 감사합니다. 아래 양식을 작성해 신청해 주세요.",
+    "sections": {
+      "basicInfo": "기본 정보",
+      "content": "지원 내용",
+      "confirmation": "확인 사항"
+    },
+    "fields": {
+      "name": "이름",
+      "studentId": "학번",
+      "contact": "전화번호 또는 기타 연락처",
+      "email": "카이스트 이메일",
+      "emailError": "@kaist.ac.kr 형식의 이메일을 입력해 주세요.",
+      "motivation": "지원 동기",
+      "experience": "Problem Solving 관련 경험"
+    },
+    "questions": {
+      "commitment": {
+        "question": "동아리 활동에 성실히 참여할 자신이 있으신가요?",
+        "options": [
+          { "value": "Yes", "label": "예" },
+          { "value": "No", "label": "아니오" }
+        ]
+      },
+      "schedule": {
+        "question": "동아리 정기 모임은 수요일 오후 9시 30분에 있습니다.",
+        "options": [
+          { "value": "I read and understood", "label": "확인했습니다" },
+          { "value": "I did not read and understand", "label": "확인하지 못했습니다" }
+        ]
+      },
+      "firstMeeting": {
+        "question": "첫 정모는 3월 15일 오후 9시 30분부터 진행됩니다. 당일 시간이 되시나요?",
+        "options": [
+          { "value": "Yes", "label": "네, 가능합니다" },
+          {
+            "value": "No, but I want to join this club (in this case contact us right away)",
+            "label": "아니요, 하지만 가입은 하고 싶습니다 (이 경우 저희에게 바로 연락해 주세요)"
+          },
+          { "value": "No", "label": "아니오" }
+        ]
+      }
+    },
+    "submit": "제출하기",
+    "submitting": "제출 중...",
+    "fallback": "제출이 되지 않는다면 <link>구글 폼</link>을 이용해 주세요.",
+    "successTitle": "신청이 완료되었습니다!",
+    "successBody": "RUN에 관심을 가져주셔서 감사합니다. 확인 후 안내해 드리겠습니다.",
+    "backHome": "홈으로 돌아가기"
   }
 }

@@ -22,6 +22,12 @@ export default async function Nav() {
           {t(item.key)}
         </Link>
       ))}
+      <Link
+        href="/apply"
+        className="whitespace-nowrap rounded-full bg-[var(--foreground)] px-4 py-1.5 font-semibold text-[var(--background)] transition-opacity hover:opacity-80"
+      >
+        {t("apply")}
+      </Link>
     </nav>
   );
 }

@@ -1,17 +1,28 @@
 "use client";
 
 import { useEffect } from "react";
-import { RECRUIT_FORM_URL } from "@/lib/recruit";
+import { routing } from "@/i18n/routing";
+import { withBasePath } from "@/lib/basePath";
 
-export default function RecruitRedirect() {
+export default function ApplyRedirect() {
   useEffect(() => {
-    window.location.replace(RECRUIT_FORM_URL);
+    const saved = window.localStorage.getItem("NEXT_LOCALE");
+    const browserLang = navigator.language.toLowerCase();
+    const target =
+      saved && (routing.locales as readonly string[]).includes(saved)
+        ? saved
+        : browserLang.startsWith("en")
+          ? "en"
+          : routing.defaultLocale;
+
+    window.location.replace(withBasePath(`/${target}/apply/`));
   }, []);
 
   return (
     <noscript>
       <p>
-        <a href={RECRUIT_FORM_URL}>{RECRUIT_FORM_URL}</a>
+        <a href={withBasePath("/ko/apply/")}>한국어</a> ·{" "}
+        <a href={withBasePath("/en/apply/")}>English</a>
       </p>
     </noscript>
   );

@@ -7,7 +7,8 @@
     "about": "About",
     "notices": "Notices",
     "archive": "Contest Archive",
-    "contact": "Contact"
+    "contact": "Contact",
+    "apply": "Apply"
   },
   "theme": {
     "light": "Light mode",
@@ -126,5 +127,56 @@
   },
   "footer": {
     "rights": "KAIST RUN. All rights reserved."
+  },
+  "apply": {
+    "pageTitle": "Apply to RUN",
+    "intro": "Thanks for your interest in RUN. Please fill out the form below to apply.",
+    "sections": {
+      "basicInfo": "Basic Information",
+      "content": "Application",
+      "confirmation": "Confirmation"
+    },
+    "fields": {
+      "name": "Your name",
+      "studentId": "Student No.",
+      "contact": "Phone number or other contact",
+      "email": "KAIST email",
+      "emailError": "Please enter a valid @kaist.ac.kr email address.",
+      "motivation": "Motivation for applying",
+      "experience": "Problem Solving experience"
+    },
+    "questions": {
+      "commitment": {
+        "question": "Are you confident you can participate in club activities diligently?",
+        "options": [
+          { "value": "Yes", "label": "Yes" },
+          { "value": "No", "label": "No" }
+        ]
+      },
+      "schedule": {
+        "question": "Regular club meetings are held on Wednesdays at 9:30 PM.",
+        "options": [
+          { "value": "I read and understood", "label": "I read and understood" },
+          { "value": "I did not read and understand", "label": "I did not read and understand" }
+        ]
+      },
+      "firstMeeting": {
+        "question": "The first meeting will be held on March 15th from 9:30 PM. Are you available that day?",
+        "options": [
+          { "value": "Yes", "label": "Yes" },
+          {
+            "value": "No, but I want to join this club (in this case contact us right away)",
+            "label": "No, but I want to join this club (in this case contact us right away)"
+          },
+          { "value": "No", "label": "No" }
+        ]
+      }
+    },
+    "submit": "Submit",
+    "submitting": "Submitting...",
+    "fallback": "If the submission doesn't go through, please use the <link>Google Form</link> instead.",
+    "successTitle": "Application submitted!",
+    "successBody": "Thanks for your interest in RUN. We'll get back to you after reviewing your application.",
+    "backHome": "Back to home"
   }
 }

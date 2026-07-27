@@ -260,12 +260,12 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
           <br />
           {recruit.line2}
         </p>
-        <a
-          href="/apply/"
+        <Link
+          href="/apply"
           className="reveal rounded-full bg-[var(--foreground)] px-8 py-3 text-sm font-semibold text-[var(--background)] transition-opacity hover:opacity-80 sm:text-base"
         >
           {recruit.buttonLabel}
-        </a>
+        </Link>
       </section>
 
       {/* 최근 소식 */}
