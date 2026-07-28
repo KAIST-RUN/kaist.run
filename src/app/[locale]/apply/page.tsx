@@ -7,13 +7,16 @@ import {
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import Logo from "@/components/Logo";
-import { RECRUIT_FORM_URL } from "@/lib/recruit";
-
-const FORM_ACTION =
-  "https://docs.google.com/forms/d/e/1FAIpQLScQQDBR86VQTi8d9QNIYS-YxswumVENwogRsbzVuIxmIs90ZQ/formResponse";
+import type { Locale } from "@/i18n/routing";
+import {
+  APPLY_FORM_ACTION_URL,
+  APPLY_FORM_VIEW_URL,
+  APPLY_FORM_FIELDS,
+  APPLY_FORM_QUESTIONS,
+} from "@/config/applyForm";
 
 const KAIST_EMAIL_PATTERN = /^[^\s@]+@kaist\.ac\.kr$/i;
 
@@ -101,8 +104,19 @@ function RadioGroup({
   );
 }
 
+function localizedOptions(
+  question: (typeof APPLY_FORM_QUESTIONS)[keyof typeof APPLY_FORM_QUESTIONS],
+  locale: Locale,
+): RadioOption[] {
+  return question.options.map((option) => ({
+    value: option.value,
+    label: option.label[locale],
+  }));
+}
+
 export default function ApplyPage() {
   const t = useTranslations("apply");
+  const locale = useLocale() as Locale;
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted">("idle");
   const hasSubmitted = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -111,10 +125,6 @@ export default function ApplyPage() {
   const [isFormValid, setIsFormValid] = useState(false);
 
   const emailError = email.length > 0 && !KAIST_EMAIL_PATTERN.test(email);
-
-  const commitmentOptions = t.raw("questions.commitment.options") as RadioOption[];
-  const scheduleOptions = t.raw("questions.schedule.options") as RadioOption[];
-  const firstMeetingOptions = t.raw("questions.firstMeeting.options") as RadioOption[];
 
   function handleEmailChange(e: ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
@@ -160,7 +170,7 @@ export default function ApplyPage() {
 
             <form
               ref={formRef}
-              action={FORM_ACTION}
+              action={APPLY_FORM_ACTION_URL}
               method="POST"
               target="hidden_iframe"
               onInput={updateFormValidity}
@@ -173,12 +183,20 @@ export default function ApplyPage() {
               style={{ animationDelay: "160ms" }}
             >
               <Section title={t("sections.basicInfo")}>
-                <TextField label={t("fields.name")} name="entry.1965855845" required />
-                <TextField label={t("fields.studentId")} name="entry.535588177" required />
-                <TextField label={t("fields.contact")} name="entry.1657892153" required />
+                <TextField label={t("fields.name")} name={APPLY_FORM_FIELDS.name} required />
+                <TextField
+                  label={t("fields.studentId")}
+                  name={APPLY_FORM_FIELDS.studentId}
+                  required
+                />
+                <TextField
+                  label={t("fields.contact")}
+                  name={APPLY_FORM_FIELDS.contact}
+                  required
+                />
                 <TextField
                   label={t("fields.email")}
-                  name="entry.1283257696"
+                  name={APPLY_FORM_FIELDS.email}
                   type="email"
                   required
                   value={email}
@@ -190,33 +208,33 @@ export default function ApplyPage() {
               <Section title={t("sections.content")}>
                 <TextAreaField
                   label={t("fields.motivation")}
-                  name="entry.1750517110"
+                  name={APPLY_FORM_FIELDS.motivation}
                   required
                 />
                 <TextAreaField
                   label={t("fields.experience")}
-                  name="entry.985421141"
+                  name={APPLY_FORM_FIELDS.experience}
                   required
                 />
               </Section>
 
               <Section title={t("sections.confirmation")}>
                 <RadioGroup
-                  question={t("questions.commitment.question")}
-                  name="entry.2049821449"
-                  options={commitmentOptions}
+                  question={APPLY_FORM_QUESTIONS.commitment.question[locale]}
+                  name={APPLY_FORM_QUESTIONS.commitment.entryId}
+                  options={localizedOptions(APPLY_FORM_QUESTIONS.commitment, locale)}
                   required
                 />
                 <RadioGroup
-                  question={t("questions.schedule.question")}
-                  name="entry.515906054"
-                  options={scheduleOptions}
+                  question={APPLY_FORM_QUESTIONS.schedule.question[locale]}
+                  name={APPLY_FORM_QUESTIONS.schedule.entryId}
+                  options={localizedOptions(APPLY_FORM_QUESTIONS.schedule, locale)}
                   required
                 />
                 <RadioGroup
-                  question={t("questions.firstMeeting.question")}
-                  name="entry.377341544"
-                  options={firstMeetingOptions}
+                  question={APPLY_FORM_QUESTIONS.firstMeeting.question[locale]}
+                  name={APPLY_FORM_QUESTIONS.firstMeeting.entryId}
+                  options={localizedOptions(APPLY_FORM_QUESTIONS.firstMeeting, locale)}
                   required
                 />
               </Section>
@@ -233,7 +251,7 @@ export default function ApplyPage() {
                 {t.rich("fallback", {
                   link: (chunks) => (
                     <a
-                      href={RECRUIT_FORM_URL}
+                      href={APPLY_FORM_VIEW_URL}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline"

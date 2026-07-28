@@ -139,38 +139,11 @@
     "fields": {
       "name": "이름",
       "studentId": "학번",
-      "contact": "전화번호 또는 기타 연락처",
+      "contact": "전화번호 (0XX-XXXX-XXXX 형식으로 써 주세요) 또는 기타 연락처",
       "email": "카이스트 이메일",
       "emailError": "@kaist.ac.kr 형식의 이메일을 입력해 주세요.",
       "motivation": "지원 동기",
-      "experience": "Problem Solving 관련 경험"
-    },
-    "questions": {
-      "commitment": {
-        "question": "동아리 활동에 성실히 참여할 자신이 있으신가요?",
-        "options": [
-          { "value": "Yes", "label": "예" },
-          { "value": "No", "label": "아니오" }
-        ]
-      },
-      "schedule": {
-        "question": "동아리 정기 모임은 수요일 오후 9시 30분에 있습니다.",
-        "options": [
-          { "value": "I read and understood", "label": "확인했습니다" },
-          { "value": "I did not read and understand", "label": "확인하지 못했습니다" }
-        ]
-      },
-      "firstMeeting": {
-        "question": "첫 정모는 3월 15일 오후 9시 30분부터 진행됩니다. 당일 시간이 되시나요?",
-        "options": [
-          { "value": "Yes", "label": "네, 가능합니다" },
-          {
-            "value": "No, but I want to join this club (in this case contact us right away)",
-            "label": "아니요, 하지만 가입은 하고 싶습니다 (이 경우 저희에게 바로 연락해 주세요)"
-          },
-          { "value": "No", "label": "아니오" }
-        ]
-      }
+      "experience": "Problem Solving 관련 경험(없어도 상관없음!!!!)"
     },
     "submit": "제출하기",
     "submitting": "제출 중...",
