@@ -183,36 +183,35 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
           </div>
 
           {activeContest && (
-            <div
-              key={activeContest.name}
-              className="animate-fade-scale-in rounded-2xl border border-black/10 p-5 dark:border-white/15"
-            >
-              <div className="flex items-baseline gap-2">
-                <a
-                  href={activeContest.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold underline decoration-black/20 underline-offset-4 hover:opacity-70 dark:decoration-white/30"
-                >
-                  {activeContest.name}
-                </a>
-                {activeContest.fullName && (
-                  <span className="text-sm opacity-60">{activeContest.fullName}</span>
+            <div className="min-h-[168px] rounded-2xl border border-black/10 p-5 sm:min-h-[152px] dark:border-white/15">
+              <div key={activeContest.name} className="animate-fade-in">
+                <div className="flex items-baseline gap-2">
+                  <a
+                    href={activeContest.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold underline decoration-black/20 underline-offset-4 hover:opacity-70 dark:decoration-white/30"
+                  >
+                    {activeContest.name}
+                  </a>
+                  {activeContest.fullName && (
+                    <span className="text-sm opacity-60">{activeContest.fullName}</span>
+                  )}
+                </div>
+                <p className="mt-1 text-sm opacity-70 sm:text-base">{activeContest.description}</p>
+                {activeContest.rounds && (
+                  <ul className="mt-3 flex flex-wrap gap-2">
+                    {activeContest.rounds.map((round) => (
+                      <li
+                        key={round}
+                        className="rounded-full border border-black/10 px-3 py-1 text-xs opacity-80 dark:border-white/15"
+                      >
+                        {round}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
-              <p className="mt-1 text-sm opacity-70 sm:text-base">{activeContest.description}</p>
-              {activeContest.rounds && (
-                <ul className="mt-3 flex flex-wrap gap-2">
-                  {activeContest.rounds.map((round) => (
-                    <li
-                      key={round}
-                      className="rounded-full border border-black/10 px-3 py-1 text-xs opacity-80 dark:border-white/15"
-                    >
-                      {round}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           )}
         </div>
