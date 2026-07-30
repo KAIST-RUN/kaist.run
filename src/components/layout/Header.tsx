@@ -10,10 +10,10 @@ export default async function Header({ locale }: { locale: Locale }) {
   const t = await getTranslations({ locale, namespace: "site" });
 
   return (
-    <header className="flex shrink-0 flex-col gap-2 border-b border-black/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-8 sm:py-4 lg:px-12 dark:border-white/10">
+    <header className="flex shrink-0 flex-col gap-3 border-b border-black/10 px-8 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-20 sm:py-6 lg:px-32 dark:border-white/10">
       <div className="flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2 font-bold">
-          <Logo className="h-5 w-auto sm:h-6" />
+          <Logo className="h-8 w-auto sm:h-10" />
           <span className="sr-only">{t("name")}</span>
         </Link>
         <div className="flex items-center gap-2 sm:hidden">

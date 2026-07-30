@@ -153,7 +153,7 @@ export default function ApplyPage() {
             </p>
             <Link
               href="/"
-              className="mt-4 rounded-full bg-[var(--foreground)] px-8 py-3 text-sm font-semibold text-[var(--background)] transition-opacity hover:opacity-80 sm:text-base"
+              className="mt-4 rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 sm:text-base"
             >
               {t("backHome")}
             </Link>
@@ -242,7 +242,7 @@ export default function ApplyPage() {
               <button
                 type="submit"
                 disabled={status === "submitting" || !isFormValid}
-                className="mt-2 w-full rounded-full bg-[var(--foreground)] px-8 py-3 text-sm font-semibold text-[var(--background)] transition-opacity hover:opacity-80 disabled:opacity-50 sm:text-base"
+                className="mt-2 w-full rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 disabled:opacity-50 sm:text-base"
               >
                 {status === "submitting" ? t("submitting") : t("submit")}
               </button>

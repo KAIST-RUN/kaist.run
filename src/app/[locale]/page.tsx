@@ -24,7 +24,7 @@ export default async function HomePage({
         {pinnedNotice && (
           <Link
             href={`/notices/${pinnedNotice.slug}`}
-            className="animate-fade-in-up flex shrink-0 items-center justify-center gap-2 border-b border-black/10 bg-black/[.03] px-4 py-2 text-center text-sm transition-colors hover:bg-black/[.05] sm:px-8 dark:border-white/10 dark:bg-white/[.04] dark:hover:bg-white/[.07]"
+            className="animate-fade-in-up flex shrink-0 items-center justify-center gap-2 border-b border-black/10 bg-black/[.03] px-4 py-2 text-center text-base transition-colors hover:bg-black/[.05] sm:px-8 dark:border-white/10 dark:bg-white/[.04] dark:hover:bg-white/[.07]"
           >
             <span className="shrink-0 font-semibold">📢 {t("bannerLabel")}</span>
             <span className="truncate">{pinnedNotice.title}</span>
@@ -38,7 +38,7 @@ export default async function HomePage({
             </span>
             <h1 className="flex flex-col items-center gap-3 sm:gap-4">
               <Logo
-                className="animate-fade-in-up h-16 w-auto sm:h-24"
+                className="animate-fade-in-up h-24 w-auto sm:h-36"
                 style={{ animationDelay: "80ms" }}
               />
               <span className="sr-only">{tSite("name")}</span>

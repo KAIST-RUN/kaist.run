@@ -170,9 +170,9 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
                   type="button"
                   aria-expanded={isExpanded}
                   onClick={() => setExpandedContest(contest.name)}
-                  className={`rounded-full px-3 py-1 text-sm transition-colors ${
+                  className={`cursor-pointer rounded-full px-3 py-1 text-sm transition-colors ${
                     isExpanded
-                      ? "bg-[var(--foreground)] text-[var(--background)]"
+                      ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
                       : "bg-black/[.05] hover:bg-black/[.1] dark:bg-white/[.08] dark:hover:bg-white/[.14]"
                   }`}
                 >
@@ -183,7 +183,7 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
           </div>
 
           {activeContest && (
-            <div className="min-h-[168px] rounded-2xl border border-black/10 p-5 sm:min-h-[152px] dark:border-white/15">
+            <div className="h-[190px] overflow-hidden rounded-2xl border border-black/10 p-5 sm:h-[168px] dark:border-white/15">
               <div key={activeContest.name} className="animate-fade-in">
                 <div className="flex items-baseline gap-2">
                   <a
@@ -261,7 +261,7 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
         </p>
         <Link
           href="/apply"
-          className="reveal rounded-full bg-[var(--foreground)] px-8 py-3 text-sm font-semibold text-[var(--background)] transition-opacity hover:opacity-80 sm:text-base"
+          className="reveal rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 sm:text-base"
         >
           {recruit.buttonLabel}
         </Link>

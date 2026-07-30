@@ -6,11 +6,19 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --logo-primary: #2fae19;
+  --logo-accent: #e8524f;
+  --accent: var(--logo-primary);
+  --accent-foreground: #ffffff;
 }
 
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --logo-primary: #70ff44;
+  --logo-accent: #ff6f6f;
+  --accent: var(--logo-primary);
+  --accent-foreground: #0a0a0a;
 }
 
 :root {

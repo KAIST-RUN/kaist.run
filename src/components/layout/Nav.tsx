@@ -24,7 +24,7 @@ export default async function Nav() {
       ))}
       <Link
         href="/apply"
-        className="whitespace-nowrap rounded-full bg-[var(--foreground)] px-4 py-1.5 font-semibold text-[var(--background)] transition-opacity hover:opacity-80"
+        className="whitespace-nowrap rounded-full bg-[var(--accent)] px-4 py-1.5 font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80"
       >
         {t("apply")}
       </Link>
