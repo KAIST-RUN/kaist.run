@@ -13,7 +13,7 @@ export default async function Header({ locale }: { locale: Locale }) {
   return (
     <header className="flex shrink-0 flex-col gap-3 border-b border-black/10 px-8 pt-2 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-20 sm:pt-3 sm:pb-5 lg:px-32 dark:border-white/10">
       <div className="flex items-center justify-between gap-4">
-        <div className="-ml-1 flex items-center gap-3 sm:ml-0">
+        <div className="-ml-1 flex items-center gap-1 sm:ml-0 sm:gap-3">
           <MobileNav />
           <Link href="/" className="flex items-center gap-2 font-bold">
             <Logo className="h-8 w-auto sm:h-10" />
