@@ -32,7 +32,7 @@ export default async function HomePage({
         )}
 
         <section className="relative flex flex-1 flex-col items-center justify-center px-6 py-16 sm:px-10">
-          <div className="mx-auto flex max-w-3xl -translate-y-6 flex-col items-center gap-5 text-center sm:-translate-y-10 sm:gap-4">
+          <div className="mx-auto flex max-w-3xl -translate-y-8 flex-col items-center gap-5 text-center sm:-translate-y-14 sm:gap-4">
             <span className="animate-fade-in-up text-xs font-bold tracking-[0.2em] opacity-50 sm:text-sm">
               {t("since")}
             </span>
