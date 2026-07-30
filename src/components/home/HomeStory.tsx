@@ -299,6 +299,44 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
           </div>
         )}
       </section>
+
+      {/* 협력 기관 */}
+      <section className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 pt-4 pb-16 sm:px-10 sm:pb-24 lg:px-12">
+        <div className="reveal flex flex-wrap items-center justify-center gap-8 sm:gap-10">
+          <a
+            href="https://cs.kaist.ac.kr/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-opacity hover:opacity-70"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/kaist_soc.png"
+              alt="KAIST School of Computing"
+              className="h-8 w-auto object-contain sm:h-11"
+            />
+          </a>
+          <a
+            href="https://www.janestreet.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-opacity hover:opacity-70"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/jane_street_light.png"
+              alt="Jane Street"
+              className="h-8 w-auto object-contain sm:h-11 dark:hidden"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/jane_street_dark.svg"
+              alt="Jane Street"
+              className="hidden h-8 w-auto object-contain sm:h-11 dark:block"
+            />
+          </a>
+        </div>
+      </section>
     </div>
   );
 }

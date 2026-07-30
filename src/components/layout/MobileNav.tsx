@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { NAV_ITEMS } from "./nav-items";
+import ScrollTopLink from "./ScrollTopLink";
 
 export default function MobileNav() {
   const t = useTranslations("nav");
@@ -74,16 +75,19 @@ export default function MobileNav() {
           </svg>
         </button>
 
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setOpen(false)}
-            className="rounded-lg px-2 py-2.5 text-base opacity-80 transition-opacity hover:opacity-100"
-          >
-            {t(item.key)}
-          </Link>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const ItemLink = item.href === "/" ? ScrollTopLink : Link;
+          return (
+            <ItemLink
+              key={item.href}
+              href={item.href}
+              onClick={() => setOpen(false)}
+              className="rounded-lg px-2 py-2.5 text-base opacity-80 transition-opacity hover:opacity-100"
+            >
+              {t(item.key)}
+            </ItemLink>
+          );
+        })}
         <Link
           href="/apply"
           onClick={() => setOpen(false)}

@@ -1,10 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
-import { Link } from "@/i18n/navigation";
 import Nav from "./Nav";
 import MobileNav from "./MobileNav";
 import LocaleSwitcher from "./LocaleSwitcher";
 import ThemeToggle from "./ThemeToggle";
+import ScrollTopLink from "./ScrollTopLink";
 import Logo from "@/components/Logo";
 
 export default async function Header({ locale }: { locale: Locale }) {
@@ -15,10 +15,10 @@ export default async function Header({ locale }: { locale: Locale }) {
       <div className="flex items-center justify-between gap-4">
         <div className="-ml-1 flex items-center gap-1 sm:ml-0 sm:gap-3">
           <MobileNav />
-          <Link href="/" className="flex items-center gap-2 font-bold">
+          <ScrollTopLink href="/" className="flex items-center gap-2 font-bold">
             <Logo className="h-8 w-auto sm:h-10" />
             <span className="sr-only">{t("name")}</span>
-          </Link>
+          </ScrollTopLink>
         </div>
         <div className="flex translate-y-1 items-center gap-2 sm:hidden">
           <LocaleSwitcher />
