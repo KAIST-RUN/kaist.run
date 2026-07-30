@@ -8,7 +8,9 @@
     "notices": "공지",
     "archive": "대회 아카이브",
     "contact": "연락처",
-    "apply": "지원"
+    "apply": "지원",
+    "openMenu": "메뉴 열기",
+    "closeMenu": "메뉴 닫기"
   },
   "theme": {
     "light": "라이트 모드",

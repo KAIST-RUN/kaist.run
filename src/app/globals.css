@@ -91,7 +91,7 @@ body {
   *,
   *::before,
   *::after {
-    transition-property: background-color, border-color, color, fill, stroke, transform, box-shadow;
+    transition-property: background-color, border-color, color, fill, stroke, transform, translate, scale, rotate, box-shadow;
     transition-timing-function: ease;
     transition-duration: 200ms;
   }

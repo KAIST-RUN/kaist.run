@@ -8,7 +8,9 @@
     "notices": "Notices",
     "archive": "Contest Archive",
     "contact": "Contact",
-    "apply": "Apply"
+    "apply": "Apply",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "theme": {
     "light": "Light mode",
