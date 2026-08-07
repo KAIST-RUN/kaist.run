@@ -40,16 +40,17 @@ export default {
   // Cloudflare Email Routing 규칙이 이 Worker로 메일을 보내면 호출됩니다.
   // (대시보드에서 규칙을 "Send to a Worker" → 이 Worker로 설정해야 함 — README 참고)
   async email(message: ForwardableEmailMessage, env: Env, _ctx: ExecutionContext) {
-    const raw = await new Response(message.raw).arrayBuffer();
-
-    // R2 저장이 실패해도 기존 Gmail 포워딩(→ 다른 Discord 봇의 알림)은 항상
-    // 그대로 이어져야 하므로, 저장 실패는 로그만 남기고 넘어갑니다.
+    // 뷰어용 저장(원본 버퍼링 포함) 과정에서 무엇이 실패하든 — R2 한도 초과든,
+    // 스트림을 읽다가 나는 오류든 — 기존 Gmail 포워딩(→ 다른 Discord 봇의 알림)은
+    // 항상 그대로 이어져야 하므로, 이 블록 전체를 감싸서 실패는 로그만 남기고
+    // 넘어갑니다. message.forward()는 try/catch 밖에서 무조건 실행됩니다.
     let viewUrl: string | null = null;
     try {
+      const raw = await new Response(message.raw).arrayBuffer();
       const id = await storeRawEmail(env, raw);
       viewUrl = `${ALLOWED_ORIGINS[0]}/email/${id}`;
     } catch (err) {
-      console.error("Failed to store incoming email in R2", err);
+      console.error("Failed to store incoming email for the viewer", err);
     }
 
     const headers = viewUrl ? new Headers({ "X-Kaist-Run-Email-Url": viewUrl }) : undefined;

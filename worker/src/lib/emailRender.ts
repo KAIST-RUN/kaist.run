@@ -64,6 +64,10 @@ export function renderErrorPage(title: string, message: string): string {
 }
 
 export function renderEmailPage(id: string, email: Email): string {
+  // id는 URL 경로에서 그대로 옵니다 — 지금은 항상 서버가 생성한 랜덤 hex라
+  // 위험한 문자가 들어올 일이 없지만, href에 그대로 꽂아 넣는 값이라 방어적으로
+  // escape 해둡니다.
+  const safeId = escapeHtml(id);
   const subject = email.subject || "(제목 없음)";
   const attachments: Attachment[] = email.attachments ?? [];
 
@@ -80,7 +84,7 @@ export function renderEmailPage(id: string, email: Email): string {
           ${attachments
             .map(
               (att, i) =>
-                `<li><a href="/email/${id}/attachments/${i}">${escapeHtml(att.filename || `attachment-${i}`)}</a> (${formatBytes(attachmentByteLength(att.content))})</li>`,
+                `<li><a href="/email/${safeId}/attachments/${i}">${escapeHtml(att.filename || `attachment-${i}`)}</a> (${formatBytes(attachmentByteLength(att.content))})</li>`,
             )
             .join("\n")}
         </ul>
@@ -96,7 +100,7 @@ export function renderEmailPage(id: string, email: Email): string {
       <dt>날짜</dt><dd>${escapeHtml(email.date || "-")}</dd>
     </dl>
     <div class="toolbar">
-      <a href="/email/${id}/raw">원본 .eml 다운로드</a>
+      <a href="/email/${safeId}/raw">원본 .eml 다운로드</a>
     </div>
     ${bodyHtml}
     ${attachmentsHtml}
