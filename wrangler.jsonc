@@ -1,8 +1,14 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "kaist-run",
-  "compatibility_date": "2026-08-07",
-  "assets": {
-    "directory": "./out"
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "kaist-run",
+	"compatibility_date": "2026-08-07",
+	"assets": {
+		"directory": "./out"
+	},
+	"r2_buckets": [
+		{
+			"bucket_name": "kaist-run-emails",
+			"binding": "kaist_run_emails"
+		}
+	]
 }
