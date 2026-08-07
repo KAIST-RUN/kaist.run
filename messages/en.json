@@ -8,7 +8,6 @@
     "notices": "Notices",
     "archive": "Contest Archive",
     "contact": "Contact",
-    "apply": "Apply",
     "openMenu": "Open menu",
     "closeMenu": "Close menu"
   },
@@ -159,8 +158,15 @@
     "loading": "Loading your account...",
     "backHome": "Back to home",
     "header": {
-      "signIn": "Sign in",
-      "myPage": "My page"
+      "myPage": "My page",
+      "joinOrSignIn": "Apply / Sign in",
+      "modal": {
+        "heading": "Join RUN",
+        "joinQuestion": "Want to join RUN?",
+        "joinCta": "Apply now",
+        "loginQuestion": "Already a RUN member?",
+        "loginCta": "Sign in with Discord"
+      }
     },
     "signInRequired": {
       "title": "Sign in required",

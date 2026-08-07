@@ -88,13 +88,6 @@ export default function MobileNav() {
             </ItemLink>
           );
         })}
-        <Link
-          href="/apply"
-          onClick={() => setOpen(false)}
-          className="mt-2 whitespace-nowrap rounded-full bg-[var(--accent)] px-4 py-2 text-center font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80"
-        >
-          {t("apply")}
-        </Link>
       </div>
     </div>
   );

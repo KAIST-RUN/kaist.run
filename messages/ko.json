@@ -8,7 +8,6 @@
     "notices": "공지",
     "archive": "대회 아카이브",
     "contact": "연락처",
-    "apply": "지원",
     "openMenu": "메뉴 열기",
     "closeMenu": "메뉴 닫기"
   },
@@ -159,8 +158,15 @@
     "loading": "계정 정보를 불러오는 중입니다...",
     "backHome": "홈으로 돌아가기",
     "header": {
-      "signIn": "로그인",
-      "myPage": "마이페이지"
+      "myPage": "마이페이지",
+      "joinOrSignIn": "지원/로그인",
+      "modal": {
+        "heading": "RUN과 함께하기",
+        "joinQuestion": "RUN에 가입하고 싶으신가요?",
+        "joinCta": "가입 신청하기",
+        "loginQuestion": "이미 RUN 회원이신가요?",
+        "loginCta": "Discord로 로그인"
+      }
     },
     "signInRequired": {
       "title": "로그인이 필요합니다",

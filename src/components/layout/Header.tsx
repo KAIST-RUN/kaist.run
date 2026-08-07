@@ -12,7 +12,7 @@ export default async function Header({ locale }: { locale: Locale }) {
   const t = await getTranslations({ locale, namespace: "site" });
 
   return (
-    <header className="flex shrink-0 flex-col gap-3 border-b border-black/10 px-8 pt-2 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-20 sm:pt-3 sm:pb-5 lg:px-32 dark:border-white/10">
+    <header className="flex shrink-0 flex-col gap-3 border-b border-black/10 px-8 pt-2 pb-4 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-6 sm:px-20 sm:pt-3 sm:pb-5 lg:px-32 dark:border-white/10">
       <div className="flex items-center justify-between gap-4">
         <div className="-ml-1 flex items-center gap-1 sm:ml-0 sm:gap-3">
           <MobileNav />
@@ -27,13 +27,13 @@ export default async function Header({ locale }: { locale: Locale }) {
           <AccountButton />
         </div>
       </div>
-      <div className="hidden items-center gap-4 sm:flex sm:translate-y-1 sm:gap-6">
+      <div className="hidden justify-center sm:flex sm:translate-y-1">
         <Nav />
-        <div className="flex items-center gap-2">
-          <LocaleSwitcher />
-          <ThemeToggle />
-          <AccountButton />
-        </div>
+      </div>
+      <div className="hidden items-center justify-end gap-2 sm:flex sm:translate-y-1">
+        <LocaleSwitcher />
+        <ThemeToggle />
+        <AccountButton />
       </div>
     </header>
   );
