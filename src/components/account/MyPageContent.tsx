@@ -13,6 +13,9 @@ import AccountMenu from "./AccountMenu";
 const PRIMARY_BUTTON_CLASS =
   "mt-2 rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 sm:text-base";
 
+const DISCORD_BUTTON_CLASS =
+  "mt-2 inline-flex w-fit items-center gap-2 rounded-full bg-[#5865F2] px-8 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-80 sm:text-base";
+
 function SkeletonBlock({ className }: { className: string }) {
   return <div aria-hidden="true" className={`rounded-2xl bg-black/[.04] dark:bg-white/[.05] ${className}`} />;
 }
@@ -66,7 +69,9 @@ export default function MyPageContent() {
             <p className="text-lg font-bold sm:text-xl">{t("signInRequired.title")}</p>
             <p className="text-sm opacity-70 sm:text-base">{t("signInRequired.body")}</p>
           </div>
-          <a href={getDiscordLoginHref(locale)} className={PRIMARY_BUTTON_CLASS}>
+          <a href={getDiscordLoginHref(locale)} className={DISCORD_BUTTON_CLASS}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/Discord-Symbol-White.svg" alt="" className="h-4 w-auto" />
             {t("signInRequired.cta")}
           </a>
         </div>
