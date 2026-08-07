@@ -14,6 +14,13 @@ async function requireAdmin(c: Context<{ Bindings: Env }>): Promise<Response | n
 
   if (!auth.ok) {
     if (auth.reason === "signed-out") {
+      // 방금 Discord 로그인은 성공했지만 회원 명단에 없어서 세션이 안 만들어진 채
+      // 돌아온 경우(auth.ts의 authError=not_member) — 여기서 다시 로그인으로
+      // 보내면 Discord가 계속 재인증만 하고 회원이 아니라는 사실은 안 바뀌므로
+      // 무한 리다이렉트 루프가 됩니다. 이때는 바로 에러 페이지를 보여줍니다.
+      if (c.req.query("authError") === "not_member") {
+        return c.html(renderErrorPage("접근 권한이 없습니다", "권한이 없습니다."), 403);
+      }
       const returnTo = encodeURIComponent(c.req.url);
       return c.redirect(`/api/auth/discord?returnTo=${returnTo}`);
     }

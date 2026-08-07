@@ -29,6 +29,43 @@ function attachmentByteLength(content: Attachment["content"]): number {
   return typeof content === "string" ? new TextEncoder().encode(content).length : content.byteLength;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function toBase64(content: Attachment["content"]): string {
+  const bytes =
+    typeof content === "string"
+      ? new TextEncoder().encode(content)
+      : content instanceof Uint8Array
+        ? content
+        : new Uint8Array(content);
+
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+// 본문에 인라인으로 삽입된 이미지(<img src="cid:...">)는 브라우저가 cid: URI를
+// 직접 못 불러오기 때문에 그냥 안 보이거나 파일명만 뜹니다. Content-ID가 있는
+// 첨부파일을 data: URI로 바로 심어서 이미지가 바로 보이게 합니다.
+//
+// 다운로드 경로(/email/<id>/attachments/<index>)로 바꾸는 방법도 시도해봤는데,
+// 본문 iframe이 sandbox(스크립트 없음)라 origin이 opaque 취급되어 그 안에서
+// 나가는 이미지 요청엔 세션 쿠키(SameSite=Lax)가 안 실려서 401이 났습니다.
+// data: URI는 별도 요청 자체가 없어서 이 문제가 아예 생기지 않습니다.
+function resolveInlineImages(html: string, attachments: Attachment[]): string {
+  let result = html;
+  for (const att of attachments) {
+    if (!att.contentId) continue;
+    const cid = att.contentId.replace(/^<|>$/g, "");
+    const pattern = new RegExp(`cid:${escapeRegExp(cid)}`, "gi");
+    const mime = att.mimeType || "application/octet-stream";
+    result = result.replace(pattern, `data:${mime};base64,${toBase64(att.content)}`);
+  }
+  return result;
+}
+
 // 이메일 HTML은 대부분 "배경은 기본값(흰색)에 맡기고 글씨 색만 지정"하는 식으로
 // 작성됩니다. 뷰어를 다크모드로 열면 브라우저/확장 프로그램의 강제 다크모드가
 // (작성자가 명시 안 한) 배경만 검게 뒤집고 명시된 글씨 색은 그대로 둬서
@@ -105,7 +142,7 @@ export function renderEmailPage(id: string, email: Email): string {
   const attachments: Attachment[] = email.attachments ?? [];
 
   const bodyHtml = email.html
-    ? `<iframe class="body-frame" sandbox srcdoc="${escapeHtml(forceLightColorScheme(email.html))}"></iframe>`
+    ? `<iframe class="body-frame" sandbox srcdoc="${escapeHtml(forceLightColorScheme(resolveInlineImages(email.html, attachments)))}"></iframe>`
     : `<div class="body-text">${escapeHtml(email.text || "(본문 없음)")}</div>`;
 
   const attachmentsHtml =
