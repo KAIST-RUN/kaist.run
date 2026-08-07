@@ -1,18 +1,8 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "kaist-run",
-	"compatibility_date": "2026-08-07",
-	"assets": {
-		"directory": "./out"
-	},
-	"kv_namespaces": [
-		{
-			"binding": "SESSIONS",
-			"id": "00af94e749d845afab109ba2c2459ccc"
-		},
-		{
-			"binding": "MEMBERS",
-			"id": "6e8d45c7760640a1add8fb62e7ad3f23"
-		}
-	]
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kaist-run",
+  "compatibility_date": "2026-08-07",
+  "assets": {
+    "directory": "./out"
+  }
 }
