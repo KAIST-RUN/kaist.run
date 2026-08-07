@@ -1,0 +1,21 @@
+# 로컬 개발용 시크릿 예시입니다. 실제 값을 채운 뒤 파일명을 .dev.vars로 바꾸세요.
+# .dev.vars는 .gitignore에 있어서 커밋되지 않습니다.
+# 프로덕션 값은 여기 두지 말고 `wrangler secret put <이름>`으로 등록하세요.
+
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+
+# 순수 로컬 테스트를 하려면(배포 전) 이 값을 로컬 Worker 주소로 바꾸고,
+# Discord Developer Portal에도 같은 주소를 Redirect로 추가 등록하세요.
+# 안 쓰면 wrangler.jsonc의 vars.DISCORD_REDIRECT_URI(프로덕션 값)가 쓰입니다.
+# DISCORD_REDIRECT_URI=http://localhost:8787/api/auth/discord/callback
+
+# 역대 회원 스프레드시트를 이미 다루고 있는 Discord 봇과 같은 서비스 계정을
+# 재사용하면 시트에 새로 공유 권한을 추가할 필요가 없습니다.
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
+ROSTER_ALL_TIME_SHEET_ID=
+GOOGLE_SHEET_RANGE=Sheet1
+
+# /api/admin/sync-members 수동 호출 시 사용할 임의의 긴 문자열
+ADMIN_SYNC_SECRET=

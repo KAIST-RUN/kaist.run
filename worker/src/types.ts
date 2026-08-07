@@ -1,0 +1,33 @@
+export type Env = {
+  SESSIONS: KVNamespace;
+  MEMBERS: KVNamespace;
+
+  DISCORD_CLIENT_ID: string;
+  DISCORD_CLIENT_SECRET: string;
+  DISCORD_REDIRECT_URI: string;
+
+  // 기존 Discord 봇(역대 회원 스프레드시트를 편집하는)과 같은 서비스 계정을
+  // 재사용합니다 — 시트에 새로 공유 권한을 추가할 필요 없음.
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: string;
+  GOOGLE_PRIVATE_KEY: string;
+  ROSTER_ALL_TIME_SHEET_ID: string;
+  GOOGLE_SHEET_RANGE: string;
+
+  ADMIN_SYNC_SECRET: string;
+};
+
+// 프런트엔드(src/types/account.ts)의 CurrentUser와 반드시 같은 모양을 유지해야 합니다.
+export type CurrentUser = {
+  discordId: string;
+  discordUsername: string;
+  discordDisplayName: string | null;
+  avatarUrl: string | null;
+
+  name: string | null;
+  email: string | null;
+  studentId: string | null;
+  joinedYear: number | null;
+
+  status: "applicant" | "member" | "alumni";
+  role: "member" | "admin";
+};

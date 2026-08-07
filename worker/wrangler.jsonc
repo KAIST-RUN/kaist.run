@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kaist-run-auth",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-07",
+
+  // 아래 두 KV namespace는 배포 전에 직접 만들어야 합니다.
+  //   npx wrangler kv namespace create SESSIONS
+  //   npx wrangler kv namespace create MEMBERS
+  // 명령이 출력하는 id 값을 아래 "id"에 채워 넣으세요. (자세한 건 README 참고)
+  "kv_namespaces": [
+    { "binding": "SESSIONS", "id": "00af94e749d845afab109ba2c2459ccc" },
+    { "binding": "MEMBERS", "id": "6e8d45c7760640a1add8fb62e7ad3f23" }
+  ],
+
+  // 매시 정각에 Google Sheets → KV로 회원 명단을 다시 동기화합니다.
+  // 필요하면 주기를 조정하세요 (cron 표현식).
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+
+  // kaist.run/api/* 요청만 이 Worker로 오도록 합니다. 나머지 경로(정적 사이트)는
+  // 기존 배포가 그대로 처리합니다. zone에 이미 다른 Worker/Pages가 연결되어 있어도
+  // 경로 패턴이 더 구체적인 쪽이 우선합니다.
+  "routes": [
+    { "pattern": "kaist.run/api/*", "zone_name": "kaist.run" }
+  ],
+
+  // 민감하지 않은 설정값. 민감한 값(시크릿)은 `wrangler secret put`으로 별도 등록합니다.
+  "vars": {
+    "DISCORD_REDIRECT_URI": "https://kaist.run/api/auth/discord/callback",
+    "GOOGLE_SHEET_RANGE": "Sheet1"
+  }
+}
