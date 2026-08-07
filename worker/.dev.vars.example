@@ -19,3 +19,8 @@ GOOGLE_SHEET_RANGE=Sheet1
 
 # /api/admin/sync-members 수동 호출 시 사용할 임의의 긴 문자열
 ADMIN_SYNC_SECRET=
+
+# EMAIL_FORWARD_TO는 시크릿이 아니라 wrangler.jsonc의 vars에 이미 있어서 보통은
+# 안 채워도 됩니다. 로컬에서 실제 발신 없이 다른 Gmail 주소로 테스트하고 싶을
+# 때만 여기서 덮어쓰세요.
+# EMAIL_FORWARD_TO=

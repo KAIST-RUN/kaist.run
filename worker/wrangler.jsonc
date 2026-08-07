@@ -13,22 +13,30 @@
     { "binding": "MEMBERS", "id": "6e8d45c7760640a1add8fb62e7ad3f23" }
   ],
 
+  // 이메일 뷰어(kaist.run/email/<id>)가 원본 .eml을 저장하는 버킷입니다.
+  // 배포 전에 만들어야 합니다: npx wrangler r2 bucket create kaist-run-emails
+  "r2_buckets": [
+    { "binding": "EMAILS", "bucket_name": "kaist-run-emails" }
+  ],
+
   // 매시 정각에 Google Sheets → KV로 회원 명단을 다시 동기화합니다.
   // 필요하면 주기를 조정하세요 (cron 표현식).
   "triggers": {
     "crons": ["0 * * * *"]
   },
 
-  // kaist.run/api/* 요청만 이 Worker로 오도록 합니다. 나머지 경로(정적 사이트)는
-  // 기존 배포가 그대로 처리합니다. zone에 이미 다른 Worker/Pages가 연결되어 있어도
-  // 경로 패턴이 더 구체적인 쪽이 우선합니다.
+  // kaist.run/api/*, kaist.run/email/* 요청만 이 Worker로 오도록 합니다.
+  // 나머지 경로(정적 사이트)는 기존 배포가 그대로 처리합니다. zone에 이미 다른
+  // Worker/Pages가 연결되어 있어도 경로 패턴이 더 구체적인 쪽이 우선합니다.
   "routes": [
-    { "pattern": "kaist.run/api/*", "zone_name": "kaist.run" }
+    { "pattern": "kaist.run/api/*", "zone_name": "kaist.run" },
+    { "pattern": "kaist.run/email/*", "zone_name": "kaist.run" }
   ],
 
   // 민감하지 않은 설정값. 민감한 값(시크릿)은 `wrangler secret put`으로 별도 등록합니다.
   "vars": {
     "DISCORD_REDIRECT_URI": "https://kaist.run/api/auth/discord/callback",
-    "GOOGLE_SHEET_RANGE": "Sheet1"
+    "GOOGLE_SHEET_RANGE": "Sheet1",
+    "EMAIL_FORWARD_TO": "kaist.run@gmail.com"
   }
 }

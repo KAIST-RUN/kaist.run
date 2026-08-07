@@ -14,6 +14,10 @@ export type Env = {
   GOOGLE_SHEET_RANGE: string;
 
   ADMIN_SYNC_SECRET: string;
+
+  // 이메일 뷰어(kaist.run/email/<id>)용.
+  EMAILS: R2Bucket;
+  EMAIL_FORWARD_TO: string; // 지금까지 Gmail로 포워딩하던 그 주소
 };
 
 // 프런트엔드(src/types/account.ts)의 CurrentUser와 반드시 같은 모양을 유지해야 합니다.

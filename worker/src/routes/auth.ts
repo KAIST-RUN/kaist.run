@@ -13,10 +13,15 @@ function randomState(): string {
 }
 
 // returnTo는 프런트가 항상 절대 URL로 보냅니다 (src/lib/account/authLinks.ts).
-// ALLOWED_ORIGINS에 있는 origin을 가리킬 때만 허용합니다 (open redirect 방지).
+// ALLOWED_ORIGINS에 있는 호스트를 가리킬 때만 허용합니다 (open redirect 방지).
+// scheme(http/https)까지는 안 따집니다 — 로컬 wrangler dev가 실제 요청을
+// http://kaist.run/...로 시뮬레이션하는 경우가 있어서, origin 전체(scheme
+// 포함)로 비교하면 로컬에서 정상적인 returnTo까지 거부될 수 있습니다.
+const ALLOWED_RETURN_HOSTS = new Set(ALLOWED_ORIGINS.map((origin) => new URL(origin).hostname));
+
 function isSafeReturnTo(returnTo: string): boolean {
   try {
-    return ALLOWED_ORIGINS.includes(new URL(returnTo).origin);
+    return ALLOWED_RETURN_HOSTS.has(new URL(returnTo).hostname);
   } catch {
     return false;
   }
