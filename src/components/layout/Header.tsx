@@ -5,6 +5,7 @@ import MobileNav from "./MobileNav";
 import LocaleSwitcher from "./LocaleSwitcher";
 import ThemeToggle from "./ThemeToggle";
 import ScrollTopLink from "./ScrollTopLink";
+import AccountButton from "@/components/account/AccountButton";
 import Logo from "@/components/Logo";
 
 export default async function Header({ locale }: { locale: Locale }) {
@@ -23,6 +24,7 @@ export default async function Header({ locale }: { locale: Locale }) {
         <div className="flex translate-y-1 items-center gap-2 sm:hidden">
           <LocaleSwitcher />
           <ThemeToggle />
+          <AccountButton />
         </div>
       </div>
       <div className="hidden items-center gap-4 sm:flex sm:translate-y-1 sm:gap-6">
@@ -30,6 +32,7 @@ export default async function Header({ locale }: { locale: Locale }) {
         <div className="flex items-center gap-2">
           <LocaleSwitcher />
           <ThemeToggle />
+          <AccountButton />
         </div>
       </div>
     </header>

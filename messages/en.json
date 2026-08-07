@@ -153,5 +153,54 @@
     "successTitle": "Application submitted!",
     "successBody": "Thanks for your interest in RUN. We'll get back to you after reviewing your application.",
     "backHome": "Back to home"
+  },
+  "account": {
+    "pageTitle": "My page",
+    "loading": "Loading your account...",
+    "backHome": "Back to home",
+    "header": {
+      "signIn": "Sign in",
+      "myPage": "My page"
+    },
+    "signInRequired": {
+      "title": "Sign in required",
+      "body": "Please sign in with Discord to access your page.",
+      "cta": "Sign in with Discord"
+    },
+    "notMember": {
+      "title": "This Discord account is not a registered club member",
+      "body": "If you think this is a mistake, please contact the club."
+    },
+    "forbidden": {
+      "title": "Access denied",
+      "body": "Your account doesn't have access to this page."
+    },
+    "error": {
+      "title": "Could not load your account information.",
+      "body": "Please try again later.",
+      "retry": "Try again"
+    },
+    "status": {
+      "applicant": "Application pending",
+      "member": "Current member",
+      "alumni": "Alumni"
+    },
+    "adminBadge": "Admin",
+    "memberInfo": {
+      "title": "Member Information",
+      "name": "Name",
+      "email": "KAIST email",
+      "studentId": "Student ID",
+      "joinedYear": "Year joined",
+      "joinedYearValue": "{year}",
+      "discordAccount": "Discord account",
+      "notRegistered": "Not registered"
+    },
+    "menu": {
+      "language": "Language",
+      "home": "Back to home",
+      "logout": "Sign out",
+      "logoutError": "Sign-out failed. Please try again."
+    }
   }
 }
