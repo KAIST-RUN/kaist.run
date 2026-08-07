@@ -29,6 +29,23 @@ function attachmentByteLength(content: Attachment["content"]): number {
   return typeof content === "string" ? new TextEncoder().encode(content).length : content.byteLength;
 }
 
+// 이메일 HTML은 대부분 "배경은 기본값(흰색)에 맡기고 글씨 색만 지정"하는 식으로
+// 작성됩니다. 뷰어를 다크모드로 열면 브라우저/확장 프로그램의 강제 다크모드가
+// (작성자가 명시 안 한) 배경만 검게 뒤집고 명시된 글씨 색은 그대로 둬서
+// "검은 글씨 위에 검은 배경"이 되는 경우가 있습니다. 이메일 클라이언트들이
+// 다 그렇듯 본문은 항상 라이트 모드로 고정해서 보여줍니다 — 다크모드 대응은
+// 우리가 만든 바깥 UI(제목/헤더/툴바)에만 적용하면 됩니다.
+function forceLightColorScheme(html: string): string {
+  const tag = '<meta name="color-scheme" content="only light"><style>html,body{background:#fff;color:#000}</style>';
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, (match) => `${match}${tag}`);
+  }
+  if (/<html[^>]*>/i.test(html)) {
+    return html.replace(/<html[^>]*>/i, (match) => `${match}<head>${tag}</head>`);
+  }
+  return `${tag}${html}`;
+}
+
 const PAGE_STYLE = `
   body { font-family: -apple-system, "Malgun Gothic", sans-serif; max-width: 900px; margin: 0 auto; padding: 24px 16px; color: #171717; }
   @media (prefers-color-scheme: dark) { body { color: #ededed; background: #0a0a0a; } a { color: #8ab4ff; } }
@@ -37,7 +54,7 @@ const PAGE_STYLE = `
   dt { font-weight: 600; }
   dd { margin: 0; word-break: break-word; }
   .toolbar { display: flex; gap: 12px; margin-bottom: 20px; font-size: 0.875rem; }
-  .body-frame { width: 100%; height: 70vh; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; }
+  .body-frame { width: 100%; height: 70vh; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; background: #fff; color-scheme: light; }
   .body-text { white-space: pre-wrap; word-break: break-word; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; padding: 16px; font-size: 0.9rem; }
   .attachments { margin-top: 20px; font-size: 0.875rem; }
   .attachments ul { padding-left: 20px; }
@@ -72,7 +89,7 @@ export function renderEmailPage(id: string, email: Email): string {
   const attachments: Attachment[] = email.attachments ?? [];
 
   const bodyHtml = email.html
-    ? `<iframe class="body-frame" sandbox srcdoc="${escapeHtml(email.html)}"></iframe>`
+    ? `<iframe class="body-frame" sandbox srcdoc="${escapeHtml(forceLightColorScheme(email.html))}"></iframe>`
     : `<div class="body-text">${escapeHtml(email.text || "(본문 없음)")}</div>`;
 
   const attachmentsHtml =
