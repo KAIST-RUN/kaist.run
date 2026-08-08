@@ -17,7 +17,7 @@ import {
   type Season,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
-import { syncMembersFromSheet, getMembersLastSyncedAt } from "../lib/members";
+import { syncMembersFromSheet, getMembersLastSyncedAt, listMembers } from "../lib/members";
 import {
   renderBackstageHome,
   renderNoticeList,
@@ -25,6 +25,7 @@ import {
   renderArchiveList,
   renderArchiveForm,
   archiveRowsToFormData,
+  renderMemberList,
   renderContactForm,
   contactRowsToFormData,
   renderUploadList,
@@ -356,6 +357,41 @@ backstage.post("/archive/:season/:slug/delete", async (c) => {
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect(`/archive/${season}`);
+});
+
+// ---------- members ----------
+
+const MEMBERS_PAGE_SIZE = 30;
+
+function paginateMembers(c: { req: { query(key: string): string | undefined } }, members: Awaited<ReturnType<typeof listMembers>>) {
+  const q = (c.req.query("q") ?? "").trim().toLowerCase();
+  const page = Math.max(0, Number.parseInt(c.req.query("page") ?? "0", 10) || 0);
+
+  const filtered = q
+    ? members.filter((m) => [m.name, m.studentId, m.email, m.discordId].some((v) => v?.toLowerCase().includes(q)))
+    : members;
+  const start = page * MEMBERS_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + MEMBERS_PAGE_SIZE);
+
+  return {
+    pageItems,
+    meta: {
+      q,
+      page,
+      hasPrev: page > 0,
+      hasNext: start + MEMBERS_PAGE_SIZE < filtered.length,
+      total: filtered.length,
+    },
+  };
+}
+
+backstage.get("/members", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const members = await listMembers(c.env);
+  const { pageItems, meta } = paginateMembers(c, members);
+  return c.html(renderMemberList(pageItems, meta));
 });
 
 // ---------- contact ----------

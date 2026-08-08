@@ -7,6 +7,9 @@ const FORM_STYLE = `
   body { max-width: 960px; }
   h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
 
+  .bs-layout { display: block; }
+  .bs-main { min-width: 0; }
+
   .bs-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px 16px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid rgba(128,128,128,.18); font-size: 0.875rem; flex-wrap: wrap; }
   .bs-nav-links { display: flex; gap: 6px; flex-wrap: wrap; }
   .bs-nav a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
@@ -24,6 +27,24 @@ const FORM_STYLE = `
   .bs-cancel-btn, .bs-add-row, .bs-copy {
     font: inherit; font-weight: 700; font-size: 0.8125rem; padding: 8px 18px; border-radius: 999px; cursor: pointer;
     transition: opacity .15s, background .15s, border-color .15s, color .15s, transform .12s;
+  }
+
+  /* 모바일 폭에서는 위에 가로로 쌓이던 nav를 왼쪽 사이드탭으로 바꿉니다. 위의 통일된
+     버튼 크기 규칙보다 뒤에 와야 로그아웃 버튼의 축소된 크기가 실제로 이깁니다
+     (같은 특정도라 소스 순서가 늦은 쪽이 이김). */
+  @media (max-width: 720px) {
+    .bs-layout { display: flex; align-items: flex-start; gap: 14px; }
+    .bs-nav {
+      flex-direction: column; align-items: stretch; gap: 4px; flex-shrink: 0; width: 92px;
+      margin-bottom: 0; padding-bottom: 0; padding-right: 12px;
+      border-bottom: none; border-right: 1px solid rgba(128,128,128,.18);
+      position: sticky; top: 12px;
+    }
+    .bs-nav-links { flex-direction: column; gap: 4px; }
+    .bs-nav a { text-align: center; padding: 10px 4px; font-size: 0.75rem; line-height: 1.3; }
+    .bs-nav-logout-form { width: 100%; margin-top: 4px; }
+    .bs-nav-logout { width: 100%; padding: 8px 4px; font-size: 0.7rem; }
+    .bs-main { flex: 1; }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
@@ -135,6 +156,14 @@ const FORM_STYLE = `
   .bs-copy:hover { background: rgba(128,128,128,.1); }
   .bs-upload-list .bs-danger { flex-shrink: 0; }
   @media (max-width: 720px) { .bs-upload-list li { flex-wrap: wrap; } .bs-upload-list .snippet { width: 100%; } }
+
+  .bs-member-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
+  .bs-member-list li { border-bottom: 1px solid rgba(128,128,128,.18); padding: 12px 6px; transition: background .15s; }
+  .bs-member-list li:hover { background: rgba(128,128,128,.05); }
+  .bs-member-main { display: flex; align-items: center; gap: 8px; }
+  .bs-member-main .name { font-weight: 600; font-size: 0.9375rem; }
+  .bs-member-list .meta { font-size: 0.8rem; opacity: 0.55; margin-top: 2px; }
+  .bs-badge { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
 `;
 
 function navLink(href: string, label: string, active: boolean): string {
@@ -148,6 +177,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
         ${navLink("/", "홈", active === "home")}
         ${navLink("/notices", "공지사항", active === "notices")}
         ${navLink("/archive", "대회 아카이브", active === "archive")}
+        ${navLink("/members", "회원 명단", active === "members")}
         ${navLink("/contact", "연락처", active === "contact")}
         ${navLink("/uploads", "업로드", active === "uploads")}
       </div>
@@ -156,7 +186,10 @@ function shell(title: string, active: string, bodyHtml: string): string {
       </form>
     </nav>
   `;
-  return page(title, `<style>${FORM_STYLE}</style>${nav}${bodyHtml}`);
+  // .bs-layout은 데스크톱에선 그냥 세로로 쌓이지만(nav가 원래 top-nav), 모바일
+  // 폭에서는 FORM_STYLE의 미디어 쿼리가 flex row로 바꿔서 nav를 왼쪽 사이드탭으로
+  // 만듭니다 — 마크업은 이거 하나로 두 레이아웃 다 커버합니다.
+  return page(title, `<style>${FORM_STYLE}</style><div class="bs-layout">${nav}<div class="bs-main">${bodyHtml}</div></div>`);
 }
 
 // authGuard.ts의 requireAdmin이 로그인은 됐지만 권한이 안 맞는 경우(회원 아님/관리자
@@ -543,6 +576,76 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
           </div>`
         : ""
     }
+  `,
+  );
+}
+
+// ---------- members ----------
+// KV에 캐싱된 회원 명단(Google Sheets 동기화본)을 그냥 보여주기만 하는 읽기 전용
+// 페이지입니다 — 수정은 항상 원본 시트에서 하고, 여기서 반영은 홈의 "지금 동기화"나
+// 매시 cron을 기다리면 됩니다.
+
+export type MemberListPage = {
+  q: string;
+  page: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+  total: number;
+};
+
+function memberPagerLink(q: string, page: number, label: string): string {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (page > 0) params.set("page", String(page));
+  const qs = params.toString();
+  return `<a href="/members${qs ? `?${qs}` : ""}">${label}</a>`;
+}
+
+function renderMemberRow(member: MemberRecord): string {
+  const metaParts = [member.studentId, member.email, `Discord ${member.discordId}`].filter(
+    (v): v is string => Boolean(v),
+  );
+
+  return `<li>
+    <div class="bs-member-main">
+      <span class="name">${escapeHtml(member.name || "(이름 없음)")}</span>
+      ${member.role === "admin" ? '<span class="bs-badge">관리자</span>' : ""}
+    </div>
+    <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
+  </li>`;
+}
+
+export function renderMemberList(members: MemberRecord[], meta: MemberListPage): string {
+  const body =
+    members.length === 0
+      ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "회원 명단이 비어 있습니다. 홈 화면에서 동기화해 주세요."}</p>`
+      : `<ul class="bs-member-list">${members.map(renderMemberRow).join("\n")}</ul>`;
+
+  const pager =
+    meta.hasPrev || meta.hasNext
+      ? `<div class="pager">
+        ${meta.hasPrev ? memberPagerLink(meta.q, meta.page - 1, "← 이전") : `<span class="disabled">← 이전</span>`}
+        <span>${meta.page + 1}페이지 · 총 ${meta.total}명</span>
+        ${meta.hasNext ? memberPagerLink(meta.q, meta.page + 1, "다음 →") : `<span class="disabled">다음 →</span>`}
+      </div>`
+      : meta.total > 0
+        ? `<p class="bs-note" style="margin-top:12px">총 ${meta.total}명</p>`
+        : "";
+
+  return shell(
+    "회원 명단",
+    "members",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>회원 명단</h1>
+    <p class="bs-note" style="margin-bottom:16px">Google Sheets 기준으로 KV에 캐싱된 명단이에요 — 홈 화면에서 동기화한 시점 기준입니다.</p>
+    <form class="bs-search" method="get" action="/members">
+      <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="이름 · 학번 · 이메일 · Discord 검색" />
+      <button type="submit" class="bs-cancel-btn">검색</button>
+      ${meta.q ? `<a href="/members" class="bs-cancel">지우기</a>` : ""}
+    </form>
+    ${body}
+    ${pager}
   `,
   );
 }

@@ -20,6 +20,25 @@ export async function getMembersLastSyncedAt(env: Env): Promise<number | null> {
   return raw ? Number(raw) : null;
 }
 
+// backstage의 회원 명단 페이지용 — KV에 캐싱된 회원 전체를 가져옵니다. 회원 수가
+// 많지 않아(역대 전체 다 합쳐도 수백 명 수준) 한 번에 다 읽어도 괜찮습니다.
+export async function listMembers(env: Env): Promise<MemberRecord[]> {
+  const members: MemberRecord[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await env.MEMBERS.list({ prefix: MEMBER_KEY_PREFIX, cursor });
+    const values = await Promise.all(page.keys.map((k) => env.MEMBERS.get(k.name)));
+    for (const raw of values) {
+      if (raw) members.push(JSON.parse(raw) as MemberRecord);
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+
+  members.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
+  return members;
+}
+
 export type SyncResult = {
   total: number; // 시트에서 읽은 전체 회원 수
   written: number; // 실제로 바뀌어서 KV에 다시 쓴 회원 수
