@@ -98,10 +98,13 @@ const PAGE_STYLE = `
   :root[data-theme="dark"] { --logo-primary: #70ff44; --logo-accent: #ff6f6f; --bg: #0a0a0a; --fg: #ededed; color-scheme: dark; }
   :where(:root[data-theme="dark"]) a { color: #8ab4ff; }
   body { font-family: -apple-system, "Malgun Gothic", sans-serif; max-width: 900px; margin: 0 auto; padding: 24px 16px; color: var(--fg); background: var(--bg); }
-  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid rgba(128,128,128,.25); }
-  .topbar a { display: inline-flex; align-items: center; text-decoration: none; opacity: 0.85; }
-  .topbar a:hover { opacity: 1; }
+  .topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid rgba(128,128,128,.25); flex-wrap: wrap; }
+  .topbar-logo { display: inline-flex; align-items: center; text-decoration: none; opacity: 0.85; flex-shrink: 0; }
+  .topbar-logo:hover { opacity: 1; }
   .topbar svg { height: 22px; width: auto; }
+  /* 로그아웃 등 오른쪽에 붙는 항목들 — margin-left:auto로 로고/중간 nav와 상관없이
+     항상 맨 끝으로 밀립니다. */
+  .topbar-end { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
   .theme-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: none; padding: 0; font-size: 1rem; line-height: 1; cursor: pointer; transition: background .15s; }
   .theme-toggle:hover { background: rgba(128,128,128,.1); }
   .theme-toggle .icon-moon { display: none; }
@@ -156,7 +159,10 @@ const THEME_INIT_SCRIPT = `(function(){try{var m=("; "+document.cookie).split(";
 const THEME_TOGGLE_SCRIPT = `(function(){var b=document.getElementById("theme-toggle");if(!b)return;b.addEventListener("click",function(){var root=document.documentElement;var current=root.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var next=current==="dark"?"light":"dark";root.setAttribute("data-theme",next);try{var h=location.hostname;var onKaistRun=h==="kaist.run"||h.slice(-10)===".kaist.run";var domain=onKaistRun?"; domain=.kaist.run":"";var secure=onKaistRun?"; secure":"";document.cookie="kr-theme="+next+"; path=/; max-age=31536000; samesite=lax"+domain+secure;}catch(e){}});})();`;
 
 // backstage.ts 등 다른 라우트도 같은 스타일/로고 셸을 쓰고 싶을 때를 위해 export합니다.
-export function page(title: string, bodyHtml: string): string {
+// topbarNav/topbarEnd는 backstageRender.ts의 shell()이 로고 옆(nav, ☰)과 테마 토글
+// 오른쪽(로그아웃)에 자기 마크업을 끼워 넣을 때 씁니다 — 이메일 뷰어 등 다른
+// 호출부는 그냥 생략하면 로고+테마 토글만 있는 기본 topbar가 됩니다.
+export function page(title: string, bodyHtml: string, topbarNav?: string, topbarEnd?: string): string {
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -169,10 +175,14 @@ export function page(title: string, bodyHtml: string): string {
 </head>
 <body>
 <div class="topbar">
-  <a href="https://kaist.run" aria-label="kaist.run">${LOGO_SVG}</a>
-  <button type="button" class="theme-toggle" id="theme-toggle" aria-label="테마 전환" title="테마 전환">
-    <span class="icon-sun" aria-hidden="true">☀️</span><span class="icon-moon" aria-hidden="true">🌙</span>
-  </button>
+  <a href="https://kaist.run" aria-label="kaist.run" class="topbar-logo">${LOGO_SVG}</a>
+  ${topbarNav ?? ""}
+  <div class="topbar-end">
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="테마 전환" title="테마 전환">
+      <span class="icon-sun" aria-hidden="true">☀️</span><span class="icon-moon" aria-hidden="true">🌙</span>
+    </button>
+    ${topbarEnd ?? ""}
+  </div>
 </div>
 ${bodyHtml}
 <script>${THEME_TOGGLE_SCRIPT}</script>

@@ -7,17 +7,19 @@ const FORM_STYLE = `
   body { max-width: 960px; }
   h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
 
-  .bs-layout { display: block; }
-  .bs-main { min-width: 0; }
-
-  .bs-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px 16px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid rgba(128,128,128,.18); font-size: 0.875rem; flex-wrap: wrap; }
-  .bs-nav-links { display: flex; gap: 6px; flex-wrap: wrap; }
-  .bs-nav a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
-  .bs-nav a:hover { opacity: 1; background: rgba(128,128,128,.1); }
-  .bs-nav a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
+  /* nav(☰ + 링크들)와 로그아웃은 이제 backstageRender.ts의 shell()이 topbar 안에
+     끼워 넣습니다(emailRender.ts의 page() 참고) — 로고 옆에 nav, 테마 토글 오른쪽에
+     로그아웃이 오도록. .bs-nav-links 자체가 데스크톱에선 그냥 가로 나열, 모바일
+     폭에서는(아래 미디어 쿼리) ☰로 여닫는 왼쪽 슬라이드 서랍(drawer)이 됩니다. */
+  .bs-menu-toggle { display: none; }
+  .bs-nav-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.875rem; }
+  .bs-nav-links a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
+  .bs-nav-links a:hover { opacity: 1; background: rgba(128,128,128,.1); }
+  .bs-nav-links a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
   .bs-nav-logout-form { flex-shrink: 0; }
   .bs-nav-logout { -webkit-appearance: none; appearance: none; color: var(--bg); background: var(--logo-primary); border: none; white-space: nowrap; transition: opacity .15s; }
   .bs-nav-logout:hover { opacity: 0.85; }
+  .bs-backdrop { display: none; }
 
   /* 페이지 곳곳의 알약(pill) 버튼(로그아웃, 새 글 작성, 저장, 삭제, 파일 선택,
      검색, + 추가, 복사)이 전부 같은 크기를 쓰도록 여기 한 곳에 모아둡니다. 색/테두리
@@ -29,31 +31,26 @@ const FORM_STYLE = `
     transition: opacity .15s, background .15s, border-color .15s, color .15s, transform .12s;
   }
 
-  /* 모바일 폭에서는 위에 가로로 쌓이던 nav를, ☰ 버튼으로 여닫는 왼쪽 슬라이드
-     서랍(drawer)으로 바꿉니다. 위의 통일된 버튼 크기 규칙보다 뒤에 와야 로그아웃
-     버튼의 규칙이 실제로 이깁니다(같은 특정도라 소스 순서가 늦은 쪽이 이김). */
-  .bs-menu-toggle { display: none; }
-  .bs-backdrop { display: none; }
+  /* 모바일 폭에서는 nav 링크들을 ☰ 버튼으로 여닫는 왼쪽 슬라이드 서랍(drawer)으로
+     바꿉니다. 위의 통일된 버튼 크기 규칙보다 뒤에 와야 로그아웃 버튼의 규칙이
+     실제로 이깁니다(같은 특정도라 소스 순서가 늦은 쪽이 이김). */
   @media (max-width: 720px) {
     .bs-menu-toggle {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 38px; height: 38px; margin-bottom: 16px; border-radius: 8px;
+      width: 38px; height: 38px; border-radius: 8px;
       border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit;
-      font-size: 1.15rem; line-height: 1; cursor: pointer;
+      font-size: 1.15rem; line-height: 1; cursor: pointer; flex-shrink: 0;
     }
-    .bs-nav {
+    .bs-nav-links {
       position: fixed; top: 0; left: 0; bottom: 0; width: 240px; max-width: 80vw;
       flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px;
       margin: 0; padding: 64px 16px 20px; box-sizing: border-box; overflow-y: auto;
-      border-bottom: none; border-right: 1px solid rgba(128,128,128,.18);
+      border-right: 1px solid rgba(128,128,128,.18);
       background: var(--bg); z-index: 50;
       transform: translateX(-100%); transition: transform .25s ease;
     }
-    .bs-nav.bs-nav-open { transform: translateX(0); }
-    .bs-nav-links { flex-direction: column; gap: 4px; }
-    .bs-nav a { text-align: left; padding: 10px 12px; font-size: 0.9rem; }
-    .bs-nav-logout-form { margin-top: 12px; }
-    .bs-nav-logout { width: 100%; }
+    .bs-nav-links.bs-nav-open { transform: translateX(0); }
+    .bs-nav-links a { text-align: left; padding: 10px 12px; font-size: 0.9rem; }
     .bs-backdrop.bs-backdrop-open {
       display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 40;
     }
@@ -214,28 +211,31 @@ const BS_MENU_SCRIPT = `
 `;
 
 function shell(title: string, active: string, bodyHtml: string): string {
-  const nav = `
-    <nav class="bs-nav" id="bs-nav">
-      <div class="bs-nav-links">
-        ${navLink("/", "홈", active === "home")}
-        ${navLink("/notices", "공지사항", active === "notices")}
-        ${navLink("/archive", "대회 아카이브", active === "archive")}
-        ${navLink("/members", "회원 명단", active === "members")}
-        ${navLink("/contact", "연락처", active === "contact")}
-        ${navLink("/uploads", "업로드", active === "uploads")}
-      </div>
-      <form method="post" action="/logout" class="bs-nav-logout-form">
-        <button type="submit" class="bs-nav-logout">로그아웃</button>
-      </form>
-    </nav>
-  `;
+  // 로고 옆(topbarNav)에 ☰ + nav 링크, 테마 토글 오른쪽(topbarEnd)에 로그아웃 —
+  // 실제 배치는 emailRender.ts의 page()가 topbar 안에서 조립합니다.
   const menuToggle = `<button type="button" class="bs-menu-toggle" id="bs-menu-toggle" aria-label="메뉴 열기" aria-expanded="false" aria-controls="bs-nav">☰</button>`;
+  const navLinks = `
+    <div class="bs-nav-links" id="bs-nav">
+      ${navLink("/", "홈", active === "home")}
+      ${navLink("/notices", "공지사항", active === "notices")}
+      ${navLink("/archive", "대회 아카이브", active === "archive")}
+      ${navLink("/members", "회원 명단", active === "members")}
+      ${navLink("/contact", "연락처", active === "contact")}
+      ${navLink("/uploads", "업로드", active === "uploads")}
+    </div>
+  `;
+  const logout = `
+    <form method="post" action="/logout" class="bs-nav-logout-form">
+      <button type="submit" class="bs-nav-logout">로그아웃</button>
+    </form>
+  `;
   const backdrop = `<div class="bs-backdrop" id="bs-backdrop"></div>`;
-  // 데스크톱에선 nav가 그대로 top-nav로 보이고 ☰/배경은 숨겨집니다. 모바일 폭에서는
-  // FORM_STYLE의 미디어 쿼리가 nav를 왼쪽 슬라이드 서랍으로 바꾸고, ☰ 버튼이 그걸 엽니다.
+
   return page(
     title,
-    `<style>${FORM_STYLE}</style><div class="bs-layout">${menuToggle}${nav}${backdrop}<div class="bs-main">${bodyHtml}</div></div><script>${BS_MENU_SCRIPT}</script>`,
+    `<style>${FORM_STYLE}</style>${backdrop}${bodyHtml}<script>${BS_MENU_SCRIPT}</script>`,
+    `${menuToggle}${navLinks}`,
+    logout,
   );
 }
 
