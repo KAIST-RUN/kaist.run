@@ -67,10 +67,12 @@ const FORM_STYLE = `
   @media (max-width: 640px) { .bs-row2 { grid-template-columns: 1fr; } }
 
   .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
-  .bs-upload input[type="file"] { font-size: 0.875rem; color: inherit; }
-  .bs-upload input[type="file"]::file-selector-button { border: none; border-radius: 999px; padding: 9px 20px; margin-right: 12px; font-weight: 700; font-size: 0.875rem; cursor: pointer; background: var(--logo-primary); color: #06240a; transition: opacity .15s, transform .1s; }
+  .bs-upload input[type="file"] { font-size: 0.9375rem; color: inherit; }
+  .bs-upload input[type="file"]::file-selector-button { border: none; border-radius: 999px; padding: 11px 28px; margin-right: 12px; font-weight: 700; font-size: 0.9375rem; cursor: pointer; background: var(--logo-primary); color: #06240a; transition: opacity .15s, transform .1s; }
   .bs-upload input[type="file"]::file-selector-button:hover { opacity: 0.88; }
   .bs-upload input[type="file"]::file-selector-button:active { transform: scale(0.98); }
+  .bs-upload input[type="text"] { font: inherit; padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; min-width: 220px; flex: 1; }
+  .bs-upload input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
   .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
   .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; max-width: 260px; }
   .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
@@ -78,6 +80,8 @@ const FORM_STYLE = `
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
   .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 14px; padding: 12px 6px; }
+  .bs-upload-open { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
+  .bs-upload-open:hover .name { text-decoration: underline; }
   .bs-upload-list .thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: rgba(128,128,128,.08); flex-shrink: 0; }
   .bs-upload-list .file-icon { width: 44px; height: 44px; border-radius: 8px; background: rgba(128,128,128,.08); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
   .bs-upload-list .info { flex: 1; min-width: 0; }
@@ -529,11 +533,13 @@ function renderUploadRow(file: UploadedFile): string {
     : `<div class="file-icon">📄</div>`;
 
   return `<li>
-    ${thumb}
-    <div class="info">
-      <div class="name">${escapeHtml(file.key)}</div>
-      <div class="meta">${formatFileBytes(file.size)} · ${escapeHtml(file.contentType)}</div>
-    </div>
+    <a class="bs-upload-open" href="${escapeHtml(url)}" target="_blank" rel="noopener">
+      ${thumb}
+      <div class="info">
+        <div class="name">${escapeHtml(file.key)}</div>
+        <div class="meta">${formatFileBytes(file.size)} · ${escapeHtml(file.contentType)}</div>
+      </div>
+    </a>
     <input class="snippet" type="text" readonly value="${escapeHtml(url)}" onclick="this.select()" />
     <button type="button" class="bs-copy" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)">복사</button>
     <form method="post" action="/uploads/${encodeURIComponent(file.key)}/delete" onsubmit="return confirm('이 파일을 삭제할까요? 이미 글에 쓰인 곳이 있다면 깨질 수 있어요.')">
@@ -584,6 +590,7 @@ export function renderUploadList(files: UploadedFile[], meta: UploadListPage, er
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
     <form class="bs-upload" method="post" action="/uploads" enctype="multipart/form-data">
       <input type="file" name="file" required />
+      <input type="text" name="name" placeholder="파일 이름 (선택, 비우면 원본 이름 사용)" />
       <button type="submit" class="bs-submit">업로드</button>
     </form>
     <form class="bs-search" method="get" action="/uploads">

@@ -380,6 +380,7 @@ backstage.post("/uploads", async (c) => {
 
   const body = await c.req.parseBody();
   const file = body["file"];
+  const desiredName = typeof body["name"] === "string" ? body["name"] : undefined;
 
   if (!(file instanceof File) || file.size === 0) {
     const files = await listUploads(c.env);
@@ -387,7 +388,7 @@ backstage.post("/uploads", async (c) => {
     return c.html(renderUploadList(pageItems, meta, "업로드할 파일을 선택해 주세요."), 400);
   }
 
-  await storeUpload(c.env, file.name, file.type || "application/octet-stream", await file.arrayBuffer());
+  await storeUpload(c.env, file.name, file.type || "application/octet-stream", await file.arrayBuffer(), desiredName);
 
   return c.redirect("/uploads");
 });

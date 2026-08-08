@@ -24,14 +24,24 @@ function sanitizeFilename(name: string): string {
   return cleaned || "file";
 }
 
+function extname(name: string): string {
+  const match = /\.[a-z0-9]+$/i.exec(name);
+  return match ? match[0] : "";
+}
+
 // R2 key = 공개 URL의 kaist.run/upload/ 뒤에 오는 부분과 그대로 같습니다.
+// desiredName을 주면 원본 파일명 대신 그걸 기반으로 key를 만듭니다(확장자가
+// 없으면 원본 파일의 확장자를 붙여줍니다).
 export async function storeUpload(
   env: Env,
   filename: string,
   contentType: string,
   data: ArrayBuffer,
+  desiredName?: string,
 ): Promise<string> {
-  const key = `${randomId()}-${sanitizeFilename(filename)}`;
+  const trimmed = desiredName?.trim();
+  const base = trimmed ? (extname(trimmed) ? trimmed : `${trimmed}${extname(filename)}`) : filename;
+  const key = `${randomId()}-${sanitizeFilename(base)}`;
   await env.UPLOADS.put(key, data, { httpMetadata: { contentType } });
   return key;
 }
