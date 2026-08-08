@@ -10,4 +10,4 @@ export const OAUTH_RETURN_TO_COOKIE = "oauth_return_to";
 //   - index.ts: /api/me, /api/auth/logout에 대한 CORS 허용 origin
 // 로컬에서 메인 사이트(npm run dev)를 3000번 포트가 아닌 다른 포트로 띄웠다면
 // 여기에 그 주소도 추가하세요.
-export const ALLOWED_ORIGINS = ["https://kaist.run", "http://localhost:3000"];
+export const ALLOWED_ORIGINS = ["https://kaist.run", "https://backstage.kaist.run", "http://localhost:3000"];

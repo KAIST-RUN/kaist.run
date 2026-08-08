@@ -205,6 +205,7 @@
     "menu": {
       "language": "언어",
       "home": "메인으로 돌아가기",
+      "adminPanel": "관리자 패널로 가기",
       "logout": "로그아웃",
       "logoutError": "로그아웃에 실패했습니다. 다시 시도해 주세요."
     }

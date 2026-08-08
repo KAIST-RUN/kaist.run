@@ -29,6 +29,21 @@ function isSafeReturnTo(returnTo: string): boolean {
 
 const DEFAULT_RETURN_TO = `${ALLOWED_ORIGINS[0]}/`;
 
+// 세션 쿠키를 kaist.run과 그 서브도메인(backstage.kaist.run 등)이 같이 쓰게
+// 하려면 Domain=.kaist.run이 필요합니다. 다만 쿠키의 Domain은 실제 요청 Host의
+// 상위 도메인이어야만 브라우저가 받아들이므로, localhost 등에서는 그냥 생략해야
+// (host-only 쿠키) 합니다.
+//
+// c.req.url의 hostname으로는 이걸 못 가릅니다 — wrangler.jsonc에 routes가
+// 설정되어 있으면 로컬 wrangler dev가 실제 접속 주소(localhost)와 무관하게
+// c.req.url을 kaist.run으로 시뮬레이션해서, 로컬에서도 항상 "kaist.run"으로
+// 잘못 판정됩니다. 대신 로컬/프로덕션에서 실제로 값이 다른 DISCORD_REDIRECT_URI
+// (.dev.vars엔 localhost, 프로덕션 vars엔 kaist.run)로 판단합니다.
+function sessionCookieDomain(env: Env): string | undefined {
+  const hostname = new URL(env.DISCORD_REDIRECT_URI).hostname;
+  return hostname === "kaist.run" || hostname.endsWith(".kaist.run") ? ".kaist.run" : undefined;
+}
+
 export const auth = new Hono<{ Bindings: Env }>();
 
 // 로그인 시작: 프런트가 이 경로로 <a> 태그를 통해 이동시킵니다.
@@ -91,8 +106,15 @@ auth.get("/discord/callback", async (c) => {
   setCookie(c, SESSION_COOKIE, sessionId, {
     httpOnly: true,
     secure: true,
-    sameSite: "Lax",
+    // /api/me 등은 프런트가 fetch(credentials:"include")로 부르는데, 로컬
+    // 개발에서는 사이트(3000)와 Worker(8787)가 다른 origin이라 이게
+    // cross-site 요청 취급됩니다. SameSite=Lax는 cross-site fetch에는 쿠키를
+    // 안 실어주므로(주소창 이동 때만 통함) 로그인은 성공해도 /api/me가 계속
+    // 401이 나요. None으로 풀어주는 대신, /api/* 쪽 CORS를 ALLOWED_ORIGINS로
+    // 좁혀서(index.ts) 신뢰하는 origin에서만 이 쿠키가 쓰이게 막아둡니다.
+    sameSite: "None",
     path: "/",
+    domain: sessionCookieDomain(c.env),
     maxAge: 60 * 60 * 24 * 30, // 30일 — session.ts의 TTL과 맞춰둠
   });
 
@@ -105,6 +127,7 @@ auth.post("/logout", async (c) => {
   if (sessionId) {
     await deleteSession(c.env, sessionId);
   }
-  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+  // 쿠키를 지울 땐 만들 때와 domain이 같아야 브라우저가 실제로 지웁니다.
+  deleteCookie(c, SESSION_COOKIE, { path: "/", domain: sessionCookieDomain(c.env) });
   return c.body(null, 204);
 });

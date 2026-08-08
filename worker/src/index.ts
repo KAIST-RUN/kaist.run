@@ -6,6 +6,7 @@ import { auth } from "./routes/auth";
 import { me } from "./routes/me";
 import { admin } from "./routes/admin";
 import { email } from "./routes/email";
+import { backstage } from "./routes/backstage";
 import { syncMembersFromSheet } from "./lib/members";
 import { storeRawEmail } from "./lib/emailStore";
 import { indexEmail } from "./lib/emailIndex";
@@ -31,6 +32,9 @@ app.route("/api/auth", auth);
 app.route("/api/me", me);
 app.route("/api/admin", admin);
 app.route("/email", email);
+// kaist.run에는 "/" 패턴의 Worker 라우트가 없어서(정적 사이트가 처리) 겹치지
+// 않고, backstage.kaist.run/*만 이 마운트를 타게 됩니다 (wrangler.jsonc 참고).
+app.route("/", backstage);
 
 export default {
   fetch: app.fetch,
