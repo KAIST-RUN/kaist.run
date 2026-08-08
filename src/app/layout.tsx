@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import ThemeCookieSync from "@/components/layout/ThemeCookieSync";
 import "pretendard/dist/web/variable/pretendardvariable.css";
 import "./globals.css";
 
@@ -27,6 +28,7 @@ export default function RootLayout({
     >
       <body className="flex h-dvh flex-col overflow-hidden">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ThemeCookieSync />
           {children}
         </ThemeProvider>
       </body>

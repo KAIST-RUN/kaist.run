@@ -16,7 +16,6 @@ import {
   upsertContact,
   type Season,
 } from "../lib/content";
-import { parseResourcesText, parseJudgesText } from "../lib/contentForms";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
 import {
   renderBackstageHome,
@@ -45,6 +44,44 @@ async function readForm(c: { req: { parseBody(): Promise<Record<string, unknown>
   const body = await c.req.parseBody();
   const get = (key: string) => (typeof body[key] === "string" ? (body[key] as string) : "");
   return { body, get };
+}
+
+// 자료 목록/온라인 저지 행 UI(backstageRender.ts의 archiveRowsField)가 보내는
+// name="...[]" 필드를 읽습니다. hono의 parseBody는 "[]"로 끝나는 키를 값이
+// 하나뿐이어도 항상 배열로 묶어줍니다.
+function getFormArray(body: Record<string, unknown>, key: string): string[] {
+  const value = body[key];
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  if (typeof value === "string") return [value];
+  return [];
+}
+
+// "이름" / "링크" 두 배열을 같은 인덱스끼리 짝지어, 둘 다 비어 있는 행(빈 채로
+// 남겨둔 행)은 건너뜁니다.
+function zipRows(names: string[], links: string[]): { name: string; link: string }[] {
+  const rows: { name: string; link: string }[] = [];
+  const len = Math.max(names.length, links.length);
+  for (let i = 0; i < len; i++) {
+    const name = (names[i] ?? "").trim();
+    const link = (links[i] ?? "").trim();
+    if (!name && !link) continue;
+    rows.push({ name, link });
+  }
+  return rows;
+}
+
+function readArchiveResources(body: Record<string, unknown>) {
+  return zipRows(getFormArray(body, "resourceLabel[]"), getFormArray(body, "resourceFile[]")).map((r) => ({
+    file: r.link,
+    label: r.name || r.link,
+  }));
+}
+
+function readArchiveJudges(body: Record<string, unknown>) {
+  return zipRows(getFormArray(body, "judgeName[]"), getFormArray(body, "judgeUrl[]")).map((j) => ({
+    name: j.name,
+    url: j.link,
+  }));
 }
 
 backstage.get("/", async (c) => {
@@ -195,7 +232,7 @@ backstage.post("/archive/:season/new", async (c) => {
   const season = c.req.param("season");
   if (!isSeason(season)) return c.notFound();
 
-  const { get } = await readForm(c);
+  const { body, get } = await readForm(c);
   const slug = get("slug").trim();
   const formData = {
     slug,
@@ -206,8 +243,8 @@ backstage.post("/archive/:season/new", async (c) => {
     titleEn: get("titleEn"),
     contentKo: get("contentKo"),
     contentEn: get("contentEn"),
-    resourcesText: get("resourcesText"),
-    judgesText: get("judgesText"),
+    resources: readArchiveResources(body),
+    judges: readArchiveJudges(body),
   };
 
   if (!/^[a-z0-9-]+$/.test(slug)) {
@@ -217,8 +254,7 @@ backstage.post("/archive/:season/new", async (c) => {
     return c.html(renderArchiveForm("new", formData, "이미 존재하는 슬러그입니다."), 400);
   }
 
-  const resources = parseResourcesText(formData.resourcesText);
-  const judges = parseJudgesText(formData.judgesText);
+  const { resources, judges } = formData;
   const year = Number.parseInt(formData.year, 10);
 
   await upsertArchiveEntry(c.env, slug, season, "ko", { title: formData.titleKo, year, date: formData.date, resources, judges, content: formData.contentKo });
@@ -254,9 +290,9 @@ backstage.post("/archive/:season/:slug/edit", async (c) => {
   const slug = c.req.param("slug");
   if (!isSeason(season)) return c.notFound();
 
-  const { get } = await readForm(c);
-  const resources = parseResourcesText(get("resourcesText"));
-  const judges = parseJudgesText(get("judgesText"));
+  const { body, get } = await readForm(c);
+  const resources = readArchiveResources(body);
+  const judges = readArchiveJudges(body);
   const year = Number.parseInt(get("year"), 10);
   const date = get("date");
 

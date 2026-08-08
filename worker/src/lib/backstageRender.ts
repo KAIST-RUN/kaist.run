@@ -1,5 +1,4 @@
 import { page, escapeHtml } from "./emailRender";
-import { serializeResources, serializeJudges } from "./contentForms";
 import type { MemberRecord } from "./members";
 import type { NoticeRow, ArchiveRow, ContactRow, ContactInfoRow, ContactSocial, Season } from "./content";
 import type { UploadedFile } from "./uploads";
@@ -8,13 +7,14 @@ const FORM_STYLE = `
   body { max-width: 960px; }
   h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
 
-  .bs-nav { display: flex; align-items: center; gap: 6px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid rgba(128,128,128,.18); font-size: 0.875rem; flex-wrap: wrap; }
-  .bs-nav a { opacity: 0.65; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
+  .bs-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px 16px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid rgba(128,128,128,.18); font-size: 0.875rem; flex-wrap: wrap; }
+  .bs-nav-links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .bs-nav a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
   .bs-nav a:hover { opacity: 1; background: rgba(128,128,128,.1); }
   .bs-nav a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: #06240a; }
-  .bs-nav-logout-form { margin-left: auto; }
-  .bs-nav-logout { font: inherit; background: none; border: none; opacity: 0.65; padding: 6px 14px; border-radius: 999px; cursor: pointer; transition: opacity .15s, background .15s; }
-  .bs-nav-logout:hover { opacity: 1; background: rgba(128,128,128,.1); }
+  .bs-nav-logout-form { flex-shrink: 0; }
+  .bs-nav-logout { -webkit-appearance: none; appearance: none; font: inherit; font-weight: 700; font-size: 0.8125rem; color: #06240a; background: var(--logo-primary); border: none; padding: 8px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
+  .bs-nav-logout:hover { opacity: 0.85; }
 
   .bs-subnav { display: flex; gap: 8px; margin: -8px 0 20px; font-size: 0.8125rem; }
   .bs-subnav a { opacity: 0.6; text-decoration: none; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(128,128,128,.25); }
@@ -54,6 +54,14 @@ const FORM_STYLE = `
   .bs-field textarea { resize: vertical; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem; line-height: 1.6; }
   .bs-field textarea.bs-autosize { resize: none; overflow: hidden; }
   .bs-field .hint { font-size: 0.75rem; opacity: 0.5; }
+  .bs-rows { display: flex; flex-direction: column; gap: 8px; }
+  .bs-row-item { display: flex; gap: 8px; align-items: center; }
+  .bs-row-item input { flex: 1; min-width: 0; }
+  .bs-row-remove { flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; font-size: 1rem; line-height: 1; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+  .bs-row-remove:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
+  .bs-add-row { align-self: flex-start; margin-top: 6px; font-size: 0.8125rem; font-weight: 600; border: 1px dashed rgba(128,128,128,.4); border-radius: 999px; padding: 7px 16px; background: transparent; color: inherit; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+  .bs-add-row:hover { background: rgba(128,128,128,.08); border-color: var(--logo-primary); color: var(--logo-primary); }
+  @media (max-width: 560px) { .bs-row-item { flex-wrap: wrap; } .bs-row-item input { min-width: 100%; } }
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .bs-check { flex-direction: row; align-items: center; gap: 8px; }
   .bs-check input { width: auto; accent-color: var(--logo-primary); }
@@ -106,11 +114,13 @@ function navLink(href: string, label: string, active: boolean): string {
 function shell(title: string, active: string, bodyHtml: string): string {
   const nav = `
     <nav class="bs-nav">
-      ${navLink("/", "홈", active === "home")}
-      ${navLink("/notices", "공지사항", active === "notices")}
-      ${navLink("/archive", "대회 아카이브", active === "archive")}
-      ${navLink("/contact", "연락처", active === "contact")}
-      ${navLink("/uploads", "업로드", active === "uploads")}
+      <div class="bs-nav-links">
+        ${navLink("/", "홈", active === "home")}
+        ${navLink("/notices", "공지사항", active === "notices")}
+        ${navLink("/archive", "대회 아카이브", active === "archive")}
+        ${navLink("/contact", "연락처", active === "contact")}
+        ${navLink("/uploads", "업로드", active === "uploads")}
+      </div>
       <form method="post" action="/logout" class="bs-nav-logout-form">
         <button type="submit" class="bs-nav-logout">로그아웃</button>
       </form>
@@ -308,8 +318,8 @@ export type ArchiveFormData = {
   titleEn: string;
   contentKo: string;
   contentEn: string;
-  resourcesText: string;
-  judgesText: string;
+  resources: { file: string; label: string }[];
+  judges: { name: string; url: string }[];
 };
 
 export function archiveRowsToFormData(season: Season, slug: string, ko: ArchiveRow | null, en: ArchiveRow | null): ArchiveFormData {
@@ -323,10 +333,53 @@ export function archiveRowsToFormData(season: Season, slug: string, ko: ArchiveR
     titleEn: en?.title ?? "",
     contentKo: ko?.content ?? "",
     contentEn: en?.content ?? "",
-    resourcesText: serializeResources(base?.resources ?? []),
-    judgesText: serializeJudges(base?.judges ?? []),
+    resources: base?.resources ?? [],
+    judges: base?.judges ?? [],
   };
 }
+
+// 자료 목록 · 온라인 저지는 둘 다 "이름 + 링크" 쌍을 여러 개 받는 반복 필드입니다.
+// 서버 렌더 HTML이라 리액트 state 없이, <template> 복제 + name="...[]" 배열
+// 필드(hono의 parseBody가 "[]"로 끝나는 키를 자동으로 배열로 묶어줌)로 구현합니다.
+function archiveRowItem(nameField: string, linkField: string, nameVal: string, linkVal: string, namePh: string, linkPh: string): string {
+  return `<div class="bs-row-item">
+    <input type="text" name="${nameField}" value="${escapeHtml(nameVal)}" placeholder="${escapeHtml(namePh)}" />
+    <input type="text" name="${linkField}" value="${escapeHtml(linkVal)}" placeholder="${escapeHtml(linkPh)}" />
+    <button type="button" class="bs-row-remove" aria-label="삭제" onclick="this.closest('.bs-row-item').remove()">×</button>
+  </div>`;
+}
+
+function archiveRowsField(
+  label: string,
+  rowsId: string,
+  templateId: string,
+  items: { name: string; link: string }[],
+  nameField: string,
+  linkField: string,
+  namePh: string,
+  linkPh: string,
+): string {
+  const rows = (items.length > 0 ? items : [{ name: "", link: "" }])
+    .map((item) => archiveRowItem(nameField, linkField, item.name, item.link, namePh, linkPh))
+    .join("");
+  return `
+    <div class="bs-field">
+      <label>${escapeHtml(label)}</label>
+      <div class="bs-rows" id="${rowsId}">${rows}</div>
+      <button type="button" class="bs-add-row" data-rows="${rowsId}" data-template="${templateId}">+ 추가</button>
+      <template id="${templateId}">${archiveRowItem(nameField, linkField, "", "", namePh, linkPh)}</template>
+    </div>`;
+}
+
+const ARCHIVE_ROWS_SCRIPT = `
+  document.querySelectorAll(".bs-add-row").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const rows = document.getElementById(btn.dataset.rows);
+      const tpl = document.getElementById(btn.dataset.template);
+      rows.appendChild(tpl.content.cloneNode(true));
+    });
+  });
+`;
 
 export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, error?: string): string {
   const action = mode === "new" ? `/archive/${data.season}/new` : `/archive/${data.season}/${escapeHtml(data.slug)}/edit`;
@@ -382,17 +435,30 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 
       <div class="bs-card">
         <p class="bs-card-title">자료 · 저지</p>
-        <div class="bs-field">
-          <label>자료 목록 (한 줄에 하나, "파일명 또는 URL | 라벨")</label>
-          <textarea name="resourcesText" rows="3">${escapeHtml(data.resourcesText)}</textarea>
-          <span class="hint">예: editorial.pdf | 풀이</span>
-        </div>
-        <div class="bs-field" style="margin-top:14px">
-          <label>온라인 저지 (한 줄에 하나, "이름 | URL")</label>
-          <textarea name="judgesText" rows="3">${escapeHtml(data.judgesText)}</textarea>
-          <span class="hint">예: oj.uz | https://oj.uz/problems/source/...</span>
+        ${archiveRowsField(
+          "자료 목록",
+          "resources-rows",
+          "resource-row-template",
+          data.resources.map((r) => ({ name: r.label, link: r.file })),
+          "resourceLabel[]",
+          "resourceFile[]",
+          "이름 (예: 풀이)",
+          "링크 (파일명 또는 URL)",
+        )}
+        <div style="margin-top:18px">
+          ${archiveRowsField(
+            "온라인 저지",
+            "judges-rows",
+            "judge-row-template",
+            data.judges.map((j) => ({ name: j.name, link: j.url })),
+            "judgeName[]",
+            "judgeUrl[]",
+            "이름 (예: oj.uz)",
+            "링크 (URL)",
+          )}
         </div>
       </div>
+      <script>${ARCHIVE_ROWS_SCRIPT}</script>
 
       <div class="bs-card">
         <p class="bs-card-title">본문 (마크다운)</p>
