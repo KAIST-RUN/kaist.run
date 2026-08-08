@@ -49,6 +49,7 @@ const FORM_STYLE = `
   }
   .bs-field input[readonly] { opacity: 0.6; }
   .bs-field textarea { resize: vertical; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem; line-height: 1.6; }
+  .bs-field textarea.bs-autosize { resize: none; overflow: hidden; }
   .bs-field .hint { font-size: 0.75rem; opacity: 0.5; }
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .bs-check { flex-direction: row; align-items: center; gap: 8px; }
@@ -67,12 +68,13 @@ const FORM_STYLE = `
   @media (max-width: 640px) { .bs-row2 { grid-template-columns: 1fr; } }
 
   .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
-  .bs-upload input[type="file"] { font-size: 0.9375rem; color: inherit; }
-  .bs-upload input[type="file"]::file-selector-button { border: none; border-radius: 999px; padding: 11px 28px; margin-right: 12px; font-weight: 700; font-size: 0.9375rem; cursor: pointer; background: var(--logo-primary); color: #06240a; transition: opacity .15s, transform .1s; }
+  .bs-upload input[type="file"] { font-size: 0.8125rem; color: inherit; }
+  .bs-upload input[type="file"]::file-selector-button { border: none; border-radius: 999px; padding: 7px 16px; margin-right: 12px; font-weight: 600; font-size: 0.8125rem; cursor: pointer; background: var(--logo-primary); color: #06240a; transition: opacity .15s, transform .1s; }
   .bs-upload input[type="file"]::file-selector-button:hover { opacity: 0.88; }
   .bs-upload input[type="file"]::file-selector-button:active { transform: scale(0.98); }
-  .bs-upload input[type="text"] { font: inherit; padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; min-width: 220px; flex: 1; }
+  .bs-upload input[type="text"] { font: inherit; font-size: 0.8125rem; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; min-width: 220px; flex: 1; }
   .bs-upload input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
+  .bs-upload .bs-submit { padding: 7px 16px; font-size: 0.8125rem; font-weight: 600; }
   .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
   .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; max-width: 260px; }
   .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
@@ -213,14 +215,19 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
         <div class="bs-row2">
           <div class="bs-field">
             <label>한국어</label>
-            <textarea name="contentKo" rows="14">${escapeHtml(data.contentKo)}</textarea>
+            <textarea name="contentKo" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentKo)}</textarea>
           </div>
           <div class="bs-field">
             <label>영어</label>
-            <textarea name="contentEn" rows="14">${escapeHtml(data.contentEn)}</textarea>
+            <textarea name="contentEn" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentEn)}</textarea>
           </div>
         </div>
       </div>
+      <script>
+        document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
+          el.style.height = el.scrollHeight + "px";
+        });
+      </script>
 
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>
