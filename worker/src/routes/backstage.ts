@@ -100,36 +100,7 @@ function readArchiveJudges(body: Record<string, unknown>) {
 backstage.get("/", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
-
-  const syncResult =
-    c.req.query("synced") === "1"
-      ? {
-          total: Number(c.req.query("total") ?? 0),
-          written: Number(c.req.query("written") ?? 0),
-          deleted: Number(c.req.query("deleted") ?? 0),
-        }
-      : null;
-  const lastSyncedAt = await getMembersLastSyncedAt(c.env);
-
-  return c.html(renderBackstageHome(gate.member, syncResult, lastSyncedAt));
-});
-
-// 홈 화면의 "지금 동기화" 버튼. cron(index.ts의 scheduled, 매시 정각)이 자동으로
-// 하는 것과 같은 작업을 그 자리에서 수동으로 트리거합니다. admin.ts의
-// /api/admin/sync-members(비밀키 헤더 인증, CLI/외부 트리거용)와는 별개로,
-// 여기는 backstage 세션(관리자 로그인)으로 인증합니다.
-backstage.post("/sync-members", async (c) => {
-  const gate = await requireAdmin(c);
-  if (!gate.ok) return gate.response;
-
-  const result = await syncMembersFromSheet(c.env);
-  const params = new URLSearchParams({
-    synced: "1",
-    total: String(result.total),
-    written: String(result.written),
-    deleted: String(result.deleted),
-  });
-  return c.redirect(`/?${params.toString()}`);
+  return c.html(renderBackstageHome(gate.member));
 });
 
 // nav의 로그아웃 버튼(backstageRender.ts의 shell)과 403 페이지의 "로그아웃" 액션이
@@ -391,7 +362,36 @@ backstage.get("/members", async (c) => {
 
   const members = await listMembers(c.env);
   const { pageItems, meta } = paginateMembers(c, members);
-  return c.html(renderMemberList(pageItems, meta));
+
+  const syncResult =
+    c.req.query("synced") === "1"
+      ? {
+          total: Number(c.req.query("total") ?? 0),
+          written: Number(c.req.query("written") ?? 0),
+          deleted: Number(c.req.query("deleted") ?? 0),
+        }
+      : null;
+  const lastSyncedAt = await getMembersLastSyncedAt(c.env);
+
+  return c.html(renderMemberList(pageItems, meta, syncResult, lastSyncedAt));
+});
+
+// 회원 명단 페이지의 "지금 동기화"(강제 캐싱) 버튼. cron(index.ts의 scheduled, 매시
+// 정각)이 자동으로 하는 것과 같은 작업을 그 자리에서 수동으로 트리거합니다.
+// admin.ts의 /api/admin/sync-members(비밀키 헤더 인증, CLI/외부 트리거용)와는
+// 별개로, 여기는 backstage 세션(관리자 로그인)으로 인증합니다.
+backstage.post("/members/sync", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const result = await syncMembersFromSheet(c.env);
+  const params = new URLSearchParams({
+    synced: "1",
+    total: String(result.total),
+    written: String(result.written),
+    deleted: String(result.deleted),
+  });
+  return c.redirect(`/members?${params.toString()}`);
 });
 
 // ---------- contact ----------

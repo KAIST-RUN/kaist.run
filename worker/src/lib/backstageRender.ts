@@ -29,22 +29,34 @@ const FORM_STYLE = `
     transition: opacity .15s, background .15s, border-color .15s, color .15s, transform .12s;
   }
 
-  /* 모바일 폭에서는 위에 가로로 쌓이던 nav를 왼쪽 사이드탭으로 바꿉니다. 위의 통일된
-     버튼 크기 규칙보다 뒤에 와야 로그아웃 버튼의 축소된 크기가 실제로 이깁니다
-     (같은 특정도라 소스 순서가 늦은 쪽이 이김). */
+  /* 모바일 폭에서는 위에 가로로 쌓이던 nav를, ☰ 버튼으로 여닫는 왼쪽 슬라이드
+     서랍(drawer)으로 바꿉니다. 위의 통일된 버튼 크기 규칙보다 뒤에 와야 로그아웃
+     버튼의 규칙이 실제로 이깁니다(같은 특정도라 소스 순서가 늦은 쪽이 이김). */
+  .bs-menu-toggle { display: none; }
+  .bs-backdrop { display: none; }
   @media (max-width: 720px) {
-    .bs-layout { display: flex; align-items: flex-start; gap: 14px; }
-    .bs-nav {
-      flex-direction: column; align-items: stretch; gap: 4px; flex-shrink: 0; width: 92px;
-      margin-bottom: 0; padding-bottom: 0; padding-right: 12px;
-      border-bottom: none; border-right: 1px solid rgba(128,128,128,.18);
-      position: sticky; top: 12px;
+    .bs-menu-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px; margin-bottom: 16px; border-radius: 8px;
+      border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit;
+      font-size: 1.15rem; line-height: 1; cursor: pointer;
     }
+    .bs-nav {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 240px; max-width: 80vw;
+      flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px;
+      margin: 0; padding: 64px 16px 20px; box-sizing: border-box; overflow-y: auto;
+      border-bottom: none; border-right: 1px solid rgba(128,128,128,.18);
+      background: var(--bg); z-index: 50;
+      transform: translateX(-100%); transition: transform .25s ease;
+    }
+    .bs-nav.bs-nav-open { transform: translateX(0); }
     .bs-nav-links { flex-direction: column; gap: 4px; }
-    .bs-nav a { text-align: center; padding: 10px 4px; font-size: 0.75rem; line-height: 1.3; }
-    .bs-nav-logout-form { width: 100%; margin-top: 4px; }
-    .bs-nav-logout { width: 100%; padding: 8px 4px; font-size: 0.7rem; }
-    .bs-main { flex: 1; }
+    .bs-nav a { text-align: left; padding: 10px 12px; font-size: 0.9rem; }
+    .bs-nav-logout-form { margin-top: 12px; }
+    .bs-nav-logout { width: 100%; }
+    .bs-backdrop.bs-backdrop-open {
+      display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 40;
+    }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
@@ -170,9 +182,40 @@ function navLink(href: string, label: string, active: boolean): string {
   return `<a href="${href}"${active ? ' class="active"' : ""}>${label}</a>`;
 }
 
+// ☰ 버튼 클릭 시 nav를 서랍처럼 여닫습니다. 데스크톱에선 버튼 자체가 숨겨져
+// (FORM_STYLE) 아무 효과가 없습니다.
+const BS_MENU_SCRIPT = `
+  (function () {
+    var toggle = document.getElementById("bs-menu-toggle");
+    var nav = document.getElementById("bs-nav");
+    var backdrop = document.getElementById("bs-backdrop");
+    if (!toggle || !nav || !backdrop) return;
+
+    function closeMenu() {
+      nav.classList.remove("bs-nav-open");
+      backdrop.classList.remove("bs-backdrop-open");
+      toggle.setAttribute("aria-expanded", "false");
+    }
+    function openMenu() {
+      nav.classList.add("bs-nav-open");
+      backdrop.classList.add("bs-backdrop-open");
+      toggle.setAttribute("aria-expanded", "true");
+    }
+
+    toggle.addEventListener("click", function () {
+      if (nav.classList.contains("bs-nav-open")) closeMenu();
+      else openMenu();
+    });
+    backdrop.addEventListener("click", closeMenu);
+    nav.querySelectorAll("a").forEach(function (a) {
+      a.addEventListener("click", closeMenu);
+    });
+  })();
+`;
+
 function shell(title: string, active: string, bodyHtml: string): string {
   const nav = `
-    <nav class="bs-nav">
+    <nav class="bs-nav" id="bs-nav">
       <div class="bs-nav-links">
         ${navLink("/", "홈", active === "home")}
         ${navLink("/notices", "공지사항", active === "notices")}
@@ -186,10 +229,14 @@ function shell(title: string, active: string, bodyHtml: string): string {
       </form>
     </nav>
   `;
-  // .bs-layout은 데스크톱에선 그냥 세로로 쌓이지만(nav가 원래 top-nav), 모바일
-  // 폭에서는 FORM_STYLE의 미디어 쿼리가 flex row로 바꿔서 nav를 왼쪽 사이드탭으로
-  // 만듭니다 — 마크업은 이거 하나로 두 레이아웃 다 커버합니다.
-  return page(title, `<style>${FORM_STYLE}</style><div class="bs-layout">${nav}<div class="bs-main">${bodyHtml}</div></div>`);
+  const menuToggle = `<button type="button" class="bs-menu-toggle" id="bs-menu-toggle" aria-label="메뉴 열기" aria-expanded="false" aria-controls="bs-nav">☰</button>`;
+  const backdrop = `<div class="bs-backdrop" id="bs-backdrop"></div>`;
+  // 데스크톱에선 nav가 그대로 top-nav로 보이고 ☰/배경은 숨겨집니다. 모바일 폭에서는
+  // FORM_STYLE의 미디어 쿼리가 nav를 왼쪽 슬라이드 서랍으로 바꾸고, ☰ 버튼이 그걸 엽니다.
+  return page(
+    title,
+    `<style>${FORM_STYLE}</style><div class="bs-layout">${menuToggle}${nav}${backdrop}<div class="bs-main">${bodyHtml}</div></div><script>${BS_MENU_SCRIPT}</script>`,
+  );
 }
 
 // authGuard.ts의 requireAdmin이 로그인은 됐지만 권한이 안 맞는 경우(회원 아님/관리자
@@ -205,13 +252,7 @@ export function renderBackstageErrorPage(title: string, message: string, action?
 export const BACKSTAGE_LOGOUT_ACTION = `<form method="post" action="/logout" style="margin-top:16px"><button type="submit" class="bs-submit">로그아웃하고 다른 계정으로 로그인</button></form>`;
 export const BACKSTAGE_RELOGIN_ACTION = `<a class="bs-new" href="/api/auth/discord">다시 로그인</a>`;
 
-export type MemberSyncResult = { total: number; written: number; deleted: number };
-
-export function renderBackstageHome(
-  member: MemberRecord,
-  syncResult?: MemberSyncResult | null,
-  lastSyncedAt?: number | null,
-): string {
+export function renderBackstageHome(member: MemberRecord): string {
   return shell(
     "Backstage",
     "home",
@@ -220,22 +261,6 @@ export function renderBackstageHome(
     <h1>안녕하세요, ${escapeHtml(member.name || "관리자")}님</h1>
     <p class="bs-lead">관리자 권한이 확인되었습니다. 왼쪽 위 메뉴에서 관리할 콘텐츠를 선택하세요.</p>
     <p class="bs-note" style="margin-top:16px">저장하면 D1에 바로 반영되고, GitHub Actions가 자동으로 다시 빌드/배포합니다 (보통 1분 내외 걸려요).</p>
-
-    <div class="bs-card" style="margin-top:24px">
-      <p class="bs-card-title">회원 명단 동기화</p>
-      <p class="bs-note">Google Sheets 회원 명단은 매시 정각에 자동으로 KV에 동기화됩니다. 방금 시트를 고쳤다면 여기서 바로 반영할 수 있어요.</p>
-      <p class="bs-note" style="margin-top:6px">
-        마지막 동기화: ${lastSyncedAt ? escapeHtml(formatKstDateTime(lastSyncedAt)) : "기록 없음"}
-      </p>
-      ${
-        syncResult
-          ? `<p class="bs-note" style="margin-top:10px;color:var(--logo-primary);font-weight:700;">완료 — 전체 ${syncResult.total}명 중 ${syncResult.written}명 갱신, ${syncResult.deleted}명 삭제됨</p>`
-          : ""
-      }
-      <form method="post" action="/sync-members" style="margin-top:14px">
-        <button type="submit" class="bs-submit">지금 동기화</button>
-      </form>
-    </div>
   `,
   );
 }
@@ -581,9 +606,11 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 }
 
 // ---------- members ----------
-// KV에 캐싱된 회원 명단(Google Sheets 동기화본)을 그냥 보여주기만 하는 읽기 전용
-// 페이지입니다 — 수정은 항상 원본 시트에서 하고, 여기서 반영은 홈의 "지금 동기화"나
-// 매시 cron을 기다리면 됩니다.
+// KV에 캐싱된 회원 명단(Google Sheets 동기화본)을 보여주는 페이지입니다 — 수정은
+// 항상 원본 시트에서 하고, 여기서는 그 결과를 보고 필요하면 수동으로 다시
+// 동기화("강제 캐싱")할 수만 있습니다.
+
+export type MemberSyncResult = { total: number; written: number; deleted: number };
 
 export type MemberListPage = {
   q: string;
@@ -615,10 +642,15 @@ function renderMemberRow(member: MemberRecord): string {
   </li>`;
 }
 
-export function renderMemberList(members: MemberRecord[], meta: MemberListPage): string {
+export function renderMemberList(
+  members: MemberRecord[],
+  meta: MemberListPage,
+  syncResult?: MemberSyncResult | null,
+  lastSyncedAt?: number | null,
+): string {
   const body =
     members.length === 0
-      ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "회원 명단이 비어 있습니다. 홈 화면에서 동기화해 주세요."}</p>`
+      ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "회원 명단이 비어 있습니다. 아래에서 동기화해 주세요."}</p>`
       : `<ul class="bs-member-list">${members.map(renderMemberRow).join("\n")}</ul>`;
 
   const pager =
@@ -638,7 +670,24 @@ export function renderMemberList(members: MemberRecord[], meta: MemberListPage):
     `
     <p class="bs-eyebrow">Backstage</p>
     <h1>회원 명단</h1>
-    <p class="bs-note" style="margin-bottom:16px">Google Sheets 기준으로 KV에 캐싱된 명단이에요 — 홈 화면에서 동기화한 시점 기준입니다.</p>
+    <p class="bs-note" style="margin-bottom:16px">Google Sheets 기준으로 KV에 캐싱된 명단이에요.</p>
+
+    <div class="bs-card">
+      <p class="bs-card-title">동기화</p>
+      <p class="bs-note">매시 정각에 자동으로 KV에 동기화됩니다. 방금 시트를 고쳤다면 여기서 강제로 바로 반영할 수 있어요.</p>
+      <p class="bs-note" style="margin-top:6px">
+        마지막 동기화: ${lastSyncedAt ? escapeHtml(formatKstDateTime(lastSyncedAt)) : "기록 없음"}
+      </p>
+      ${
+        syncResult
+          ? `<p class="bs-note" style="margin-top:10px;color:var(--logo-primary);font-weight:700;">완료 — 전체 ${syncResult.total}명 중 ${syncResult.written}명 갱신, ${syncResult.deleted}명 삭제됨</p>`
+          : ""
+      }
+      <form method="post" action="/members/sync" style="margin-top:14px">
+        <button type="submit" class="bs-submit">지금 동기화</button>
+      </form>
+    </div>
+
     <form class="bs-search" method="get" action="/members">
       <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="이름 · 학번 · 이메일 · Discord 검색" />
       <button type="submit" class="bs-cancel-btn">검색</button>
