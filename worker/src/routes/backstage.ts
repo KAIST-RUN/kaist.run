@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { requireAdmin } from "../lib/authGuard";
+import { clearSessionCookie } from "./auth";
 import { triggerRebuild } from "../lib/githubDeploy";
 import {
   listNotices,
@@ -50,6 +51,14 @@ backstage.get("/", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
   return c.html(renderBackstageHome(gate.member));
+});
+
+// nav의 로그아웃 버튼(backstageRender.ts의 shell)과 403 페이지의 "로그아웃" 액션이
+// 여기로 폼 제출합니다. 로그인 상태 확인 없이 그냥 지우기만 하면 되므로 requireAdmin
+// 게이트가 필요 없습니다 — 로그아웃은 항상 허용해도 안전합니다.
+backstage.post("/logout", async (c) => {
+  await clearSessionCookie(c);
+  return c.redirect("/");
 });
 
 // ---------- notices ----------

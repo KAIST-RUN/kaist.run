@@ -8,10 +8,13 @@ const FORM_STYLE = `
   body { max-width: 960px; }
   h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
 
-  .bs-nav { display: flex; gap: 6px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid rgba(128,128,128,.18); font-size: 0.875rem; flex-wrap: wrap; }
+  .bs-nav { display: flex; align-items: center; gap: 6px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid rgba(128,128,128,.18); font-size: 0.875rem; flex-wrap: wrap; }
   .bs-nav a { opacity: 0.65; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
   .bs-nav a:hover { opacity: 1; background: rgba(128,128,128,.1); }
   .bs-nav a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: #06240a; }
+  .bs-nav-logout-form { margin-left: auto; }
+  .bs-nav-logout { font: inherit; background: none; border: none; opacity: 0.65; padding: 6px 14px; border-radius: 999px; cursor: pointer; transition: opacity .15s, background .15s; }
+  .bs-nav-logout:hover { opacity: 1; background: rgba(128,128,128,.1); }
 
   .bs-subnav { display: flex; gap: 8px; margin: -8px 0 20px; font-size: 0.8125rem; }
   .bs-subnav a { opacity: 0.6; text-decoration: none; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(128,128,128,.25); }
@@ -108,10 +111,26 @@ function shell(title: string, active: string, bodyHtml: string): string {
       ${navLink("/archive", "대회 아카이브", active === "archive")}
       ${navLink("/contact", "연락처", active === "contact")}
       ${navLink("/uploads", "업로드", active === "uploads")}
+      <form method="post" action="/logout" class="bs-nav-logout-form">
+        <button type="submit" class="bs-nav-logout">로그아웃</button>
+      </form>
     </nav>
   `;
   return page(title, `<style>${FORM_STYLE}</style>${nav}${bodyHtml}`);
 }
+
+// authGuard.ts의 requireAdmin이 로그인은 됐지만 권한이 안 맞는 경우(회원 아님/관리자
+// 아님)에 씁니다. 일반 renderErrorPage와 달리 로그아웃(또는 재로그인) 액션을 넣어서,
+// 세션이 잘못된 계정으로 잡혀 있어도 backstage를 떠나지 않고 바로 계정을 바꿀 수 있게 합니다.
+export function renderBackstageErrorPage(title: string, message: string, action?: string): string {
+  return page(
+    title,
+    `<style>${FORM_STYLE}</style><h1>${escapeHtml(title)}</h1><p class="bs-lead">${escapeHtml(message)}</p>${action ?? ""}`,
+  );
+}
+
+export const BACKSTAGE_LOGOUT_ACTION = `<form method="post" action="/logout" style="margin-top:16px"><button type="submit" class="bs-submit">로그아웃하고 다른 계정으로 로그인</button></form>`;
+export const BACKSTAGE_RELOGIN_ACTION = `<a class="bs-new" href="/api/auth/discord">다시 로그인</a>`;
 
 export function renderBackstageHome(member: MemberRecord): string {
   return shell(

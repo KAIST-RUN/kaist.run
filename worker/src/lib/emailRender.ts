@@ -85,14 +85,27 @@ function forceLightColorScheme(html: string): string {
 }
 
 const PAGE_STYLE = `
-  :root { --logo-primary: #2fae19; --logo-accent: #e8524f; }
-  @media (prefers-color-scheme: dark) { :root { --logo-primary: #70ff44; --logo-accent: #ff6f6f; } }
-  body { font-family: -apple-system, "Malgun Gothic", sans-serif; max-width: 900px; margin: 0 auto; padding: 24px 16px; color: #171717; }
-  @media (prefers-color-scheme: dark) { body { color: #ededed; background: #0a0a0a; } a { color: #8ab4ff; } }
-  .topbar { margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid rgba(128,128,128,.25); }
+  :root { --logo-primary: #2fae19; --logo-accent: #e8524f; --bg: #ffffff; --fg: #171717; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --logo-primary: #70ff44; --logo-accent: #ff6f6f; --bg: #0a0a0a; --fg: #ededed; }
+    :root:not([data-theme="light"]) a { color: #8ab4ff; }
+  }
+  :root[data-theme="dark"] { --logo-primary: #70ff44; --logo-accent: #ff6f6f; --bg: #0a0a0a; --fg: #ededed; }
+  :root[data-theme="dark"] a { color: #8ab4ff; }
+  body { font-family: -apple-system, "Malgun Gothic", sans-serif; max-width: 900px; margin: 0 auto; padding: 24px 16px; color: var(--fg); background: var(--bg); }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid rgba(128,128,128,.25); }
   .topbar a { display: inline-flex; align-items: center; text-decoration: none; opacity: 0.85; }
   .topbar a:hover { opacity: 1; }
   .topbar svg { height: 22px; width: auto; }
+  .theme-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: none; padding: 0; font-size: 1rem; line-height: 1; cursor: pointer; transition: background .15s; }
+  .theme-toggle:hover { background: rgba(128,128,128,.1); }
+  .theme-toggle .icon-moon { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: inline; }
+  }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: inline; }
   h1 { font-size: 1.25rem; margin: 0 0 16px; word-break: break-word; }
   dl { display: grid; grid-template-columns: 5em 1fr; gap: 4px 12px; font-size: 0.875rem; opacity: 0.85; margin: 0 0 20px; }
   dt { font-weight: 600; }
@@ -124,6 +137,16 @@ const LOGO_SVG = `<svg viewBox="0 0 337 144" fill="none" xmlns="http://www.w3.or
   <path d="M291.229 44.3693C286.496 37.6703 284.495 29.6806 285.592 21.8687C286.058 18.5642 287.169 15.3836 288.864 12.5086C290.558 9.63369 292.802 7.12065 295.468 5.113C298.134 3.10535 301.169 1.64241 304.4 0.80772C307.631 -0.0269722 310.995 -0.217073 314.299 0.248273C328.174 2.198 337.878 15.0743 335.928 28.9493C334.834 36.7381 330.708 43.8591 324.312 49.0016C320.76 51.8459 316.752 53.8434 312.949 54.7366C312.662 54.8057 312.411 54.9823 312.25 55.2301C312.089 55.478 312.029 55.7783 312.082 56.0691L312.786 59.8819C312.888 60.4007 312.813 60.9388 312.572 61.4096C312.376 61.7849 312.082 62.0995 311.72 62.3189C311.358 62.5383 310.943 62.6542 310.52 62.654C310.412 62.6543 310.304 62.6466 310.197 62.6309L307.623 62.2695C307.562 62.261 307.499 62.2724 307.445 62.3021C307.391 62.3317 307.347 62.3781 307.321 62.4343C304.905 67.6822 300.751 71.6626 295.448 73.7598C295.158 73.8744 294.847 73.9292 294.535 73.9207C294.223 73.9122 293.916 73.8406 293.633 73.7103C293.349 73.58 293.095 73.3936 292.885 73.1624C292.675 72.9312 292.515 72.66 292.413 72.365C292.004 71.1828 292.65 69.8979 293.812 69.4339C297.44 67.9846 300.464 65.339 302.382 61.9357C302.407 61.8946 302.421 61.8482 302.423 61.8006C302.425 61.753 302.415 61.7056 302.394 61.6627C302.373 61.6197 302.342 61.5826 302.304 61.5546C302.265 61.5266 302.22 61.5085 302.173 61.5021L301.103 61.3575C300.544 61.2854 300.028 61.0176 299.646 60.6016C299.338 60.2566 299.14 59.827 299.079 59.3683C299.017 58.9097 299.095 58.4431 299.301 58.029L301.044 54.527C301.177 54.261 301.202 53.9542 301.114 53.6703C301.026 53.3863 300.832 53.1471 300.573 53.0022C297.163 51.0987 293.859 48.0881 291.229 44.3693ZM313.617 46.7946C313.908 46.7945 314.196 46.7396 314.467 46.6327C320.43 44.2739 325.494 39.0159 327.684 32.9109C327.791 32.6241 327.84 32.319 327.827 32.0132C327.815 31.7075 327.743 31.4071 327.614 31.1296C327.485 30.8522 327.302 30.603 327.076 30.3967C326.85 30.1904 326.585 30.031 326.297 29.9277C326.009 29.8244 325.704 29.7793 325.398 29.795C325.092 29.8107 324.793 29.887 324.517 30.0192C324.241 30.1515 323.994 30.3373 323.791 30.5657C323.587 30.7941 323.431 31.0607 323.331 31.35C321.235 37.1948 316.499 40.8558 312.766 42.3343C312.265 42.5322 311.849 42.8986 311.589 43.3703C311.33 43.842 311.243 44.3894 311.344 44.9182C311.445 45.4471 311.727 45.9241 312.142 46.2672C312.557 46.6102 313.079 46.7978 313.617 46.7975V46.7946Z" fill="var(--logo-accent)"/>
 </svg>`;
 
+// 저장된 테마를 첫 페인트부터 바로 반영하기 위해 <style>보다 먼저, 동기적으로
+// 실행합니다 — body 렌더 이후에 붙이면 시스템 기본값으로 그렸다가 뒤늦게 바뀌는
+// 깜빡임(FOUC)이 생깁니다.
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("kaistrun-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();`;
+
+// 토글 클릭 시 "현재 실효 테마"(명시적 선택이 없으면 시스템 설정)의 반대로 전환하고
+// localStorage에 저장합니다. 실제 색상 전환은 전부 CSS(PAGE_STYLE의 [data-theme]
+// 규칙)가 담당하므로, 여기선 속성/저장만 건드립니다.
+const THEME_TOGGLE_SCRIPT = `(function(){var b=document.getElementById("theme-toggle");if(!b)return;b.addEventListener("click",function(){var root=document.documentElement;var current=root.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var next=current==="dark"?"light":"dark";root.setAttribute("data-theme",next);try{localStorage.setItem("kaistrun-theme",next);}catch(e){}});})();`;
+
 // backstage.ts 등 다른 라우트도 같은 스타일/로고 셸을 쓰고 싶을 때를 위해 export합니다.
 export function page(title: string, bodyHtml: string): string {
   return `<!doctype html>
@@ -133,11 +156,18 @@ export function page(title: string, bodyHtml: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
 <title>${escapeHtml(title)}</title>
+<script>${THEME_INIT_SCRIPT}</script>
 <style>${PAGE_STYLE}</style>
 </head>
 <body>
-<div class="topbar"><a href="https://kaist.run" aria-label="kaist.run">${LOGO_SVG}</a></div>
+<div class="topbar">
+  <a href="https://kaist.run" aria-label="kaist.run">${LOGO_SVG}</a>
+  <button type="button" class="theme-toggle" id="theme-toggle" aria-label="테마 전환" title="테마 전환">
+    <span class="icon-sun" aria-hidden="true">☀️</span><span class="icon-moon" aria-hidden="true">🌙</span>
+  </button>
+</div>
 ${bodyHtml}
+<script>${THEME_TOGGLE_SCRIPT}</script>
 </body>
 </html>`;
 }

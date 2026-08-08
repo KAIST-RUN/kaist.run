@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Env } from "../types";
 import { buildDiscordAuthorizeUrl, exchangeDiscordCode, fetchDiscordUser } from "../lib/discord";
@@ -178,13 +178,19 @@ auth.get("/discord/callback", async (c) => {
   return c.redirect(returnTo);
 });
 
-// 로그아웃: src/components/account/AccountMenu.tsx가 POST로 호출합니다.
-auth.post("/logout", async (c) => {
+// backstage.ts의 POST /logout(폼 제출로 페이지 이동)도 이 로직을 그대로 씁니다 —
+// 세션 삭제 + 쿠키 삭제만 하고 응답(204 vs 리다이렉트)은 호출부가 알아서 정합니다.
+export async function clearSessionCookie(c: Context<{ Bindings: Env }>): Promise<void> {
   const sessionId = getCookie(c, SESSION_COOKIE);
   if (sessionId) {
     await deleteSession(c.env, sessionId);
   }
   // 쿠키를 지울 땐 만들 때와 domain이 같아야 브라우저가 실제로 지웁니다.
   deleteCookie(c, SESSION_COOKIE, { path: "/", domain: sessionCookieDomain(c.env) });
+}
+
+// 로그아웃: src/components/account/AccountMenu.tsx가 POST로 호출합니다.
+auth.post("/logout", async (c) => {
+  await clearSessionCookie(c);
   return c.body(null, 204);
 });
