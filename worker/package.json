@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "sync-members": "curl -X POST -H \"x-admin-secret: $ADMIN_SYNC_SECRET\" https://kaist.run/api/admin/sync-members"
+    "sync-members": "curl -X POST -H \"x-admin-secret: $ADMIN_SYNC_SECRET\" https://kaist.run/api/admin/sync-members",
+    "backfill-email-index": "curl -X POST -H \"x-admin-secret: $ADMIN_SYNC_SECRET\" https://kaist.run/api/admin/backfill-email-index"
   },
   "dependencies": {
     "hono": "^4",

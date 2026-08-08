@@ -1,4 +1,5 @@
 import type { Email, Address, Attachment } from "postal-mime";
+import type { EmailIndexEntry } from "./emailIndex";
 
 export function escapeHtml(value: string): string {
   return value
@@ -9,12 +10,12 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function formatAddress(addr: Address | undefined): string {
+export function formatAddress(addr: Address | undefined): string {
   if (!addr) return "-";
   return addr.name ? `${addr.name} <${addr.address}>` : (addr.address ?? "-");
 }
 
-function formatAddressList(addrs: Address[] | undefined): string {
+export function formatAddressList(addrs: Address[] | undefined): string {
   if (!addrs || addrs.length === 0) return "-";
   return addrs.map(formatAddress).join(", ");
 }
@@ -101,6 +102,17 @@ const PAGE_STYLE = `
   .body-text { white-space: pre-wrap; word-break: break-word; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; padding: 16px; font-size: 0.9rem; }
   .attachments { margin-top: 20px; font-size: 0.875rem; }
   .attachments ul { padding-left: 20px; }
+  .email-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.25); }
+  .email-list li { border-bottom: 1px solid rgba(128,128,128,.25); }
+  .email-list a { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 14px 4px; text-decoration: none; color: inherit; }
+  .email-list a:hover { background: rgba(128,128,128,.08); }
+  .email-list .main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .email-list .subject { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .email-list .addrs { font-size: 0.8rem; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .email-list .date { flex-shrink: 0; font-size: 0.8rem; opacity: 0.6; }
+  .empty { opacity: 0.6; padding: 24px 4px; }
+  .pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; font-size: 0.875rem; }
+  .pager .disabled { opacity: 0.35; }
 `;
 
 // 메인 사이트의 src/components/Logo.tsx와 같은 SVG입니다 (React 없이 그냥
@@ -176,4 +188,53 @@ export function renderEmailPage(id: string, email: Email): string {
     ${attachmentsHtml}
   `,
   );
+}
+
+// KST(Asia/Seoul) 기준 "YYYY-MM-DD HH:mm"로 고정 포맷 — 로케일 구분자에 기대지 않고
+// formatToParts로 직접 조립해서 어느 런타임에서 돌아도 형태가 안 바뀌게 합니다.
+function formatReceivedAt(ms: number): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(ms));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
+export type EmailListPageInfo = {
+  page: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+};
+
+export function renderEmailListPage(items: EmailIndexEntry[], info: EmailListPageInfo): string {
+  const rows = items.length
+    ? `<ul class="email-list">
+        ${items
+          .map((item) => {
+            const safeId = escapeHtml(item.id);
+            return `<li><a href="/email/${safeId}">
+              <div class="main">
+                <span class="subject">${escapeHtml(item.subject)}</span>
+                <span class="addrs">${escapeHtml(item.from)} → ${escapeHtml(item.to)}</span>
+              </div>
+              <span class="date">${escapeHtml(formatReceivedAt(item.receivedAt))}</span>
+            </a></li>`;
+          })
+          .join("\n")}
+      </ul>`
+    : `<p class="empty">받은 메일이 없습니다.</p>`;
+
+  const pager = `<div class="pager">
+    ${info.hasPrev ? `<a href="/email?page=${info.page - 1}">← 이전</a>` : `<span class="disabled">← 이전</span>`}
+    <span>${info.page + 1}페이지</span>
+    ${info.hasNext ? `<a href="/email?page=${info.page + 1}">다음 →</a>` : `<span class="disabled">다음 →</span>`}
+  </div>`;
+
+  return page("받은 메일함", `<h1>받은 메일함</h1>${rows}${pager}`);
 }

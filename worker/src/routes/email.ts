@@ -3,9 +3,12 @@ import PostalMime from "postal-mime";
 import type { Env } from "../types";
 import { requireSession } from "../lib/authGuard";
 import { getRawEmail } from "../lib/emailStore";
-import { renderEmailPage, renderErrorPage } from "../lib/emailRender";
+import { listEmailIndex } from "../lib/emailIndex";
+import { renderEmailPage, renderEmailListPage, renderErrorPage } from "../lib/emailRender";
 
 export const email = new Hono<{ Bindings: Env }>();
+
+const LIST_PAGE_SIZE = 20;
 
 // 로그인 안 됨 → /api/auth/discord로 보내서 로그인 후 이 페이지로 돌아오게 합니다.
 // 로그인은 됐지만 관리자가 아님 → 다시 로그인해도 소용없으니 바로 에러 페이지.
@@ -33,6 +36,27 @@ async function requireAdmin(c: Context<{ Bindings: Env }>): Promise<Response | n
 
   return null;
 }
+
+// 받은메일함 목록. 페이지네이션은 커서가 아니라 단순 ?page=N 쿼리 파라미터입니다 —
+// listEmailIndex()가 어차피 KV list() 1회로 전체(최대 1,000건)를 가져오므로, 몇
+// 페이지를 요청하든 이 라우트의 백엔드 비용은 항상 KV 호출 1회로 동일합니다.
+email.get("/", async (c) => {
+  const gate = await requireAdmin(c);
+  if (gate) return gate;
+
+  const page = Math.max(0, Number.parseInt(c.req.query("page") ?? "0", 10) || 0);
+  const all = await listEmailIndex(c.env);
+  const start = page * LIST_PAGE_SIZE;
+  const items = all.slice(start, start + LIST_PAGE_SIZE);
+
+  return c.html(
+    renderEmailListPage(items, {
+      page,
+      hasPrev: page > 0,
+      hasNext: start + LIST_PAGE_SIZE < all.length,
+    }),
+  );
+});
 
 email.get("/:id", async (c) => {
   const gate = await requireAdmin(c);

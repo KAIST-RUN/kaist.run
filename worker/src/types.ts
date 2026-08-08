@@ -1,6 +1,9 @@
 export type Env = {
   SESSIONS: KVNamespace;
   MEMBERS: KVNamespace;
+  // 이메일 목록 페이지(kaist.run/email)용 가벼운 색인 — 제목/보낸사람/받는사람/
+  // 수신시각만 담고, 원본은 여전히 EMAILS(R2)에 있습니다.
+  EMAIL_INDEX: KVNamespace;
 
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;

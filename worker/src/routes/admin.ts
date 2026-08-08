@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { syncMembersFromSheet } from "../lib/members";
+import { backfillEmailIndex } from "../lib/emailIndex";
 
 export const admin = new Hono<{ Bindings: Env }>();
 
@@ -16,5 +17,19 @@ admin.post("/sync-members", async (c) => {
   }
 
   const result = await syncMembersFromSheet(c.env);
+  return c.json(result);
+});
+
+// 이메일 목록 페이지(kaist.run/email) 기능을 배포한 뒤, 그 전에 이미 R2에 쌓여
+// 있던 메일들을 색인에 채워 넣기 위해 딱 한 번 수동으로 호출합니다
+// (`npm run backfill-email-index`). 이미 색인된 메일은 건너뛰므로 재실행해도
+// 안전합니다.
+admin.post("/backfill-email-index", async (c) => {
+  const provided = c.req.header("x-admin-secret");
+  if (!provided || provided !== c.env.ADMIN_SYNC_SECRET) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const result = await backfillEmailIndex(c.env);
   return c.json(result);
 });

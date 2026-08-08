@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import PostalMime from "postal-mime";
 import type { Env } from "./types";
 import { auth } from "./routes/auth";
 import { me } from "./routes/me";
@@ -7,6 +8,8 @@ import { admin } from "./routes/admin";
 import { email } from "./routes/email";
 import { syncMembersFromSheet } from "./lib/members";
 import { storeRawEmail } from "./lib/emailStore";
+import { indexEmail } from "./lib/emailIndex";
+import { formatAddress, formatAddressList } from "./lib/emailRender";
 import { ALLOWED_ORIGINS } from "./lib/constants";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -49,6 +52,23 @@ export default {
       const raw = await new Response(message.raw).arrayBuffer();
       const id = await storeRawEmail(env, raw);
       viewUrl = `${ALLOWED_ORIGINS[0]}/email/${id}`;
+
+      // 목록 페이지(GET /email)용 가벼운 색인. 이 블록만의 실패는 원본 저장/
+      // 포워딩에 영향을 주면 안 되므로 별도 try/catch로 감쌉니다(안 그러면 색인
+      // 실패가 바로 위 "메일 저장 실패" 로그로 잘못 찍힘 — message.forward()는
+      // 어차피 이 바깥 try/catch 밖에서 무조건 실행되니 안전장치 목적은 아님).
+      try {
+        const parsed = await PostalMime.parse(raw);
+        await indexEmail(env, {
+          id,
+          subject: parsed.subject || "(제목 없음)",
+          from: formatAddress(parsed.from),
+          to: formatAddressList(parsed.to),
+          receivedAt: Date.now(),
+        });
+      } catch (err) {
+        console.error(`Failed to index email ${id} for the list view`, err);
+      }
     } catch (err) {
       console.error("Failed to store incoming email for the viewer", err);
     }

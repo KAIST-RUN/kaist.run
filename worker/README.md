@@ -2,9 +2,10 @@
 
 `/ko/my`, `/en/my` 페이지(그리고 헤더의 로그인 버튼)가 호출하는
 `GET /api/me`, `GET /api/auth/discord`, `POST /api/auth/logout`과,
-`kaist.run/email/<id>` 이메일 전문 뷰어(관리자 전용)를 구현하는 Cloudflare
-Worker입니다. 메인 사이트(정적 export)와는 별도로 배포되고,
-`kaist.run/api/*`, `kaist.run/email/*` 경로만 이 Worker가 처리합니다.
+`kaist.run/email` 받은메일함 목록 + `kaist.run/email/<id>` 이메일 전문 뷰어
+(둘 다 관리자 전용)를 구현하는 Cloudflare Worker입니다. 메인 사이트(정적
+export)와는 별도로 배포되고, `kaist.run/api/*`, `kaist.run/email`,
+`kaist.run/email/*` 경로만 이 Worker가 처리합니다.
 
 ## 0. 미리 필요한 것
 
@@ -57,6 +58,7 @@ npm install
 
 npx wrangler kv namespace create SESSIONS
 npx wrangler kv namespace create MEMBERS
+npx wrangler kv namespace create EMAIL_INDEX
 npx wrangler r2 bucket create kaist-run-emails
 ```
 
@@ -97,11 +99,12 @@ EMAIL_FORWARD_TO`로 시크릿으로 등록해도 됩니다.)
 ```jsonc
 "routes": [
   { "pattern": "kaist.run/api/*", "zone_name": "kaist.run" },
+  { "pattern": "kaist.run/email", "zone_name": "kaist.run" },
   { "pattern": "kaist.run/email/*", "zone_name": "kaist.run" }
 ]
 ```
 
-기존 정적 사이트 배포는 건드리지 않아도, 이 두 경로만 이 Worker가 가로채고
+기존 정적 사이트 배포는 건드리지 않아도, 이 경로들만 이 Worker가 가로채고
 나머지 경로는 그대로 기존 배포(정적 자산)가 처리합니다.
 (존이 이미 Cloudflare에 연결돼 있어야 하고, `wrangler deploy` 시 자동으로
 라우트가 등록됩니다. 안 되면 대시보드 → Workers Routes에서 수동으로 추가하세요.)
@@ -130,7 +133,18 @@ npm run deploy
 메시지에 링크로 붙이도록 코드를 수정해야 합니다 — 이건 이 저장소가 아니라
 그 봇 쪽 작업입니다.
 
-## 8. 첫 회원 동기화
+## 8. 받은메일함 목록 색인 채우기 (딱 한 번)
+
+`kaist.run/email` 목록 페이지는 메일이 도착할 때마다 자동으로 쌓이는 가벼운
+색인(KV)만 읽습니다. 이 기능을 배포하기 **전**에 이미 R2에 쌓여 있던 메일은
+이 색인에 없어서 목록에 안 보이는데, 아래를 한 번 실행하면 기존 메일도 전부
+색인에 채워집니다 (이미 색인된 메일은 건너뛰므로 여러 번 실행해도 안전합니다):
+
+```bash
+ADMIN_SYNC_SECRET=<4번에서 등록한 값> npm run backfill-email-index
+```
+
+## 9. 첫 회원 동기화
 
 Cron(매시 정각)이 돌 때까지 기다리거나, 바로 실행하려면:
 
@@ -138,7 +152,7 @@ Cron(매시 정각)이 돌 때까지 기다리거나, 바로 실행하려면:
 ADMIN_SYNC_SECRET=<4번에서 등록한 값> npm run sync-members
 ```
 
-## 9. 확인
+## 10. 확인
 
 - `https://kaist.run/api/auth/discord?returnTo=/ko/my` 로 접속 → Discord 로그인 →
   `/ko/my`로 돌아오면서 실제 회원 정보가 보이는지 확인
@@ -152,6 +166,8 @@ ADMIN_SYNC_SECRET=<4번에서 등록한 값> npm run sync-members
   접근이 막히는지 확인
 - `npx wrangler r2 object get kaist-run-emails/emails/<id>.eml --remote`로
   R2에 원본이 실제로 저장됐는지 직접 확인해볼 수도 있습니다
+- `https://kaist.run/email`로 접속(관리자 계정) → 제목/보낸사람/받는주소/수신일시
+  목록이 최신순으로 뜨고, 20건 넘게 있으면 페이지네이션이 동작하는지 확인
 
 ## 나중에 고려할 것 (지금은 안 만듦)
 
