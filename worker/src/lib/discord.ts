@@ -7,10 +7,13 @@ export type DiscordUser = {
   avatarUrl: string | null;
 };
 
-export function buildDiscordAuthorizeUrl(env: Env, state: string): string {
+// redirectUri는 호출부(routes/auth.ts의 discordRedirectUri)가 요청 호스트별로
+// 계산해서 넘겨줍니다 — kaist.run과 backstage.kaist.run 각각 자기 호스트로 콜백을
+// 받기 위함이라, 여기서 env.DISCORD_REDIRECT_URI로 고정하면 안 됩니다.
+export function buildDiscordAuthorizeUrl(env: Env, state: string, redirectUri: string): string {
   const url = new URL("https://discord.com/oauth2/authorize");
   url.searchParams.set("client_id", env.DISCORD_CLIENT_ID);
-  url.searchParams.set("redirect_uri", env.DISCORD_REDIRECT_URI);
+  url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
   // 최소 권한: 로그인 식별에 identify만 있으면 충분합니다 (KAIST 이메일은
   // Discord가 아니라 회원 스프레드시트에서 옵니다 — src/lib/members.ts 참고).
@@ -19,7 +22,7 @@ export function buildDiscordAuthorizeUrl(env: Env, state: string): string {
   return url.toString();
 }
 
-export async function exchangeDiscordCode(env: Env, code: string): Promise<string> {
+export async function exchangeDiscordCode(env: Env, code: string, redirectUri: string): Promise<string> {
   const res = await fetch("https://discord.com/api/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -28,7 +31,8 @@ export async function exchangeDiscordCode(env: Env, code: string): Promise<strin
       client_secret: env.DISCORD_CLIENT_SECRET,
       grant_type: "authorization_code",
       code,
-      redirect_uri: env.DISCORD_REDIRECT_URI,
+      // Discord는 이 값이 authorize 때 쓴 redirect_uri와 정확히 같아야 토큰을 내줍니다.
+      redirect_uri: redirectUri,
     }),
   });
 

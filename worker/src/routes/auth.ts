@@ -106,6 +106,30 @@ function sessionCookieDomain(env: Env): string | undefined {
   return hostname === "kaist.run" || hostname.endsWith(".kaist.run") ? ".kaist.run" : undefined;
 }
 
+const DISCORD_CALLBACK_PATH = "/api/auth/discord/callback";
+
+// 콜백을 항상 kaist.run 하나로 고정해뒀을 때(DISCORD_REDIRECT_URI), backstage.kaist.run에서
+// 로그인을 시작한 경우 kaist.run에서 막 심어진 Domain=.kaist.run 세션 쿠키를 곧바로
+// backstage.kaist.run으로 다시 리다이렉트해서 쓰게 됩니다. 이 "방금 심은 쿠키를 다른
+// 서브도메인으로 넘어가자마자 쓰는" 마지막 한 번의 크로스 서브도메인 이동에서 모바일
+// Firefox가 간헐적으로 그 쿠키를 놓쳐서, 로그인을 완료해도 즉시 다시 로그인 화면으로
+// 튕기는 문제가 있었습니다(kaist.run 마이페이지 로그인은 콜백도 kaist.run이라 이 문제가
+// 없음 — 증상이 backstage에서만 재현되는 이유). 그래서 로그인을 시작한 호스트에서 그대로
+// 콜백까지 받도록, redirect_uri를 요청 호스트별로 다르게 씁니다 — 쿠키를 심는 요청과
+// 처음 쓰는 요청이 항상 같은 호스트가 되어 이 문제가 생기지 않습니다.
+// ⚠️ Discord Developer Portal의 OAuth2 → Redirects에
+// https://backstage.kaist.run/api/auth/discord/callback 도 등록해둬야 합니다
+// (kaist.run 것만 있으면 Discord가 "Invalid OAuth2 redirect_uri"로 거부합니다).
+//
+// 로컬 dev에서는 wrangler dev가 routes 설정 때문에 c.req.url의 호스트를 실제 접속
+// 주소와 무관하게 항상 프로덕션 값으로 시뮬레이션하므로(sessionCookieDomain 주석
+// 참고) 이 방식이 신뢰할 수 없어, 로컬에서는 그냥 DISCORD_REDIRECT_URI를 그대로 씁니다.
+function discordRedirectUri(env: Env, requestUrl: string): string {
+  if (sessionCookieDomain(env) === undefined) return env.DISCORD_REDIRECT_URI;
+  const hostname = new URL(requestUrl).hostname;
+  return ALLOWED_RETURN_HOSTS.has(hostname) ? `https://${hostname}${DISCORD_CALLBACK_PATH}` : env.DISCORD_REDIRECT_URI;
+}
+
 export const auth = new Hono<{ Bindings: Env }>();
 
 // 로그인 시작: 프런트가 이 경로로 <a> 태그를 통해 이동시킵니다.
@@ -120,10 +144,12 @@ auth.get("/discord", async (c) => {
     exp: Date.now() + 10 * 60 * 1000, // 10분 — 이 사이에 로그인을 마쳐야 함
   });
 
-  return c.redirect(buildDiscordAuthorizeUrl(c.env, state));
+  return c.redirect(buildDiscordAuthorizeUrl(c.env, state, discordRedirectUri(c.env, c.req.url)));
 });
 
-// Discord가 로그인 후 돌아오는 콜백.
+// Discord가 로그인 후 돌아오는 콜백. (discordRedirectUri 덕분에 kaist.run과
+// backstage.kaist.run 둘 다에서 받을 수 있습니다 — wrangler.jsonc 라우트가 이미
+// backstage.kaist.run/*를 통째로 이 워커로 보내고 있어서 별도 라우트 추가는 불필요.)
 auth.get("/discord/callback", async (c) => {
   const code = c.req.query("code");
   const stateParam = c.req.query("state");
@@ -134,7 +160,11 @@ auth.get("/discord/callback", async (c) => {
   }
   const returnTo = statePayload.returnTo;
 
-  const accessToken = await exchangeDiscordCode(c.env, code);
+  // /discord에서 쓴 것과 반드시 같은 값이어야 합니다(Discord가 토큰 교환 때 정확히
+  // 일치하는지 검사) — 둘 다 "현재 요청 호스트" 기준으로 계산하므로, Discord가 우리가
+  // 넘긴 redirect_uri 그대로 돌아오는 한 자동으로 같은 값이 나옵니다.
+  const redirectUri = discordRedirectUri(c.env, c.req.url);
+  const accessToken = await exchangeDiscordCode(c.env, code, redirectUri);
   const discordUser = await fetchDiscordUser(accessToken);
 
   // 역대 회원 스프레드시트(→ KV로 동기화된 것)에 없는 Discord 계정은 로그인 거부.

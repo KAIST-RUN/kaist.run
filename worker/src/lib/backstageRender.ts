@@ -11,10 +11,19 @@ const FORM_STYLE = `
   .bs-nav-links { display: flex; gap: 6px; flex-wrap: wrap; }
   .bs-nav a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
   .bs-nav a:hover { opacity: 1; background: rgba(128,128,128,.1); }
-  .bs-nav a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: #06240a; }
+  .bs-nav a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
   .bs-nav-logout-form { flex-shrink: 0; }
-  .bs-nav-logout { -webkit-appearance: none; appearance: none; font: inherit; font-weight: 700; font-size: 0.8125rem; color: #06240a; background: var(--logo-primary); border: none; padding: 8px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
+  .bs-nav-logout { -webkit-appearance: none; appearance: none; color: var(--bg); background: var(--logo-primary); border: none; white-space: nowrap; transition: opacity .15s; }
   .bs-nav-logout:hover { opacity: 0.85; }
+
+  /* 페이지 곳곳의 알약(pill) 버튼(로그아웃, 새 글 작성, 저장, 삭제, 파일 선택,
+     검색, + 추가, 복사)이 전부 같은 크기를 쓰도록 여기 한 곳에 모아둡니다. 색/테두리
+     같은 개별 스타일은 각자의 규칙에 그대로 남아있습니다. */
+  .bs-nav-logout, .bs-new, .bs-submit, .bs-danger,
+  .bs-upload input[type="file"]::file-selector-button,
+  .bs-cancel-btn, .bs-add-row, .bs-copy {
+    font: inherit; font-weight: 700; font-size: 0.8125rem; padding: 8px 18px; border-radius: 999px; cursor: pointer;
+  }
 
   .bs-subnav { display: flex; gap: 8px; margin: -8px 0 20px; font-size: 0.8125rem; }
   .bs-subnav a { opacity: 0.6; text-decoration: none; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(128,128,128,.25); }
@@ -36,7 +45,7 @@ const FORM_STYLE = `
   .bs-list .pin { color: var(--logo-accent); font-weight: 700; margin-right: 6px; }
   .empty { opacity: 0.5; padding: 20px 6px; font-size: 0.9rem; }
 
-  .bs-new { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 20px; font-size: 0.875rem; font-weight: 700; text-decoration: none; color: #06240a; background: var(--logo-primary); padding: 8px 16px; border-radius: 999px; transition: opacity .15s; }
+  .bs-new { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none; color: var(--bg); background: var(--logo-primary); transition: opacity .15s; }
   .bs-new:hover { opacity: 0.85; }
 
   form.bs-form { display: flex; flex-direction: column; gap: 18px; }
@@ -59,20 +68,20 @@ const FORM_STYLE = `
   .bs-row-item input { flex: 1; min-width: 0; }
   .bs-row-remove { flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; font-size: 1rem; line-height: 1; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
   .bs-row-remove:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
-  .bs-add-row { align-self: flex-start; margin-top: 6px; font-size: 0.8125rem; font-weight: 600; border: 1px dashed rgba(128,128,128,.4); border-radius: 999px; padding: 7px 16px; background: transparent; color: inherit; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+  .bs-add-row { align-self: flex-start; margin-top: 6px; border: 1px dashed rgba(128,128,128,.4); background: transparent; color: inherit; transition: background .15s, border-color .15s, color .15s; }
   .bs-add-row:hover { background: rgba(128,128,128,.08); border-color: var(--logo-primary); color: var(--logo-primary); }
   @media (max-width: 560px) { .bs-row-item { flex-wrap: wrap; } .bs-row-item input { min-width: 100%; } }
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .bs-check { flex-direction: row; align-items: center; gap: 8px; }
   .bs-check input { width: auto; accent-color: var(--logo-primary); }
   .bs-actions { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
-  .bs-submit { border: none; border-radius: 999px; padding: 11px 28px; font-weight: 700; font-size: 0.9375rem; cursor: pointer; background: var(--logo-primary); color: #06240a; transition: opacity .15s, transform .1s; }
+  .bs-submit { border: none; background: var(--logo-primary); color: var(--bg); transition: opacity .15s, transform .1s; }
   .bs-submit:hover { opacity: 0.88; }
   .bs-submit:active { transform: scale(0.98); }
   .bs-cancel { font-size: 0.875rem; opacity: 0.6; text-decoration: none; }
   .bs-cancel:hover { opacity: 1; }
   .bs-danger-zone { margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(220,38,38,.2); }
-  .bs-danger { border: 1px solid rgba(220,38,38,.4); color: #f87171; border-radius: 999px; padding: 9px 20px; background: rgba(220,38,38,.06); cursor: pointer; font-weight: 600; font-size: 0.875rem; transition: background .15s; }
+  .bs-danger { border: 1px solid rgba(220,38,38,.4); color: #f87171; background: rgba(220,38,38,.06); transition: background .15s; }
   .bs-danger:hover { background: rgba(220,38,38,.14); }
   .bs-note { font-size: 0.8125rem; opacity: 0.55; }
   .bs-error { color: #f87171; background: rgba(220,38,38,.08); border: 1px solid rgba(220,38,38,.25); border-radius: 10px; padding: 10px 14px; font-size: 0.875rem; margin: 0 0 18px; }
@@ -80,16 +89,15 @@ const FORM_STYLE = `
 
   .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
   .bs-upload input[type="file"] { font-size: 0.8125rem; color: inherit; }
-  .bs-upload input[type="file"]::file-selector-button { border: none; border-radius: 999px; padding: 7px 16px; margin-right: 12px; font-weight: 600; font-size: 0.8125rem; cursor: pointer; background: var(--logo-primary); color: #06240a; transition: opacity .15s, transform .1s; }
+  .bs-upload input[type="file"]::file-selector-button { border: none; margin-right: 12px; background: var(--logo-primary); color: var(--bg); transition: opacity .15s, transform .1s; }
   .bs-upload input[type="file"]::file-selector-button:hover { opacity: 0.88; }
   .bs-upload input[type="file"]::file-selector-button:active { transform: scale(0.98); }
   .bs-upload input[type="text"] { font: inherit; font-size: 0.8125rem; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; min-width: 220px; flex: 1; }
   .bs-upload input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
-  .bs-upload .bs-submit { padding: 7px 16px; font-size: 0.8125rem; font-weight: 600; }
   .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
   .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; max-width: 260px; }
   .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
-  .bs-cancel-btn { font-size: 0.8125rem; font-weight: 600; border: 1px solid rgba(128,128,128,.3); border-radius: 999px; padding: 7px 16px; background: transparent; color: inherit; cursor: pointer; }
+  .bs-cancel-btn { border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
   .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 14px; padding: 12px 6px; }
@@ -101,9 +109,9 @@ const FORM_STYLE = `
   .bs-upload-list .name { font-weight: 600; font-size: 0.875rem; word-break: break-all; }
   .bs-upload-list .meta { font-size: 0.75rem; opacity: 0.55; }
   .bs-upload-list .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; width: 220px; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex-shrink: 0; }
-  .bs-copy { flex-shrink: 0; font-size: 0.75rem; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; cursor: pointer; }
+  .bs-copy { flex-shrink: 0; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-copy:hover { background: rgba(128,128,128,.1); }
-  .bs-upload-list .bs-danger { padding: 6px 14px; font-size: 0.75rem; flex-shrink: 0; }
+  .bs-upload-list .bs-danger { flex-shrink: 0; }
   @media (max-width: 720px) { .bs-upload-list li { flex-wrap: wrap; } .bs-upload-list .snippet { width: 100%; } }
 `;
 
