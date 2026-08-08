@@ -25,9 +25,9 @@ export type Env = {
   // 공지/아카이브/연락처 콘텐츠 (backstage가 CRUD, 메인 사이트가 빌드 시점에 읽어감).
   CONTENT_DB: D1Database;
 
-  // backstage에서 공지/아카이브 글에 넣는 이미지(포스터 등). kaist.run/content-images/*로
+  // backstage에서 공지/아카이브 글에 넣는 파일(포스터 등). kaist.run/upload/*로
   // 공개 서빙됩니다.
-  CONTENT_IMAGES: R2Bucket;
+  UPLOADS: R2Bucket;
 
   // backstage가 콘텐츠를 저장한 뒤 GitHub Actions(deploy.yml)를 재실행시켜
   // 정적 사이트를 다시 빌드/배포하기 위한 값들. 토큰은 이 저장소의

@@ -16,7 +16,7 @@ import {
   type Season,
 } from "../lib/content";
 import { parseResourcesText, parseJudgesText, parseInfoText, parseSocialsText } from "../lib/contentForms";
-import { listContentImages, storeContentImage, deleteContentImage } from "../lib/contentImages";
+import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
 import {
   renderBackstageHome,
   renderNoticeList,
@@ -26,7 +26,7 @@ import {
   archiveRowsToFormData,
   renderContactForm,
   contactRowsToFormData,
-  renderImageGallery,
+  renderUploadList,
   type NoticeFormData,
 } from "../lib/backstageRender";
 import { renderErrorPage } from "../lib/emailRender";
@@ -294,50 +294,41 @@ backstage.post("/contact", async (c) => {
   return c.redirect("/contact");
 });
 
-// ---------- images ----------
-// 공지/아카이브 본문 마크다운에 넣을 이미지(포스터 등)를 올려두는 곳입니다.
-// 업로드된 이미지는 kaist.run/content-images/<key>로 즉시 공개되고(별도 재빌드 불필요),
-// 여기서 각 이미지의 마크다운 문법을 복사해 본문에 붙여넣으면 됩니다.
+// ---------- uploads ----------
+// 공지/아카이브 본문에 넣을 파일(포스터 등)을 올려두는 곳입니다. 이미지로 한정하지
+// 않고 아무 파일이나 받습니다. 업로드된 파일은 kaist.run/upload/<key>로 즉시
+// 공개되고(별도 재빌드 불필요), 여기서 링크를 복사해 본문에 붙여넣으면 됩니다.
 
-backstage.get("/images", async (c) => {
+backstage.get("/uploads", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
-  const folder = c.req.query("folder");
-  const images = await listContentImages(c.env);
-  return c.html(renderImageGallery(images, folder));
+  const files = await listUploads(c.env);
+  return c.html(renderUploadList(files));
 });
 
-backstage.post("/images", async (c) => {
+backstage.post("/uploads", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
   const body = await c.req.parseBody();
   const file = body["file"];
-  const folder = typeof body["folder"] === "string" ? body["folder"] : undefined;
 
   if (!(file instanceof File) || file.size === 0) {
-    const images = await listContentImages(c.env);
-    return c.html(renderImageGallery(images, folder, "업로드할 파일을 선택해 주세요."), 400);
-  }
-  if (!file.type.startsWith("image/")) {
-    const images = await listContentImages(c.env);
-    return c.html(renderImageGallery(images, folder, "이미지 파일만 업로드할 수 있습니다."), 400);
+    const files = await listUploads(c.env);
+    return c.html(renderUploadList(files, "업로드할 파일을 선택해 주세요."), 400);
   }
 
-  await storeContentImage(c.env, file.name, file.type, await file.arrayBuffer(), folder);
+  await storeUpload(c.env, file.name, file.type || "application/octet-stream", await file.arrayBuffer());
 
-  return c.redirect(folder ? `/images?folder=${encodeURIComponent(folder)}` : "/images");
+  return c.redirect("/uploads");
 });
 
-backstage.post("/images/:key/delete", async (c) => {
+backstage.post("/uploads/:key/delete", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
-  const body = await c.req.parseBody();
-  const folder = typeof body["folder"] === "string" ? body["folder"] : undefined;
+  await deleteUpload(c.env, c.req.param("key"));
 
-  await deleteContentImage(c.env, c.req.param("key"));
-
-  return c.redirect(folder ? `/images?folder=${encodeURIComponent(folder)}` : "/images");
+  return c.redirect("/uploads");
 });

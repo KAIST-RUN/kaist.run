@@ -29,11 +29,12 @@
 			"binding": "EMAILS",
 			"bucket_name": "kaist-run-emails"
 		},
-		// backstage에서 공지/아카이브 글 작성 시 올리는 이미지들. 배포 전에 만들어야
-		// 합니다: npx wrangler r2 bucket create kaist-run-content-images
+		// backstage에서 공지/아카이브 글 작성 시 올리는 파일들. 배포 전에 만들어야
+		// 합니다: npx wrangler r2 bucket create kaist-run-uploads
+		// (예전에 만든 kaist-run-content-images는 이제 안 씁니다 — 옮길 데이터 없으면 지워도 됩니다.)
 		{
-			"binding": "CONTENT_IMAGES",
-			"bucket_name": "kaist-run-content-images",
+			"binding": "UPLOADS",
+			"bucket_name": "kaist-run-uploads",
 			"remote": true
 		}
 	],
@@ -77,10 +78,10 @@
 			"pattern": "kaist.run/email/*",
 			"zone_name": "kaist.run"
 		},
-		// backstage에서 올린 공지/아카이브용 이미지를 실제 공지 페이지에서 볼 수 있게
-		// 하는 공개(인증 불필요) 경로입니다.
+		// backstage에서 올린 파일(공지/아카이브용 이미지 등)을 실제 공지 페이지에서
+		// 볼 수 있게 하는 공개(인증 불필요) 경로입니다.
 		{
-			"pattern": "kaist.run/content-images/*",
+			"pattern": "kaist.run/upload/*",
 			"zone_name": "kaist.run"
 		},
 		// backstage.kaist.run은 전체를 이 Worker가 처리합니다 (관리자 패널).

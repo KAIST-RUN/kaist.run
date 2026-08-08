@@ -2,7 +2,7 @@ import { page, escapeHtml } from "./emailRender";
 import { serializeResources, serializeJudges, serializeInfo, serializeSocials } from "./contentForms";
 import type { MemberRecord } from "./members";
 import type { NoticeRow, ArchiveRow, ContactRow, Season } from "./content";
-import { groupImagesByFolder, type ContentImage } from "./contentImages";
+import type { UploadedFile } from "./uploads";
 
 const FORM_STYLE = `
   body { max-width: 960px; }
@@ -68,24 +68,18 @@ const FORM_STYLE = `
 
   .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 28px; }
   .bs-upload input[type="file"] { font-size: 0.875rem; }
-  .bs-upload input[type="text"] { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; }
-  .bs-breadcrumb { display: inline-block; font-size: 0.875rem; opacity: 0.6; text-decoration: none; margin-bottom: 10px; }
-  .bs-breadcrumb:hover { opacity: 1; }
-  .bs-folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
-  .bs-folder-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; color: inherit; background: rgba(128,128,128,.05); border: 1px solid rgba(128,128,128,.16); border-radius: 14px; padding: 22px 12px; transition: background .15s, border-color .15s; }
-  .bs-folder-tile:hover { background: rgba(128,128,128,.1); border-color: var(--logo-primary); }
-  .bs-folder-icon { font-size: 2rem; }
-  .bs-folder-name { font-weight: 600; font-size: 0.875rem; text-align: center; word-break: break-all; }
-  .bs-folder-count { font-size: 0.75rem; opacity: 0.55; }
-  .bs-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
-  .bs-gallery figure { margin: 0; background: rgba(128,128,128,.05); border: 1px solid rgba(128,128,128,.16); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .bs-gallery .thumb { width: 100%; height: 130px; object-fit: contain; border-radius: 8px; background: rgba(128,128,128,.08); }
-  .bs-gallery figcaption { font-size: 0.75rem; opacity: 0.55; word-break: break-all; }
-  .bs-gallery .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; }
-  .bs-gallery .row { display: flex; gap: 6px; }
-  .bs-copy { flex-shrink: 0; font-size: 0.75rem; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; cursor: pointer; }
+  .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
+  .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 14px; padding: 12px 6px; }
+  .bs-upload-list .thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: rgba(128,128,128,.08); flex-shrink: 0; }
+  .bs-upload-list .file-icon { width: 44px; height: 44px; border-radius: 8px; background: rgba(128,128,128,.08); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+  .bs-upload-list .info { flex: 1; min-width: 0; }
+  .bs-upload-list .name { font-weight: 600; font-size: 0.875rem; word-break: break-all; }
+  .bs-upload-list .meta { font-size: 0.75rem; opacity: 0.55; }
+  .bs-upload-list .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; width: 220px; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex-shrink: 0; }
+  .bs-copy { flex-shrink: 0; font-size: 0.75rem; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; cursor: pointer; }
   .bs-copy:hover { background: rgba(128,128,128,.1); }
-  .bs-gallery .bs-danger { padding: 5px 12px; font-size: 0.75rem; }
+  .bs-upload-list .bs-danger { padding: 6px 14px; font-size: 0.75rem; flex-shrink: 0; }
+  @media (max-width: 720px) { .bs-upload-list li { flex-wrap: wrap; } .bs-upload-list .snippet { width: 100%; } }
 `;
 
 function navLink(href: string, label: string, active: boolean): string {
@@ -99,7 +93,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
       ${navLink("/notices", "공지사항", active === "notices")}
       ${navLink("/archive", "대회 아카이브", active === "archive")}
       ${navLink("/contact", "연락처", active === "contact")}
-      ${navLink("/images", "이미지", active === "images")}
+      ${navLink("/uploads", "업로드", active === "uploads")}
     </nav>
   `;
   return page(title, `<style>${FORM_STYLE}</style>${nav}${bodyHtml}`);
@@ -475,91 +469,53 @@ export function renderContactForm(data: ContactFormData, error?: string): string
   );
 }
 
-// ---------- images ----------
+// ---------- uploads ----------
 
-function formatImageBytes(bytes: number): string {
+function formatFileBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function renderImageFigure(img: ContentImage, currentFolder: string): string {
-  const url = `/content-images/${img.key}`;
-  const snippet = `![](${url})`;
-  const deleteAction = `/images/${encodeURIComponent(img.key)}/delete`;
-  return `<figure>
-    <img class="thumb" src="${escapeHtml(url)}" alt="" loading="lazy" />
-    <figcaption>${escapeHtml(img.key)} · ${formatImageBytes(img.size)}</figcaption>
-    <div class="row">
-      <input class="snippet" type="text" readonly value="${escapeHtml(snippet)}" onclick="this.select()" />
-      <button type="button" class="bs-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(snippet)});this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)">복사</button>
+function renderUploadRow(file: UploadedFile): string {
+  const url = `/upload/${file.key}`;
+  const isImage = file.contentType.startsWith("image/");
+  const thumb = isImage
+    ? `<img class="thumb" src="${escapeHtml(url)}" alt="" loading="lazy" />`
+    : `<div class="file-icon">📄</div>`;
+
+  return `<li>
+    ${thumb}
+    <div class="info">
+      <div class="name">${escapeHtml(file.key)}</div>
+      <div class="meta">${formatFileBytes(file.size)} · ${escapeHtml(file.contentType)}</div>
     </div>
-    <form method="post" action="${deleteAction}" onsubmit="return confirm('이 이미지를 삭제할까요? 이미 글에 쓰인 곳이 있다면 깨질 수 있어요.')">
-      <input type="hidden" name="folder" value="${escapeHtml(currentFolder)}" />
+    <input class="snippet" type="text" readonly value="${escapeHtml(url)}" onclick="this.select()" />
+    <button type="button" class="bs-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(url)});this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)">복사</button>
+    <form method="post" action="/uploads/${encodeURIComponent(file.key)}/delete" onsubmit="return confirm('이 파일을 삭제할까요? 이미 글에 쓰인 곳이 있다면 깨질 수 있어요.')">
       <button type="submit" class="bs-danger">삭제</button>
     </form>
-  </figure>`;
+  </li>`;
 }
 
-function uploadForm(folder: string): string {
-  return `<form class="bs-upload" method="post" action="/images" enctype="multipart/form-data">
-    <input type="file" name="file" accept="image/*" required />
-    <input type="text" name="folder" value="${escapeHtml(folder)}" placeholder="폴더 (선택, 예: 2026-spring-recruiting)" style="max-width:280px" />
-    <button type="submit" class="bs-submit">업로드</button>
-  </form>`;
-}
-
-// folder가 없으면 "드라이브 루트"처럼 폴더 타일 목록만 보여주고, folder가 있으면
-// 그 폴더 안으로 들어가서 이미지 목록을 보여줍니다 (구글 드라이브 느낌의 탐색).
-export function renderImageGallery(images: ContentImage[], folder?: string, error?: string): string {
-  const errorHtml = error ? `<p class="bs-error">${escapeHtml(error)}</p>` : "";
-
-  if (!folder) {
-    const groups = groupImagesByFolder(images);
-    const body =
-      groups.length === 0
-        ? `<p class="empty">업로드된 이미지가 없습니다.</p>`
-        : `<div class="bs-folders">
-          ${groups
-            .map(
-              (group) => `<a class="bs-folder-tile" href="/images?folder=${encodeURIComponent(group.folder)}">
-                <span class="bs-folder-icon">📁</span>
-                <span class="bs-folder-name">${escapeHtml(group.folder)}</span>
-                <span class="bs-folder-count">${group.images.length}개</span>
-              </a>`,
-            )
-            .join("\n")}
-        </div>`;
-
-    return shell(
-      "이미지 관리",
-      "images",
-      `
-      <p class="bs-eyebrow">Backstage</p>
-      <h1>이미지</h1>
-      <p class="bs-lead">폴더를 눌러 들어가면 그 안의 이미지들을 볼 수 있어요. 업로드할 땐 폴더 이름을 적어서 새 폴더를 만들 수도 있어요.</p>
-      ${errorHtml}
-      ${uploadForm("")}
-      ${body}
-    `,
-    );
-  }
-
-  const folderImages = images.filter((img) => (img.folder ?? "미분류") === folder);
+export function renderUploadList(files: UploadedFile[], error?: string): string {
   const body =
-    folderImages.length === 0
-      ? `<p class="empty">이 폴더에 이미지가 없습니다.</p>`
-      : `<div class="bs-gallery">${folderImages.map((img) => renderImageFigure(img, folder)).join("\n")}</div>`;
+    files.length === 0
+      ? `<p class="empty">업로드된 파일이 없습니다.</p>`
+      : `<ul class="bs-upload-list">${files.map(renderUploadRow).join("\n")}</ul>`;
 
   return shell(
-    "이미지 관리",
-    "images",
+    "업로드 관리",
+    "uploads",
     `
     <p class="bs-eyebrow">Backstage</p>
-    <a href="/images" class="bs-breadcrumb">← 전체 폴더</a>
-    <h1>📁 ${escapeHtml(folder)}</h1>
-    ${errorHtml}
-    ${uploadForm(folder)}
+    <h1>업로드</h1>
+    <p class="bs-lead">올린 파일은 바로 공개되고, 링크를 복사해서 공지/아카이브 본문에 붙여넣으면 됩니다. 이미지는 <code>![](링크)</code> 형태로 쓰세요.</p>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    <form class="bs-upload" method="post" action="/uploads" enctype="multipart/form-data">
+      <input type="file" name="file" required />
+      <button type="submit" class="bs-submit">업로드</button>
+    </form>
     ${body}
   `,
   );
