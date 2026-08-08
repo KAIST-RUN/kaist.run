@@ -21,6 +21,16 @@ export type Env = {
   // 이메일 뷰어(kaist.run/email/<id>)용.
   EMAILS: R2Bucket;
   EMAIL_FORWARD_TO: string; // 지금까지 Gmail로 포워딩하던 그 주소
+
+  // 공지/아카이브/연락처 콘텐츠 (backstage가 CRUD, 메인 사이트가 빌드 시점에 읽어감).
+  CONTENT_DB: D1Database;
+
+  // backstage가 콘텐츠를 저장한 뒤 GitHub Actions(deploy.yml)를 재실행시켜
+  // 정적 사이트를 다시 빌드/배포하기 위한 값들. 토큰은 이 저장소의
+  // "Actions: write" 권한만 있으면 되고(코드/설정 쓰기 권한은 없음), fine-grained
+  // PAT로 발급하세요.
+  GITHUB_REPO: string; // "KAIST-RUN/kaist.run"
+  GITHUB_ACTIONS_TOKEN: string;
 };
 
 // 프런트엔드(src/types/account.ts)의 CurrentUser와 반드시 같은 모양을 유지해야 합니다.

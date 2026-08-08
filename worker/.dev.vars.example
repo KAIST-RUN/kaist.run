@@ -24,3 +24,10 @@ ADMIN_SYNC_SECRET=
 # 안 채워도 됩니다. 로컬에서 실제 발신 없이 다른 Gmail 주소로 테스트하고 싶을
 # 때만 여기서 덮어쓰세요.
 # EMAIL_FORWARD_TO=
+
+# backstage에서 공지/아카이브/연락처를 저장했을 때 GitHub Actions(deploy.yml)를
+# 재실행시켜 정적 사이트를 재빌드하기 위한 토큰입니다. 이 저장소의 "Actions: write"
+# 권한만 있는 fine-grained PAT로 발급하세요 (Contents 권한은 필요 없음 — 코드를
+# 직접 쓰지 않고 이미 있는 워크플로만 재실행시킵니다).
+# https://github.com/settings/personal-access-tokens/new
+GITHUB_ACTIONS_TOKEN=

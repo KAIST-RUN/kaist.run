@@ -15,8 +15,8 @@ export default async function HomePage({
   const t = await getTranslations("home");
   const tSite = await getTranslations("site");
   const tNotices = await getTranslations("notices");
-  const pinnedNotice = getPinnedNotice(locale as Locale);
-  const recentNotices = getRecentNotices(locale as Locale, 3);
+  const pinnedNotice = await getPinnedNotice(locale as Locale);
+  const recentNotices = await getRecentNotices(locale as Locale, 3);
 
   return (
     <div className="flex h-full flex-col">

@@ -11,10 +11,14 @@ import {
 import { markdownToHtml } from "@/lib/markdown";
 import { withBasePath } from "@/lib/basePath";
 
-export function generateStaticParams() {
-  return SEASONS.flatMap((season) =>
-    getAllArchiveSlugs(season).map((slug) => ({ season, slug })),
+export async function generateStaticParams() {
+  const bySeason = await Promise.all(
+    SEASONS.map(async (season) => {
+      const slugs = await getAllArchiveSlugs(season);
+      return slugs.map((slug) => ({ season, slug }));
+    }),
   );
+  return bySeason.flat();
 }
 
 export default async function ArchiveEntryPage({
@@ -27,7 +31,7 @@ export default async function ArchiveEntryPage({
   if (!isSeason(season)) notFound();
 
   const t = await getTranslations("archive");
-  const entry = getArchiveEntry(locale as Locale, season, slug);
+  const entry = await getArchiveEntry(locale as Locale, season, slug);
   if (!entry) notFound();
 
   const html = await markdownToHtml(entry.content);

@@ -4,7 +4,7 @@ import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { SEASONS, isSeason, getAllArchiveEntries } from "@/lib/content/archive";
 
-export function generateStaticParams() {
+export async function generateStaticParams() {
   return SEASONS.map((season) => ({ season }));
 }
 
@@ -18,7 +18,7 @@ export default async function ArchiveSeasonPage({
   if (!isSeason(season)) notFound();
 
   const t = await getTranslations("archive");
-  const entries = getAllArchiveEntries(locale as Locale, season);
+  const entries = await getAllArchiveEntries(locale as Locale, season);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 sm:px-10 sm:py-16 lg:max-w-3xl lg:px-12">

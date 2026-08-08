@@ -11,7 +11,7 @@ export default async function NoticesPage({
   const { locale } = await params;
   setRequestLocale(locale as Locale);
   const t = await getTranslations("notices");
-  const notices = getAllNotices(locale as Locale);
+  const notices = await getAllNotices(locale as Locale);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 sm:px-10 sm:py-16 lg:max-w-3xl lg:px-12">

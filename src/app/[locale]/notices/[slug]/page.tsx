@@ -5,8 +5,8 @@ import type { Locale } from "@/i18n/routing";
 import { getAllNoticeSlugs, getNoticeBySlug } from "@/lib/content/notices";
 import { markdownToHtml } from "@/lib/markdown";
 
-export function generateStaticParams({ params }: { params: { locale: string } }) {
-  return getAllNoticeSlugs(params.locale as Locale).map((slug) => ({ slug }));
+export async function generateStaticParams({ params }: { params: { locale: string } }) {
+  return (await getAllNoticeSlugs(params.locale as Locale)).map((slug) => ({ slug }));
 }
 
 export default async function NoticeDetailPage({
@@ -18,7 +18,7 @@ export default async function NoticeDetailPage({
   setRequestLocale(locale as Locale);
   const t = await getTranslations("notices");
 
-  const notice = getNoticeBySlug(locale as Locale, slug);
+  const notice = await getNoticeBySlug(locale as Locale, slug);
   if (!notice) notFound();
 
   const html = await markdownToHtml(notice.content);

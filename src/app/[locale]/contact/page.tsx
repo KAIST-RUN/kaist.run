@@ -53,7 +53,7 @@ export default async function ContactPage({
   setRequestLocale(locale as Locale);
   const t = await getTranslations({ locale: locale as Locale, namespace: "site" });
 
-  const contact = getContact(locale as Locale);
+  const contact = await getContact(locale as Locale);
   if (!contact) notFound();
 
   const html = await markdownToHtml(contact.content);

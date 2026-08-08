@@ -1,9 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
-import matter from "gray-matter";
 import type { Locale } from "@/i18n/routing";
-
-const CONTACT_DIR = path.join(process.cwd(), "content", "contact");
+import { fetchContentJson } from "./api";
 
 export type ContactInfoLine = {
   text: string;
@@ -29,10 +25,13 @@ export type ContactFrontmatter = {
 
 export type Contact = ContactFrontmatter & { content: string };
 
-export function getContact(locale: Locale): Contact | null {
-  const filePath = path.join(CONTACT_DIR, `${locale}.md`);
-  if (!fs.existsSync(filePath)) return null;
-  const raw = fs.readFileSync(filePath, "utf8");
-  const { data, content } = matter(raw);
-  return { content, ...(data as ContactFrontmatter) };
+type ApiContact = {
+  title: string;
+  info: ContactInfoRow[];
+  socials: ContactSocial[];
+  content: string;
+};
+
+export async function getContact(locale: Locale): Promise<Contact | null> {
+  return fetchContentJson<ApiContact>(`/contact/${locale}`);
 }

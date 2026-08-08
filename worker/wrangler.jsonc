@@ -30,6 +30,21 @@
 			"bucket_name": "kaist-run-emails"
 		}
 	],
+	// 공지/아카이브/연락처 콘텐츠(backstage가 CRUD). 배포 전에 만들어야 합니다:
+	//   npx wrangler d1 create kaist-run-content
+	// 출력된 database_id를 아래에 채우고, 스키마를 적용하세요:
+	//   npx wrangler d1 execute kaist-run-content --remote --file=migrations/0001_init.sql
+	"d1_databases": [
+		{
+			"binding": "CONTENT_DB",
+			"database_name": "kaist-run-content",
+			"database_id": "d27c09fc-dca4-45c3-ace6-dbe3fefd8532",
+			// "d1 create" 마법사에서 "로컬 dev에서 remote 리소스에 연결할까요?"에 yes를
+			// 준 것과 같은 설정입니다. 이게 있으면 --remote 플래그 없이 `wrangler dev`만
+			// 돌려도 이 바인딩은 로컬 빈 시뮬레이션 DB가 아니라 실제 배포된 D1을 씁니다.
+			"remote": true
+		}
+	],
 	// 매시 정각에 Google Sheets → KV로 회원 명단을 다시 동기화합니다.
 	// 필요하면 주기를 조정하세요 (cron 표현식).
 	"triggers": {
@@ -67,6 +82,7 @@
 	"vars": {
 		"DISCORD_REDIRECT_URI": "https://kaist.run/api/auth/discord/callback",
 		"GOOGLE_SHEET_RANGE": "Sheet1",
-		"EMAIL_FORWARD_TO": "kaist.run@gmail.com"
+		"EMAIL_FORWARD_TO": "kaist.run@gmail.com",
+		"GITHUB_REPO": "KAIST-RUN/kaist.run"
 	}
 }
