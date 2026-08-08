@@ -2,6 +2,7 @@ import { page, escapeHtml } from "./emailRender";
 import { serializeResources, serializeJudges, serializeInfo, serializeSocials } from "./contentForms";
 import type { MemberRecord } from "./members";
 import type { NoticeRow, ArchiveRow, ContactRow, Season } from "./content";
+import { groupImagesByFolder, type ContentImage } from "./contentImages";
 
 const FORM_STYLE = `
   body { max-width: 960px; }
@@ -64,6 +65,21 @@ const FORM_STYLE = `
   .bs-note { font-size: 0.8125rem; opacity: 0.55; }
   .bs-error { color: #f87171; background: rgba(220,38,38,.08); border: 1px solid rgba(220,38,38,.25); border-radius: 10px; padding: 10px 14px; font-size: 0.875rem; margin: 0 0 18px; }
   @media (max-width: 640px) { .bs-row2 { grid-template-columns: 1fr; } }
+
+  .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 28px; }
+  .bs-upload input[type="file"] { font-size: 0.875rem; }
+  .bs-upload input[type="text"] { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; }
+  .bs-folder { margin-bottom: 28px; }
+  .bs-folder .bs-card-title { margin-bottom: 12px; }
+  .bs-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .bs-gallery figure { margin: 0; background: rgba(128,128,128,.05); border: 1px solid rgba(128,128,128,.16); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .bs-gallery .thumb { width: 100%; height: 130px; object-fit: contain; border-radius: 8px; background: rgba(128,128,128,.08); }
+  .bs-gallery figcaption { font-size: 0.75rem; opacity: 0.55; word-break: break-all; }
+  .bs-gallery .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; }
+  .bs-gallery .row { display: flex; gap: 6px; }
+  .bs-copy { flex-shrink: 0; font-size: 0.75rem; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; cursor: pointer; }
+  .bs-copy:hover { background: rgba(128,128,128,.1); }
+  .bs-gallery .bs-danger { padding: 5px 12px; font-size: 0.75rem; }
 `;
 
 function navLink(href: string, label: string, active: boolean): string {
@@ -77,6 +93,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
       ${navLink("/notices", "공지사항", active === "notices")}
       ${navLink("/archive", "대회 아카이브", active === "archive")}
       ${navLink("/contact", "연락처", active === "contact")}
+      ${navLink("/images", "이미지", active === "images")}
     </nav>
   `;
   return page(title, `<style>${FORM_STYLE}</style>${nav}${bodyHtml}`);
@@ -448,6 +465,65 @@ export function renderContactForm(data: ContactFormData, error?: string): string
         <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
+  `,
+  );
+}
+
+// ---------- images ----------
+
+function formatImageBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderImageFigure(img: ContentImage): string {
+  const url = `/content-images/${img.key}`;
+  const snippet = `![](${url})`;
+  return `<figure>
+    <img class="thumb" src="${escapeHtml(url)}" alt="" loading="lazy" />
+    <figcaption>${escapeHtml(img.key)} · ${formatImageBytes(img.size)}</figcaption>
+    <div class="row">
+      <input class="snippet" type="text" readonly value="${escapeHtml(snippet)}" onclick="this.select()" />
+      <button type="button" class="bs-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(snippet)});this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)">복사</button>
+    </div>
+    <form method="post" action="/images/${encodeURIComponent(img.key)}/delete" onsubmit="return confirm('이 이미지를 삭제할까요? 이미 글에 쓰인 곳이 있다면 깨질 수 있어요.')">
+      <button type="submit" class="bs-danger">삭제</button>
+    </form>
+  </figure>`;
+}
+
+export function renderImageGallery(images: ContentImage[], error?: string): string {
+  const groups = groupImagesByFolder(images);
+  const items =
+    images.length === 0
+      ? `<p class="empty">업로드된 이미지가 없습니다.</p>`
+      : groups
+          .map(
+            (group) => `
+        <div class="bs-folder">
+          <p class="bs-card-title">📁 ${escapeHtml(group.folder)} (${group.images.length})</p>
+          <div class="bs-gallery">
+            ${group.images.map(renderImageFigure).join("\n")}
+          </div>
+        </div>`,
+          )
+          .join("\n");
+
+  return shell(
+    "이미지 관리",
+    "images",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>이미지</h1>
+    <p class="bs-lead">업로드한 이미지는 바로 공개되고, 아래 스니펫을 공지/아카이브 본문에 붙여넣으면 됩니다.</p>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    <form class="bs-upload" method="post" action="/images" enctype="multipart/form-data">
+      <input type="file" name="file" accept="image/*" required />
+      <input type="text" name="folder" placeholder="폴더 (선택, 예: 2026-spring-recruiting)" style="max-width:280px" />
+      <button type="submit" class="bs-submit">업로드</button>
+    </form>
+    ${items}
   `,
   );
 }

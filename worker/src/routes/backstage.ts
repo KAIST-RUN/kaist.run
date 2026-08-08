@@ -16,6 +16,7 @@ import {
   type Season,
 } from "../lib/content";
 import { parseResourcesText, parseJudgesText, parseInfoText, parseSocialsText } from "../lib/contentForms";
+import { listContentImages, storeContentImage, deleteContentImage } from "../lib/contentImages";
 import {
   renderBackstageHome,
   renderNoticeList,
@@ -25,6 +26,7 @@ import {
   archiveRowsToFormData,
   renderContactForm,
   contactRowsToFormData,
+  renderImageGallery,
   type NoticeFormData,
 } from "../lib/backstageRender";
 import { renderErrorPage } from "../lib/emailRender";
@@ -290,4 +292,48 @@ backstage.post("/contact", async (c) => {
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/contact");
+});
+
+// ---------- images ----------
+// 공지/아카이브 본문 마크다운에 넣을 이미지(포스터 등)를 올려두는 곳입니다.
+// 업로드된 이미지는 kaist.run/content-images/<key>로 즉시 공개되고(별도 재빌드 불필요),
+// 여기서 각 이미지의 마크다운 문법을 복사해 본문에 붙여넣으면 됩니다.
+
+backstage.get("/images", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const images = await listContentImages(c.env);
+  return c.html(renderImageGallery(images));
+});
+
+backstage.post("/images", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const body = await c.req.parseBody();
+  const file = body["file"];
+  const folder = typeof body["folder"] === "string" ? body["folder"] : undefined;
+
+  if (!(file instanceof File) || file.size === 0) {
+    const images = await listContentImages(c.env);
+    return c.html(renderImageGallery(images, "업로드할 파일을 선택해 주세요."), 400);
+  }
+  if (!file.type.startsWith("image/")) {
+    const images = await listContentImages(c.env);
+    return c.html(renderImageGallery(images, "이미지 파일만 업로드할 수 있습니다."), 400);
+  }
+
+  await storeContentImage(c.env, file.name, file.type, await file.arrayBuffer(), folder);
+
+  return c.redirect("/images");
+});
+
+backstage.post("/images/:key/delete", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  await deleteContentImage(c.env, c.req.param("key"));
+
+  return c.redirect("/images");
 });
