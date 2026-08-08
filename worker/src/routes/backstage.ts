@@ -303,8 +303,9 @@ backstage.get("/images", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
+  const folder = c.req.query("folder");
   const images = await listContentImages(c.env);
-  return c.html(renderImageGallery(images));
+  return c.html(renderImageGallery(images, folder));
 });
 
 backstage.post("/images", async (c) => {
@@ -317,23 +318,26 @@ backstage.post("/images", async (c) => {
 
   if (!(file instanceof File) || file.size === 0) {
     const images = await listContentImages(c.env);
-    return c.html(renderImageGallery(images, "업로드할 파일을 선택해 주세요."), 400);
+    return c.html(renderImageGallery(images, folder, "업로드할 파일을 선택해 주세요."), 400);
   }
   if (!file.type.startsWith("image/")) {
     const images = await listContentImages(c.env);
-    return c.html(renderImageGallery(images, "이미지 파일만 업로드할 수 있습니다."), 400);
+    return c.html(renderImageGallery(images, folder, "이미지 파일만 업로드할 수 있습니다."), 400);
   }
 
   await storeContentImage(c.env, file.name, file.type, await file.arrayBuffer(), folder);
 
-  return c.redirect("/images");
+  return c.redirect(folder ? `/images?folder=${encodeURIComponent(folder)}` : "/images");
 });
 
 backstage.post("/images/:key/delete", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
+  const body = await c.req.parseBody();
+  const folder = typeof body["folder"] === "string" ? body["folder"] : undefined;
+
   await deleteContentImage(c.env, c.req.param("key"));
 
-  return c.redirect("/images");
+  return c.redirect(folder ? `/images?folder=${encodeURIComponent(folder)}` : "/images");
 });
