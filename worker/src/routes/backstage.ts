@@ -15,7 +15,7 @@ import {
   upsertContact,
   type Season,
 } from "../lib/content";
-import { parseResourcesText, parseJudgesText, parseInfoText, parseSocialsText } from "../lib/contentForms";
+import { parseResourcesText, parseJudgesText } from "../lib/contentForms";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
 import {
   renderBackstageHome,
@@ -284,11 +284,50 @@ backstage.post("/contact", async (c) => {
   if (!gate.ok) return gate.response;
 
   const { get } = await readForm(c);
-  const info = parseInfoText(get("infoText"));
-  const socials = parseSocialsText(get("socialsText"));
+  const phone = get("phone");
+  const presidentEmail = get("presidentEmail");
+  const clubEmail = get("clubEmail");
+  const instagramUrl = get("instagramUrl");
+  const githubUrl = get("githubUrl");
+  const content = get("extra");
 
-  await upsertContact(c.env, "ko", { title: get("titleKo"), info, socials, content: get("contentKo") });
-  await upsertContact(c.env, "en", { title: get("titleEn"), info, socials, content: get("contentEn") });
+  const socials = [
+    instagramUrl ? { platform: "instagram", label: "Instagram", url: instagramUrl } : null,
+    githubUrl ? { platform: "github", label: "GitHub", url: githubUrl } : null,
+  ].filter((s): s is { platform: string; label: string; url: string } => s !== null);
+
+  await upsertContact(c.env, "ko", {
+    title: "연락처",
+    info: [
+      {
+        label: "회장",
+        lines: [
+          { text: get("presidentNameKo") },
+          { text: phone },
+          { text: presidentEmail, href: `mailto:${presidentEmail}` },
+        ],
+      },
+      { label: "동아리 이메일", lines: [{ text: clubEmail, href: `mailto:${clubEmail}` }] },
+    ],
+    socials,
+    content,
+  });
+  await upsertContact(c.env, "en", {
+    title: "Contact",
+    info: [
+      {
+        label: "President",
+        lines: [
+          { text: get("presidentNameEn") },
+          { text: phone },
+          { text: presidentEmail, href: `mailto:${presidentEmail}` },
+        ],
+      },
+      { label: "Club email", lines: [{ text: clubEmail, href: `mailto:${clubEmail}` }] },
+    ],
+    socials,
+    content,
+  });
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/contact");

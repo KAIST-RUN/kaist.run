@@ -1,7 +1,7 @@
 import { page, escapeHtml } from "./emailRender";
-import { serializeResources, serializeJudges, serializeInfo, serializeSocials } from "./contentForms";
+import { serializeResources, serializeJudges } from "./contentForms";
 import type { MemberRecord } from "./members";
-import type { NoticeRow, ArchiveRow, ContactRow, Season } from "./content";
+import type { NoticeRow, ArchiveRow, ContactRow, ContactInfoRow, ContactSocial, Season } from "./content";
 import type { UploadedFile } from "./uploads";
 
 const FORM_STYLE = `
@@ -389,24 +389,44 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 }
 
 // ---------- contact ----------
+// 연락처 페이지는 항목 구성이 거의 안 바뀌는 걸 전제로, 실제 있는 필드만 딱
+// 고정해서 받습니다 (회장 이름 한/영, 전화번호, 이메일, 동아리 이메일, 인스타/깃허브
+// URL, 그 외 자유 텍스트). 라벨("회장"/"President" 등)과 제목("연락처"/"Contact")은
+// 코드에 고정돼 있고, backstage.ts에서 채워 넣습니다.
 
 export type ContactFormData = {
-  titleKo: string;
-  titleEn: string;
-  contentKo: string;
-  contentEn: string;
-  infoText: string;
-  socialsText: string;
+  presidentNameKo: string;
+  presidentNameEn: string;
+  phone: string;
+  presidentEmail: string;
+  clubEmail: string;
+  instagramUrl: string;
+  githubUrl: string;
+  extra: string;
 };
 
+function findInfoGroup(info: ContactInfoRow[], labels: string[]): ContactInfoRow | undefined {
+  return info.find((group) => labels.includes(group.label));
+}
+
+function findSocialUrl(socials: ContactSocial[], platform: string): string {
+  return socials.find((s) => s.platform === platform)?.url ?? "";
+}
+
 export function contactRowsToFormData(ko: ContactRow | null, en: ContactRow | null): ContactFormData {
+  const koPresident = findInfoGroup(ko?.info ?? [], ["회장"]);
+  const enPresident = findInfoGroup(en?.info ?? [], ["President"]);
+  const koClubEmail = findInfoGroup(ko?.info ?? [], ["동아리 이메일"]);
+
   return {
-    titleKo: ko?.title ?? "",
-    titleEn: en?.title ?? "",
-    contentKo: ko?.content ?? "",
-    contentEn: en?.content ?? "",
-    infoText: serializeInfo(ko?.info ?? []),
-    socialsText: serializeSocials(ko?.socials ?? []),
+    presidentNameKo: koPresident?.lines[0]?.text ?? "",
+    presidentNameEn: enPresident?.lines[0]?.text ?? "",
+    phone: koPresident?.lines[1]?.text ?? "",
+    presidentEmail: koPresident?.lines[2]?.text ?? "",
+    clubEmail: koClubEmail?.lines[0]?.text ?? "",
+    instagramUrl: findSocialUrl(ko?.socials ?? [], "instagram"),
+    githubUrl: findSocialUrl(ko?.socials ?? [], "github"),
+    extra: ko?.content ?? "",
   };
 }
 
@@ -420,44 +440,52 @@ export function renderContactForm(data: ContactFormData, error?: string): string
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
     <form class="bs-form" method="post" action="/contact">
       <div class="bs-card">
-        <p class="bs-card-title">제목</p>
+        <p class="bs-card-title">회장</p>
         <div class="bs-row2">
           <div class="bs-field">
-            <label>한국어</label>
-            <input type="text" name="titleKo" value="${escapeHtml(data.titleKo)}" required />
+            <label>이름 (한글)</label>
+            <input type="text" name="presidentNameKo" value="${escapeHtml(data.presidentNameKo)}" />
           </div>
           <div class="bs-field">
-            <label>영어</label>
-            <input type="text" name="titleEn" value="${escapeHtml(data.titleEn)}" required />
+            <label>이름 (영어)</label>
+            <input type="text" name="presidentNameEn" value="${escapeHtml(data.presidentNameEn)}" />
+          </div>
+        </div>
+        <div class="bs-row2" style="margin-top:16px">
+          <div class="bs-field">
+            <label>전화번호</label>
+            <input type="text" name="phone" value="${escapeHtml(data.phone)}" />
+          </div>
+          <div class="bs-field">
+            <label>이메일</label>
+            <input type="text" name="presidentEmail" value="${escapeHtml(data.presidentEmail)}" />
           </div>
         </div>
       </div>
 
       <div class="bs-card">
-        <p class="bs-card-title">연락처 정보 · SNS</p>
+        <p class="bs-card-title">동아리</p>
         <div class="bs-field">
-          <label>연락처 정보 (한국어/영어 공통 — 라벨/링크는 언어 구분 없이 그대로 씁니다)</label>
-          <textarea name="infoText" rows="6">${escapeHtml(data.infoText)}</textarea>
-          <span class="hint">블록마다 빈 줄로 구분. 첫 줄은 라벨(예: 회장), 다음 줄들은 "내용" 또는 "내용 | mailto:..."</span>
+          <label>동아리 이메일</label>
+          <input type="text" name="clubEmail" value="${escapeHtml(data.clubEmail)}" />
         </div>
-        <div class="bs-field" style="margin-top:14px">
-          <label>SNS (한 줄에 하나, "플랫폼 | 라벨 | URL")</label>
-          <textarea name="socialsText" rows="3">${escapeHtml(data.socialsText)}</textarea>
-          <span class="hint">플랫폼: instagram / github / discord / email / x — 예: instagram | @run_kaist | https://instagram.com/run_kaist</span>
+        <div class="bs-row2" style="margin-top:16px">
+          <div class="bs-field">
+            <label>인스타그램</label>
+            <input type="text" name="instagramUrl" value="${escapeHtml(data.instagramUrl)}" placeholder="https://instagram.com/..." />
+          </div>
+          <div class="bs-field">
+            <label>깃허브</label>
+            <input type="text" name="githubUrl" value="${escapeHtml(data.githubUrl)}" placeholder="https://github.com/..." />
+          </div>
         </div>
       </div>
 
       <div class="bs-card">
-        <p class="bs-card-title">본문 (마크다운)</p>
-        <div class="bs-row2">
-          <div class="bs-field">
-            <label>한국어</label>
-            <textarea name="contentKo" rows="6">${escapeHtml(data.contentKo)}</textarea>
-          </div>
-          <div class="bs-field">
-            <label>영어</label>
-            <textarea name="contentEn" rows="6">${escapeHtml(data.contentEn)}</textarea>
-          </div>
+        <p class="bs-card-title">추가 사항</p>
+        <div class="bs-field">
+          <textarea name="extra" rows="4">${escapeHtml(data.extra)}</textarea>
+          <span class="hint">마크다운으로 씁니다. 한/영 페이지에 동일하게 나가요 (예: "이란성 쌍둥이 동아리: [SNUPS](https://snups.org/)").</span>
         </div>
       </div>
 
