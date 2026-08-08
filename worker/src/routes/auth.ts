@@ -4,9 +4,71 @@ import type { Env } from "../types";
 import { buildDiscordAuthorizeUrl, exchangeDiscordCode, fetchDiscordUser } from "../lib/discord";
 import { createSession, deleteSession } from "../lib/session";
 import { getMember } from "../lib/members";
-import { ALLOWED_ORIGINS, OAUTH_RETURN_TO_COOKIE, OAUTH_STATE_COOKIE, SESSION_COOKIE } from "../lib/constants";
+import { ALLOWED_ORIGINS, SESSION_COOKIE } from "../lib/constants";
 
-function randomState(): string {
+// state를 쿠키에 저장했다가 콜백 때 되읽는 방식은 모바일 Firefox의 ETP(Total
+// Cookie Protection) 등 추적 방지 기능이 kaist.run → discord.com → kaist.run
+// 리다이렉트 체인 중간에 쿠키를 걸러내는 경우가 있어 간헐적으로
+// "Invalid OAuth state"를 냈습니다. 대신 state 자체에 서명을 실어 보내서
+// 콜백 때 쿠키 없이 서명만 검증하면 되도록 바꿨습니다 — 브라우저의 쿠키 정책과
+// 완전히 무관해집니다.
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function base64UrlDecode(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+async function hmacKey(env: Env): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.DISCORD_CLIENT_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+}
+
+type OAuthStatePayload = { returnTo: string; nonce: string; exp: number };
+
+async function signOAuthState(env: Env, payload: OAuthStatePayload): Promise<string> {
+  const payloadB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await hmacKey(env);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payloadB64));
+  return `${payloadB64}.${base64UrlEncode(new Uint8Array(sig))}`;
+}
+
+// 서명 검증까지 통과한 payload만 돌려주고, 형식이 안 맞거나 위조/만료된 건 null.
+async function verifyOAuthState(env: Env, state: string): Promise<OAuthStatePayload | null> {
+  const dotIndex = state.lastIndexOf(".");
+  if (dotIndex < 0) return null;
+  const payloadB64 = state.slice(0, dotIndex);
+  const sigB64 = state.slice(dotIndex + 1);
+
+  const key = await hmacKey(env);
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    base64UrlDecode(sigB64),
+    new TextEncoder().encode(payloadB64),
+  );
+  if (!valid) return null;
+
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadB64))) as OAuthStatePayload;
+    if (typeof payload.exp !== "number" || Date.now() > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function randomNonce(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -48,28 +110,15 @@ export const auth = new Hono<{ Bindings: Env }>();
 
 // 로그인 시작: 프런트가 이 경로로 <a> 태그를 통해 이동시킵니다.
 // (src/lib/account/authLinks.ts의 getDiscordLoginHref 참고)
-auth.get("/discord", (c) => {
+auth.get("/discord", async (c) => {
   const returnToParam = c.req.query("returnTo") ?? DEFAULT_RETURN_TO;
   const returnTo = isSafeReturnTo(returnToParam) ? returnToParam : DEFAULT_RETURN_TO;
-  const state = randomState();
 
-  const oauthCookieOptions = {
-    httpOnly: true,
-    secure: true,
-    sameSite: "Lax" as const,
-    path: "/",
-    // backstage.kaist.run에서 로그인을 시작해도 Discord 콜백은 항상
-    // kaist.run/api/auth/discord/callback으로 돌아옵니다(DISCORD_REDIRECT_URI가
-    // 고정값이라서 — discord.ts 참고). 이 쿠키를 시작 호스트(backstage.kaist.run)
-    // 전용 host-only 쿠키로 두면 콜백 때(kaist.run) 브라우저가 안 실어줘서
-    // state가 항상 undefined로 보여 "Invalid OAuth state"가 났습니다.
-    // 세션 쿠키와 같은 방식으로 .kaist.run 서브도메인 전체가 공유하게 합니다.
-    domain: sessionCookieDomain(c.env),
-    maxAge: 600, // 10분 — 이 사이에 로그인을 마쳐야 함
-  };
-
-  setCookie(c, OAUTH_STATE_COOKIE, state, oauthCookieOptions);
-  setCookie(c, OAUTH_RETURN_TO_COOKIE, returnTo, oauthCookieOptions);
+  const state = await signOAuthState(c.env, {
+    returnTo,
+    nonce: randomNonce(),
+    exp: Date.now() + 10 * 60 * 1000, // 10분 — 이 사이에 로그인을 마쳐야 함
+  });
 
   return c.redirect(buildDiscordAuthorizeUrl(c.env, state));
 });
@@ -78,15 +127,12 @@ auth.get("/discord", (c) => {
 auth.get("/discord/callback", async (c) => {
   const code = c.req.query("code");
   const stateParam = c.req.query("state");
-  const expectedState = getCookie(c, OAUTH_STATE_COOKIE);
-  const returnTo = getCookie(c, OAUTH_RETURN_TO_COOKIE) ?? DEFAULT_RETURN_TO;
+  const statePayload = stateParam ? await verifyOAuthState(c.env, stateParam) : null;
 
-  deleteCookie(c, OAUTH_STATE_COOKIE, { path: "/" });
-  deleteCookie(c, OAUTH_RETURN_TO_COOKIE, { path: "/" });
-
-  if (!code || !stateParam || !expectedState || stateParam !== expectedState) {
+  if (!code || !statePayload) {
     return c.text("Invalid OAuth state", 400);
   }
+  const returnTo = statePayload.returnTo;
 
   const accessToken = await exchangeDiscordCode(c.env, code);
   const discordUser = await fetchDiscordUser(accessToken);
