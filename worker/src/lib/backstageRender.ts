@@ -66,8 +66,16 @@ const FORM_STYLE = `
   .bs-error { color: #f87171; background: rgba(220,38,38,.08); border: 1px solid rgba(220,38,38,.25); border-radius: 10px; padding: 10px 14px; font-size: 0.875rem; margin: 0 0 18px; }
   @media (max-width: 640px) { .bs-row2 { grid-template-columns: 1fr; } }
 
-  .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 28px; }
-  .bs-upload input[type="file"] { font-size: 0.875rem; }
+  .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .bs-upload input[type="file"] { font-size: 0.875rem; color: inherit; }
+  .bs-upload input[type="file"]::file-selector-button { border: none; border-radius: 999px; padding: 9px 20px; margin-right: 12px; font-weight: 700; font-size: 0.875rem; cursor: pointer; background: var(--logo-primary); color: #06240a; transition: opacity .15s, transform .1s; }
+  .bs-upload input[type="file"]::file-selector-button:hover { opacity: 0.88; }
+  .bs-upload input[type="file"]::file-selector-button:active { transform: scale(0.98); }
+  .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
+  .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; max-width: 260px; }
+  .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
+  .bs-cancel-btn { font-size: 0.8125rem; font-weight: 600; border: 1px solid rgba(128,128,128,.3); border-radius: 999px; padding: 7px 16px; background: transparent; color: inherit; cursor: pointer; }
+  .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
   .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 14px; padding: 12px 6px; }
   .bs-upload-list .thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: rgba(128,128,128,.08); flex-shrink: 0; }
@@ -402,7 +410,8 @@ export type ContactFormData = {
   clubEmail: string;
   instagramUrl: string;
   githubUrl: string;
-  extra: string;
+  extraKo: string;
+  extraEn: string;
 };
 
 function findInfoGroup(info: ContactInfoRow[], labels: string[]): ContactInfoRow | undefined {
@@ -426,7 +435,8 @@ export function contactRowsToFormData(ko: ContactRow | null, en: ContactRow | nu
     clubEmail: koClubEmail?.lines[0]?.text ?? "",
     instagramUrl: findSocialUrl(ko?.socials ?? [], "instagram"),
     githubUrl: findSocialUrl(ko?.socials ?? [], "github"),
-    extra: ko?.content ?? "",
+    extraKo: ko?.content ?? "",
+    extraEn: en?.content ?? "",
   };
 }
 
@@ -483,9 +493,15 @@ export function renderContactForm(data: ContactFormData, error?: string): string
 
       <div class="bs-card">
         <p class="bs-card-title">추가 사항</p>
-        <div class="bs-field">
-          <textarea name="extra" rows="4">${escapeHtml(data.extra)}</textarea>
-          <span class="hint">마크다운으로 씁니다. 한/영 페이지에 동일하게 나가요 (예: "이란성 쌍둥이 동아리: [SNUPS](https://snups.org/)").</span>
+        <div class="bs-row2">
+          <div class="bs-field">
+            <label>한국어</label>
+            <textarea name="extraKo" rows="4">${escapeHtml(data.extraKo)}</textarea>
+          </div>
+          <div class="bs-field">
+            <label>영어</label>
+            <textarea name="extraEn" rows="4">${escapeHtml(data.extraEn)}</textarea>
+          </div>
         </div>
       </div>
 
@@ -519,18 +535,45 @@ function renderUploadRow(file: UploadedFile): string {
       <div class="meta">${formatFileBytes(file.size)} · ${escapeHtml(file.contentType)}</div>
     </div>
     <input class="snippet" type="text" readonly value="${escapeHtml(url)}" onclick="this.select()" />
-    <button type="button" class="bs-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(url)});this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)">복사</button>
+    <button type="button" class="bs-copy" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)">복사</button>
     <form method="post" action="/uploads/${encodeURIComponent(file.key)}/delete" onsubmit="return confirm('이 파일을 삭제할까요? 이미 글에 쓰인 곳이 있다면 깨질 수 있어요.')">
       <button type="submit" class="bs-danger">삭제</button>
     </form>
   </li>`;
 }
 
-export function renderUploadList(files: UploadedFile[], error?: string): string {
+export type UploadListPage = {
+  q: string;
+  page: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+  total: number;
+};
+
+function pagerLink(q: string, page: number, label: string): string {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (page > 0) params.set("page", String(page));
+  const qs = params.toString();
+  return `<a href="/uploads${qs ? `?${qs}` : ""}">${label}</a>`;
+}
+
+export function renderUploadList(files: UploadedFile[], meta: UploadListPage, error?: string): string {
   const body =
     files.length === 0
-      ? `<p class="empty">업로드된 파일이 없습니다.</p>`
+      ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "업로드된 파일이 없습니다."}</p>`
       : `<ul class="bs-upload-list">${files.map(renderUploadRow).join("\n")}</ul>`;
+
+  const pager =
+    meta.hasPrev || meta.hasNext
+      ? `<div class="pager">
+        ${meta.hasPrev ? pagerLink(meta.q, meta.page - 1, "← 이전") : `<span class="disabled">← 이전</span>`}
+        <span>${meta.page + 1}페이지 · 총 ${meta.total}개</span>
+        ${meta.hasNext ? pagerLink(meta.q, meta.page + 1, "다음 →") : `<span class="disabled">다음 →</span>`}
+      </div>`
+      : meta.total > 0
+        ? `<p class="bs-note" style="margin-top:12px">총 ${meta.total}개</p>`
+        : "";
 
   return shell(
     "업로드 관리",
@@ -538,13 +581,18 @@ export function renderUploadList(files: UploadedFile[], error?: string): string 
     `
     <p class="bs-eyebrow">Backstage</p>
     <h1>업로드</h1>
-    <p class="bs-lead">올린 파일은 바로 공개되고, 링크를 복사해서 공지/아카이브 본문에 붙여넣으면 됩니다. 이미지는 <code>![](링크)</code> 형태로 쓰세요.</p>
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
     <form class="bs-upload" method="post" action="/uploads" enctype="multipart/form-data">
       <input type="file" name="file" required />
       <button type="submit" class="bs-submit">업로드</button>
     </form>
+    <form class="bs-search" method="get" action="/uploads">
+      <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="파일명 검색" />
+      <button type="submit" class="bs-cancel-btn">검색</button>
+      ${meta.q ? `<a href="/uploads" class="bs-cancel">지우기</a>` : ""}
+    </form>
     ${body}
+    ${pager}
   `,
   );
 }

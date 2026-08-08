@@ -58,6 +58,13 @@ auth.get("/discord", (c) => {
     secure: true,
     sameSite: "Lax" as const,
     path: "/",
+    // backstage.kaist.run에서 로그인을 시작해도 Discord 콜백은 항상
+    // kaist.run/api/auth/discord/callback으로 돌아옵니다(DISCORD_REDIRECT_URI가
+    // 고정값이라서 — discord.ts 참고). 이 쿠키를 시작 호스트(backstage.kaist.run)
+    // 전용 host-only 쿠키로 두면 콜백 때(kaist.run) 브라우저가 안 실어줘서
+    // state가 항상 undefined로 보여 "Invalid OAuth state"가 났습니다.
+    // 세션 쿠키와 같은 방식으로 .kaist.run 서브도메인 전체가 공유하게 합니다.
+    domain: sessionCookieDomain(c.env),
     maxAge: 600, // 10분 — 이 사이에 로그인을 마쳐야 함
   };
 

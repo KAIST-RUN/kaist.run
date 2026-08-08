@@ -153,6 +153,10 @@ backstage.post("/notices/:slug/delete", async (c) => {
 
 // ---------- archive ----------
 
+// 네비게이션의 "대회 아카이브"는 시즌 없이 그냥 /archive로 가는데, 실제 목록은
+// 시즌별로만 있어서 기본값(봄)으로 보내줍니다.
+backstage.get("/archive", (c) => c.redirect("/archive/spring"));
+
 backstage.get("/archive/:season", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
@@ -289,7 +293,8 @@ backstage.post("/contact", async (c) => {
   const clubEmail = get("clubEmail");
   const instagramUrl = get("instagramUrl");
   const githubUrl = get("githubUrl");
-  const content = get("extra");
+  const contentKo = get("extraKo");
+  const contentEn = get("extraEn");
 
   const socials = [
     instagramUrl ? { platform: "instagram", label: "Instagram", url: instagramUrl } : null,
@@ -310,7 +315,7 @@ backstage.post("/contact", async (c) => {
       { label: "동아리 이메일", lines: [{ text: clubEmail, href: `mailto:${clubEmail}` }] },
     ],
     socials,
-    content,
+    content: contentKo,
   });
   await upsertContact(c.env, "en", {
     title: "Contact",
@@ -326,7 +331,7 @@ backstage.post("/contact", async (c) => {
       { label: "Club email", lines: [{ text: clubEmail, href: `mailto:${clubEmail}` }] },
     ],
     socials,
-    content,
+    content: contentEn,
   });
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
@@ -338,12 +343,35 @@ backstage.post("/contact", async (c) => {
 // 않고 아무 파일이나 받습니다. 업로드된 파일은 kaist.run/upload/<key>로 즉시
 // 공개되고(별도 재빌드 불필요), 여기서 링크를 복사해 본문에 붙여넣으면 됩니다.
 
+const UPLOADS_PAGE_SIZE = 20;
+
+function paginateUploads(c: { req: { query(key: string): string | undefined } }, files: Awaited<ReturnType<typeof listUploads>>) {
+  const q = (c.req.query("q") ?? "").trim();
+  const page = Math.max(0, Number.parseInt(c.req.query("page") ?? "0", 10) || 0);
+
+  const filtered = q ? files.filter((f) => f.key.toLowerCase().includes(q.toLowerCase())) : files;
+  const start = page * UPLOADS_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + UPLOADS_PAGE_SIZE);
+
+  return {
+    pageItems,
+    meta: {
+      q,
+      page,
+      hasPrev: page > 0,
+      hasNext: start + UPLOADS_PAGE_SIZE < filtered.length,
+      total: filtered.length,
+    },
+  };
+}
+
 backstage.get("/uploads", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
   const files = await listUploads(c.env);
-  return c.html(renderUploadList(files));
+  const { pageItems, meta } = paginateUploads(c, files);
+  return c.html(renderUploadList(pageItems, meta));
 });
 
 backstage.post("/uploads", async (c) => {
@@ -355,7 +383,8 @@ backstage.post("/uploads", async (c) => {
 
   if (!(file instanceof File) || file.size === 0) {
     const files = await listUploads(c.env);
-    return c.html(renderUploadList(files, "업로드할 파일을 선택해 주세요."), 400);
+    const { pageItems, meta } = paginateUploads(c, files);
+    return c.html(renderUploadList(pageItems, meta, "업로드할 파일을 선택해 주세요."), 400);
   }
 
   await storeUpload(c.env, file.name, file.type || "application/octet-stream", await file.arrayBuffer());
