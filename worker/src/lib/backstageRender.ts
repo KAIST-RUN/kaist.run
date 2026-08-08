@@ -1,4 +1,4 @@
-import { page, escapeHtml } from "./emailRender";
+import { page, escapeHtml, formatKstDateTime } from "./emailRender";
 import type { MemberRecord } from "./members";
 import type { NoticeRow, ArchiveRow, ContactRow, ContactInfoRow, ContactSocial, Season } from "./content";
 import type { UploadedFile } from "./uploads";
@@ -23,6 +23,28 @@ const FORM_STYLE = `
   .bs-upload input[type="file"]::file-selector-button,
   .bs-cancel-btn, .bs-add-row, .bs-copy {
     font: inherit; font-weight: 700; font-size: 0.8125rem; padding: 8px 18px; border-radius: 999px; cursor: pointer;
+    transition: opacity .15s, background .15s, border-color .15s, color .15s, transform .12s;
+  }
+
+  /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
+     prefers-reduced-motion에서 전부 뺍니다 (색/배경 전환은 자극이 적어 유지). */
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes bs-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes bs-row-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    body { animation: bs-fade-up .4s cubic-bezier(0.16,1,0.3,1) both; }
+    .bs-card { animation: bs-fade-up .35s cubic-bezier(0.16,1,0.3,1) both; }
+    .bs-row-enter { animation: bs-row-enter .25s ease both; }
+
+    .bs-nav-logout:hover, .bs-new:hover, .bs-submit:hover, .bs-danger:hover,
+    .bs-upload input[type="file"]::file-selector-button:hover,
+    .bs-cancel-btn:hover, .bs-add-row:hover, .bs-copy:hover, .bs-row-remove:hover {
+      transform: translateY(-1px);
+    }
+    .bs-nav-logout:active, .bs-new:active, .bs-submit:active, .bs-danger:active,
+    .bs-upload input[type="file"]::file-selector-button:active,
+    .bs-cancel-btn:active, .bs-add-row:active, .bs-copy:active, .bs-row-remove:active {
+      transform: scale(0.96);
+    }
   }
 
   .bs-subnav { display: flex; gap: 8px; margin: -8px 0 20px; font-size: 0.8125rem; }
@@ -37,7 +59,7 @@ const FORM_STYLE = `
   .bs-card-title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.5; margin: 0 0 16px; }
 
   .bs-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
-  .bs-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px 6px; flex-wrap: wrap; border-radius: 8px; }
+  .bs-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px 6px; flex-wrap: wrap; border-radius: 8px; transition: background .15s; }
   .bs-list li:hover { background: rgba(128,128,128,.06); }
   .bs-list .title { font-weight: 600; text-decoration: none; color: inherit; }
   .bs-list .title:hover { color: var(--logo-primary); }
@@ -75,23 +97,22 @@ const FORM_STYLE = `
   .bs-check { flex-direction: row; align-items: center; gap: 8px; }
   .bs-check input { width: auto; accent-color: var(--logo-primary); }
   .bs-actions { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
-  .bs-submit { border: none; background: var(--logo-primary); color: var(--bg); transition: opacity .15s, transform .1s; }
+  .bs-submit { border: none; background: var(--logo-primary); color: var(--bg); }
   .bs-submit:hover { opacity: 0.88; }
-  .bs-submit:active { transform: scale(0.98); }
-  .bs-cancel { font-size: 0.875rem; opacity: 0.6; text-decoration: none; }
+  .bs-cancel { font-size: 0.875rem; opacity: 0.6; text-decoration: none; transition: opacity .15s; }
   .bs-cancel:hover { opacity: 1; }
   .bs-danger-zone { margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(220,38,38,.2); }
   .bs-danger { border: 1px solid rgba(220,38,38,.4); color: #f87171; background: rgba(220,38,38,.06); transition: background .15s; }
   .bs-danger:hover { background: rgba(220,38,38,.14); }
   .bs-note { font-size: 0.8125rem; opacity: 0.55; }
   .bs-error { color: #f87171; background: rgba(220,38,38,.08); border: 1px solid rgba(220,38,38,.25); border-radius: 10px; padding: 10px 14px; font-size: 0.875rem; margin: 0 0 18px; }
+  @media (prefers-reduced-motion: no-preference) { .bs-error { animation: bs-fade-up .3s ease both; } }
   @media (max-width: 640px) { .bs-row2 { grid-template-columns: 1fr; } }
 
   .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
   .bs-upload input[type="file"] { font-size: 0.8125rem; color: inherit; }
-  .bs-upload input[type="file"]::file-selector-button { border: none; margin-right: 12px; background: var(--logo-primary); color: var(--bg); transition: opacity .15s, transform .1s; }
+  .bs-upload input[type="file"]::file-selector-button { border: none; margin-right: 12px; background: var(--logo-primary); color: var(--bg); }
   .bs-upload input[type="file"]::file-selector-button:hover { opacity: 0.88; }
-  .bs-upload input[type="file"]::file-selector-button:active { transform: scale(0.98); }
   .bs-upload input[type="text"] { font: inherit; font-size: 0.8125rem; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; min-width: 220px; flex: 1; }
   .bs-upload input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
   .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
@@ -100,7 +121,8 @@ const FORM_STYLE = `
   .bs-cancel-btn { border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
-  .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 14px; padding: 12px 6px; }
+  .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 14px; padding: 12px 6px; transition: background .15s; }
+  .bs-upload-list li:hover { background: rgba(128,128,128,.05); }
   .bs-upload-open { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
   .bs-upload-open:hover .name { text-decoration: underline; }
   .bs-upload-list .thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: rgba(128,128,128,.08); flex-shrink: 0; }
@@ -150,7 +172,13 @@ export function renderBackstageErrorPage(title: string, message: string, action?
 export const BACKSTAGE_LOGOUT_ACTION = `<form method="post" action="/logout" style="margin-top:16px"><button type="submit" class="bs-submit">로그아웃하고 다른 계정으로 로그인</button></form>`;
 export const BACKSTAGE_RELOGIN_ACTION = `<a class="bs-new" href="/api/auth/discord">다시 로그인</a>`;
 
-export function renderBackstageHome(member: MemberRecord): string {
+export type MemberSyncResult = { total: number; written: number; deleted: number };
+
+export function renderBackstageHome(
+  member: MemberRecord,
+  syncResult?: MemberSyncResult | null,
+  lastSyncedAt?: number | null,
+): string {
   return shell(
     "Backstage",
     "home",
@@ -159,6 +187,22 @@ export function renderBackstageHome(member: MemberRecord): string {
     <h1>안녕하세요, ${escapeHtml(member.name || "관리자")}님</h1>
     <p class="bs-lead">관리자 권한이 확인되었습니다. 왼쪽 위 메뉴에서 관리할 콘텐츠를 선택하세요.</p>
     <p class="bs-note" style="margin-top:16px">저장하면 D1에 바로 반영되고, GitHub Actions가 자동으로 다시 빌드/배포합니다 (보통 1분 내외 걸려요).</p>
+
+    <div class="bs-card" style="margin-top:24px">
+      <p class="bs-card-title">회원 명단 동기화</p>
+      <p class="bs-note">Google Sheets 회원 명단은 매시 정각에 자동으로 KV에 동기화됩니다. 방금 시트를 고쳤다면 여기서 바로 반영할 수 있어요.</p>
+      <p class="bs-note" style="margin-top:6px">
+        마지막 동기화: ${lastSyncedAt ? escapeHtml(formatKstDateTime(lastSyncedAt)) : "기록 없음"}
+      </p>
+      ${
+        syncResult
+          ? `<p class="bs-note" style="margin-top:10px;color:var(--logo-primary);font-weight:700;">완료 — 전체 ${syncResult.total}명 중 ${syncResult.written}명 갱신, ${syncResult.deleted}명 삭제됨</p>`
+          : ""
+      }
+      <form method="post" action="/sync-members" style="margin-top:14px">
+        <button type="submit" class="bs-submit">지금 동기화</button>
+      </form>
+    </div>
   `,
   );
 }
@@ -384,7 +428,10 @@ const ARCHIVE_ROWS_SCRIPT = `
     btn.addEventListener("click", () => {
       const rows = document.getElementById(btn.dataset.rows);
       const tpl = document.getElementById(btn.dataset.template);
-      rows.appendChild(tpl.content.cloneNode(true));
+      const clone = tpl.content.cloneNode(true);
+      const row = clone.querySelector(".bs-row-item");
+      if (row) row.classList.add("bs-row-enter");
+      rows.appendChild(clone);
     });
   });
 `;

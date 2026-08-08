@@ -4,10 +4,20 @@ import { fetchMembersFromSheet, type MemberRecord } from "./googleSheets";
 export type { MemberRecord };
 
 const MEMBER_KEY_PREFIX = "member:";
+// "member:" 프리픽스를 안 씁니다 — removeStaleMembers가 그 프리픽스로 나열한 키를
+// 전부 discordId로 취급해서, 시트에 없는 키는 지워버립니다. 여기에 두면 매 동기화마다
+// 자기 자신이 "탈퇴한 회원"으로 오인되어 지워지는 꼴이 됩니다.
+const LAST_SYNCED_KEY = "meta:members_last_synced_at";
 
 export async function getMember(env: Env, discordId: string): Promise<MemberRecord | null> {
   const raw = await env.MEMBERS.get(`${MEMBER_KEY_PREFIX}${discordId}`);
   return raw ? (JSON.parse(raw) as MemberRecord) : null;
+}
+
+// backstage 홈 화면에 "마지막 동기화" 시각을 보여주기 위함.
+export async function getMembersLastSyncedAt(env: Env): Promise<number | null> {
+  const raw = await env.MEMBERS.get(LAST_SYNCED_KEY);
+  return raw ? Number(raw) : null;
 }
 
 export type SyncResult = {
@@ -63,6 +73,8 @@ export async function syncMembersFromSheet(env: Env): Promise<SyncResult> {
     ),
     removeStaleMembers(env, currentIds),
   ]);
+
+  await env.MEMBERS.put(LAST_SYNCED_KEY, String(Date.now()));
 
   return { total: members.length, written: results.filter(Boolean).length, deleted };
 }

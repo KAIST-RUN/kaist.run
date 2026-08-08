@@ -231,7 +231,8 @@ export function renderEmailPage(id: string, email: Email): string {
 
 // KST(Asia/Seoul) 기준 "YYYY-MM-DD HH:mm"로 고정 포맷 — 로케일 구분자에 기대지 않고
 // formatToParts로 직접 조립해서 어느 런타임에서 돌아도 형태가 안 바뀌게 합니다.
-function formatReceivedAt(ms: number): string {
+// backstageRender.ts(회원 명단 마지막 동기화 시각)도 재사용합니다.
+export function formatKstDateTime(ms: number): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
@@ -262,7 +263,7 @@ export function renderEmailListPage(items: EmailIndexEntry[], info: EmailListPag
                 <span class="subject">${escapeHtml(item.subject)}</span>
                 <span class="addrs">${escapeHtml(item.from)} → ${escapeHtml(item.to)}</span>
               </div>
-              <span class="date">${escapeHtml(formatReceivedAt(item.receivedAt))}</span>
+              <span class="date">${escapeHtml(formatKstDateTime(item.receivedAt))}</span>
             </a></li>`;
           })
           .join("\n")}
