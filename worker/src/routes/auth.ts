@@ -156,16 +156,20 @@ auth.get("/discord/callback", async (c) => {
     avatarUrl: discordUser.avatarUrl,
   });
 
+  const isProd = sessionCookieDomain(c.env) !== undefined;
+
   setCookie(c, SESSION_COOKIE, sessionId, {
     httpOnly: true,
     secure: true,
-    // /api/me 등은 프런트가 fetch(credentials:"include")로 부르는데, 로컬
-    // 개발에서는 사이트(3000)와 Worker(8787)가 다른 origin이라 이게
-    // cross-site 요청 취급됩니다. SameSite=Lax는 cross-site fetch에는 쿠키를
-    // 안 실어주므로(주소창 이동 때만 통함) 로그인은 성공해도 /api/me가 계속
-    // 401이 나요. None으로 풀어주는 대신, /api/* 쪽 CORS를 ALLOWED_ORIGINS로
-    // 좁혀서(index.ts) 신뢰하는 origin에서만 이 쿠키가 쓰이게 막아둡니다.
-    sameSite: "None",
+    // 로컬 개발에서는 사이트(3000)와 Worker(8787)가 다른 origin이라 fetch가
+    // cross-site 취급되어 SameSite=Lax면 쿠키가 안 실립니다(None으로 풀어주는
+    // 대신 /api/* 쪽 CORS를 ALLOWED_ORIGINS로 좁혀서 신뢰하는 origin에서만
+    // 쓰이게 막음 — index.ts 참고). 반면 프로덕션은 kaist.run과
+    // backstage.kaist.run이 같은 site라서 Lax로도 충분하고, SameSite=None
+    // 쿠키는 모바일 Firefox의 추적 방지 기능(Total Cookie Protection 등)이
+    // 더 적극적으로 걸러내는 경향이 있어 "로그인해도 계속 로그인 화면"으로
+    // 튕기는 원인이 됐던 것으로 보입니다. Lax가 더 안전합니다.
+    sameSite: isProd ? "Lax" : "None",
     path: "/",
     domain: sessionCookieDomain(c.env),
     maxAge: 60 * 60 * 24 * 30, // 30일 — session.ts의 TTL과 맞춰둠
