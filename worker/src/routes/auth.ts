@@ -132,6 +132,14 @@ function discordRedirectUri(env: Env, requestUrl: string): string {
 
 export const auth = new Hono<{ Bindings: Env }>();
 
+// backstage.ts의 같은 이름 미들웨어와 같은 이유 — /discord, /discord/callback 응답은
+// 요청자의 쿠키/세션에 따라 완전히 달라지는데, Cache-Control이 없으면 쿠키 없이 나간
+// 주소창 자동완성 프리페치 요청의 응답이 캐시됐다가 진짜 요청에 잘못 재사용될 수 있음.
+auth.use("*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "no-store");
+});
+
 // 로그인 시작: 프런트가 이 경로로 <a> 태그를 통해 이동시킵니다.
 // (src/lib/account/authLinks.ts의 getDiscordLoginHref 참고)
 auth.get("/discord", async (c) => {

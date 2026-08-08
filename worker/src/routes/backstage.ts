@@ -36,6 +36,17 @@ import { renderErrorPage } from "../lib/emailRender";
 // 마운트하지만, kaist.run에는 애초에 "/" 패턴의 Worker 라우트 자체가 없어서 겹치지 않음).
 export const backstage = new Hono<{ Bindings: Env }>();
 
+// 모바일 Firefox 등이 주소창에 backstage.kaist.run을 타이핑하는 동안 자동완성으로
+// 목적지를 미리 요청(speculative prefetch)하는 경우가 있는데, 이 요청은 쿠키 없이
+// 나갑니다. Cache-Control 없이 두면 그때 받은 "로그인 안 됨 → /api/auth/discord로
+// 리다이렉트" 302 응답이 브라우저에 캐시됐다가, 바로 뒤의 진짜(쿠키 포함) 요청에도
+// 그대로 재사용돼서 실제로는 로그인돼 있어도 계속 Discord 로그인 화면으로 튕기는
+// 문제가 있었습니다. 세션에 따라 완전히 달라지는 응답이라 캐시되면 안 됩니다.
+backstage.use("*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "no-store");
+});
+
 function isSeason(value: string | undefined): value is Season {
   return value === "spring" || value === "fall";
 }
