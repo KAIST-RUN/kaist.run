@@ -16,7 +16,16 @@ const FORM_STYLE = `
   /* .topbar의 기본 gap은 이메일 페이지와 공유라 여기서 못 건드리고, 로고 쪽에만
      오른쪽 여백을 추가로 줘서 backstage에서만 로고-홈 간격을 늘립니다. */
   .topbar-logo { margin-right: 18px; }
-  .bs-menu-toggle { display: none; }
+  /* 메인 사이트의 MobileNav 버튼(테두리/배경 없이 아이콘만, 36px, hover는 opacity로만
+     반응)과 통일한 스타일입니다 — src/components/layout/MobileNav.tsx 참고. */
+  .bs-menu-toggle {
+    display: none; align-items: center; justify-content: center;
+    width: 36px; height: 36px; padding: 0; flex-shrink: 0;
+    border: none; border-radius: 0; background: transparent; color: inherit;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .bs-menu-toggle:hover { opacity: 0.7; }
+  .bs-menu-toggle svg { height: 16px; width: 16px; }
   .bs-nav-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.875rem; }
   .bs-nav-links a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
   .bs-nav-links a:hover { opacity: 1; background: rgba(128,128,128,.1); }
@@ -25,6 +34,9 @@ const FORM_STYLE = `
   .bs-nav-logout { -webkit-appearance: none; appearance: none; color: var(--bg); background: var(--logo-primary); border: none; white-space: nowrap; transition: opacity .15s; }
   .bs-nav-logout:hover { opacity: 0.85; }
   .bs-backdrop { display: none; }
+  /* 모바일 서랍 안에서만 보이는 로그아웃 — 데스크톱에서는 topbar 오른쪽의
+     .bs-nav-logout-form이 대신 보입니다(아래 미디어 쿼리에서 서로 뒤바뀜). */
+  .bs-drawer-logout-form { display: none; }
 
   /* 페이지 곳곳의 알약(pill) 버튼(로그아웃, 새 글 작성, 저장, 삭제, 파일 선택,
      검색, + 추가, 복사)이 전부 같은 크기를 쓰도록 여기 한 곳에 모아둡니다. 색/테두리
@@ -40,15 +52,12 @@ const FORM_STYLE = `
      바꿉니다. 위의 통일된 버튼 크기 규칙보다 뒤에 와야 로그아웃 버튼의 규칙이
      실제로 이깁니다(같은 특정도라 소스 순서가 늦은 쪽이 이김). */
   @media (max-width: 720px) {
-    .bs-menu-toggle {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 38px; height: 38px; border-radius: 8px;
-      border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit;
-      font-size: 1.15rem; line-height: 1; cursor: pointer; flex-shrink: 0;
-    }
+    /* topbar는 flex라 order로 시각적 순서만 바꿉니다 — 로고보다 먼저(왼쪽에)
+       오도록. 데스크톱에서는 이 버튼 자체가 display:none이라 영향 없습니다. */
+    .bs-menu-toggle { display: inline-flex; order: -1; }
     .bs-nav-links {
       position: fixed; top: 0; left: 0; bottom: 0; width: 240px; max-width: 80vw;
-      flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px;
+      display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: 4px;
       margin: 0; padding: 64px 16px 20px; box-sizing: border-box; overflow-y: auto;
       border-right: 1px solid rgba(128,128,128,.18);
       background: var(--bg); z-index: 50;
@@ -59,6 +68,12 @@ const FORM_STYLE = `
     .bs-backdrop.bs-backdrop-open {
       display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 40;
     }
+    /* 로그아웃은 모바일에서 topbar가 아니라 서랍 맨 아래로 옮깁니다. */
+    .bs-nav-logout-form { display: none; }
+    .bs-drawer-logout-form {
+      display: block; margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(128,128,128,.18);
+    }
+    .bs-drawer-logout-form .bs-nav-logout { display: block; width: 100%; text-align: center; }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
@@ -215,10 +230,19 @@ const BS_MENU_SCRIPT = `
   })();
 `;
 
+// 메인 사이트 MobileNav(src/components/layout/MobileNav.tsx)와 같은 아이콘입니다.
+const MENU_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>`;
+
 function shell(title: string, active: string, bodyHtml: string): string {
   // 로고 옆(topbarNav)에 ☰ + nav 링크, 테마 토글 오른쪽(topbarEnd)에 로그아웃 —
-  // 실제 배치는 emailRender.ts의 page()가 topbar 안에서 조립합니다.
-  const menuToggle = `<button type="button" class="bs-menu-toggle" id="bs-menu-toggle" aria-label="메뉴 열기" aria-expanded="false" aria-controls="bs-nav">☰</button>`;
+  // 실제 배치는 emailRender.ts의 page()가 topbar 안에서 조립합니다. ☰는 모바일
+  // 폭에서 CSS order로 로고보다 앞(왼쪽)에 오도록 되어 있습니다(FORM_STYLE 참고).
+  const menuToggle = `<button type="button" class="bs-menu-toggle" id="bs-menu-toggle" aria-label="메뉴 열기" aria-expanded="false" aria-controls="bs-nav">${MENU_ICON_SVG}</button>`;
+  const drawerLogout = `
+    <form method="post" action="/logout" class="bs-drawer-logout-form">
+      <button type="submit" class="bs-nav-logout">로그아웃</button>
+    </form>
+  `;
   const navLinks = `
     <div class="bs-nav-links" id="bs-nav">
       ${navLink("/", "홈", active === "home")}
@@ -228,8 +252,11 @@ function shell(title: string, active: string, bodyHtml: string): string {
       ${navLink("/contact", "연락처", active === "contact")}
       ${navLink("/apply", "지원 폼", active === "apply")}
       ${navLink("/uploads", "업로드", active === "uploads")}
+      ${drawerLogout}
     </div>
   `;
+  // 데스크톱 topbar 오른쪽용 — 모바일 폭에서는 CSS로 숨기고 위 drawerLogout이
+  // 대신 보입니다(FORM_STYLE의 모바일 미디어 쿼리 참고).
   const logout = `
     <form method="post" action="/logout" class="bs-nav-logout-form">
       <button type="submit" class="bs-nav-logout">로그아웃</button>
