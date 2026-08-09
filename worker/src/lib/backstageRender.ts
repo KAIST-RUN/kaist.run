@@ -206,6 +206,11 @@ const FORM_STYLE = `
   .bylaws-node-row.drop-after { box-shadow: inset 0 -2px 0 var(--logo-primary); }
   .bylaws-node.dragging { opacity: .4; }
 
+  /* 태그/본문 줄 맨 앞의 "안 보이는" 접기버튼+드래그손잡이+뱃지+번호 묶음 — 위
+     텍스트 칸과 같은 내용을 그대로 한 번 더 찍어서, 라벨 길이가 뭐든 그 칸의
+     실제 시작 위치에 항상 정확히 맞춰줍니다. */
+  .bylaws-row-gutter { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 7px; visibility: hidden; pointer-events: none; }
+
   .bylaws-drag-handle { flex: 0 0 auto; width: 18px; padding-top: 6px; text-align: center; letter-spacing: -1px; font-size: .8125rem; color: rgba(128,128,128,.8); cursor: grab; user-select: none; }
   .bylaws-drag-handle:active { cursor: grabbing; }
 
@@ -249,13 +254,14 @@ const FORM_STYLE = `
   .bylaws-chip:active { transform: scale(.94); }
   .bylaws-chip-ghost { color: inherit; opacity: .65; border-color: rgba(128,128,128,.35); }
   .bylaws-chip-ghost:hover { opacity: 1; color: var(--logo-primary); border-color: var(--logo-primary); }
-  .bylaws-chip-inline { align-self: center; }
 
   /* 개정/신설 태그 삽입 — 네이티브 <select>는 브라우저마다 못생기게 나와서 대신
      버튼 + 직접 그리는 드롭다운 메뉴로 만듭니다. */
   /* 본문(body)처럼 카드 행 아래 별도 줄 — 텍스트 입력칸과 한 줄에 같이 두면
-     칩/뱃지가 늘어날 때마다 줄바꿈이 지저분해져서 뺐습니다. */
-  .bylaws-tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 8px 8px 45px; }
+     칩/뱃지가 늘어날 때마다 줄바꿈이 지저분해져서 뺐습니다. 왼쪽은 .bylaws-row-gutter가
+     맞춰주므로 여기 자체엔 왼쪽 들여쓰기를 따로 안 둡니다. */
+  .bylaws-tag-row { display: flex; align-items: flex-start; gap: 7px; padding: 0 8px 8px; }
+  .bylaws-tag-row-content { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   .bylaws-tag-menu { position: relative; flex: 0 0 auto; }
   .bylaws-tag-dropdown {
     display: none; flex-direction: column; gap: 1px; position: absolute; top: calc(100% + 6px); left: 0; z-index: 5;
@@ -288,7 +294,7 @@ const FORM_STYLE = `
   }
   .bylaws-tag-badge button:hover { opacity: 1; background: rgba(220,38,38,.18); color: #f87171; }
 
-  .bylaws-body-row { display: flex; align-items: flex-start; gap: 6px; padding: 0 8px 8px 45px; animation: bylaws-node-in .16s ease; }
+  .bylaws-body-row { display: flex; align-items: flex-start; gap: 7px; padding: 0 8px 8px; animation: bylaws-node-in .16s ease; }
   .bylaws-body-row textarea {
     flex: 1 1 auto; min-width: 0; font: inherit; font-size: .875rem; line-height: 1.5; padding: 7px 9px;
     border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.02);
@@ -1703,6 +1709,18 @@ const BYLAWS_TREE_SCRIPT = `
 
       var numHtml = n.label ? '<span class="bylaws-num">' + esc(n.label) + "</span>" : "";
 
+      // 접기버튼/드래그손잡이/타입뱃지/번호 — 텍스트 칸 왼쪽에 오는, 노드마다 폭이
+      // 들쭉날쭉한 부분(번호가 "①"냐 "제12조"냐에 따라 폭이 다름)입니다. 아래
+      // 태그/본문 줄을 이 텍스트 칸 시작 위치에 맞추려고, 이 묶음을 그대로 한 번
+      // 더(안 보이게) 찍어서 자리만 차지하게 합니다 — 라벨 길이가 얼마든 항상
+      // 정확히 맞습니다(고정 픽셀값으로 대충 맞추는 대신).
+      var gutterHtml =
+        foldBtn +
+        '<span class="bylaws-drag-handle" data-drag-handle draggable="true" aria-label="드래그해서 순서 변경" title="드래그해서 순서 변경">⠿</span>' +
+        (HIDE_BADGE[n.type] ? "" : '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>") +
+        numHtml;
+      var gutterSpacer = '<div class="bylaws-row-gutter" aria-hidden="true">' + gutterHtml + "</div>";
+
       // 태그는 텍스트 안에 글자로 박히는 게 아니라 이 노드에 딸린 메타데이터라,
       // 본문(body)처럼 카드 행 아래 별도 줄에 둡니다 — 텍스트 입력칸이 있는 줄에
       // 같이 끼워두면 줄바꿈이 지저분해집니다. 이미 붙은 태그는 뱃지로 보여주고
@@ -1726,17 +1744,21 @@ const BYLAWS_TREE_SCRIPT = `
           '<div class="bylaws-tag-menu">' +
           '<button type="button" class="bylaws-chip bylaws-tag-btn" data-action="tag-toggle" data-id="' + n.id + '" data-type="' + n.type + '" aria-haspopup="true" aria-expanded="false" title="개정/신설 표시 추가">+ 태그</button>' +
           '<div class="bylaws-tag-dropdown" role="menu"></div></div>';
-        tagRow = '<div class="bylaws-tag-row">' + tagBadgesHtml + tagMenu + "</div>";
+        tagRow = '<div class="bylaws-tag-row">' + gutterSpacer + '<div class="bylaws-tag-row-content">' + tagBadgesHtml + tagMenu + "</div></div>";
       }
 
-      var bodyChip = "";
+      // "+ 본문"도 텍스트 칸 옆이 아니라 이 줄에 둡니다 — 본문이 이미 있으면
+      // 같은 자리에 그 본문 textarea가 대신 나옵니다.
       var bodyRow = "";
       if (BODY_ELIGIBLE[n.type]) {
         if (n.body === null || n.body === undefined) {
-          bodyChip = '<button type="button" class="bylaws-chip bylaws-chip-ghost bylaws-chip-inline" data-action="body-add" data-id="' + n.id + '" aria-label="본문 추가" title="본문 추가">+ 본문</button>';
+          bodyRow =
+            '<div class="bylaws-body-row">' + gutterSpacer +
+            '<button type="button" class="bylaws-chip bylaws-chip-ghost" data-action="body-add" data-id="' + n.id + '" aria-label="본문 추가" title="본문 추가">+ 본문</button>' +
+            "</div>";
         } else {
           bodyRow =
-            '<div class="bylaws-body-row">' +
+            '<div class="bylaws-body-row">' + gutterSpacer +
             '<textarea class="bs-autosize" rows="1" data-body-id="' + n.id + '" placeholder="번호 없는 문단 (선택)">' + esc(n.body) + "</textarea>" +
             '<button type="button" class="bylaws-body-remove" data-action="body-remove" data-id="' + n.id + '" aria-label="본문 제거" title="본문 제거">×</button>' +
             "</div>";
@@ -1746,12 +1768,8 @@ const BYLAWS_TREE_SCRIPT = `
       var cardHtml =
         '<div class="bylaws-node-card">' +
         '<div class="bylaws-node-row">' +
-        foldBtn +
-        '<span class="bylaws-drag-handle" data-drag-handle draggable="true" aria-label="드래그해서 순서 변경" title="드래그해서 순서 변경">⠿</span>' +
-        (HIDE_BADGE[n.type] ? "" : '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>") +
-        numHtml +
+        gutterHtml +
         '<textarea class="bs-autosize" rows="1" data-text-id="' + n.id + '" placeholder="' + esc(PLACEHOLDER[n.type] || "") + '">' + esc(n.text) + "</textarea>" +
-        bodyChip +
         '<span class="bylaws-node-actions"><button type="button" data-action="remove" data-id="' + n.id + '" aria-label="삭제" title="삭제">×</button></span>' +
         "</div>" +
         tagRow +
