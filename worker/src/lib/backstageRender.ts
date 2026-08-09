@@ -253,7 +253,10 @@ const FORM_STYLE = `
 
   /* 개정/신설 태그 삽입 — 네이티브 <select>는 브라우저마다 못생기게 나와서 대신
      버튼 + 직접 그리는 드롭다운 메뉴로 만듭니다. */
-  .bylaws-tag-menu { position: relative; flex: 0 0 auto; align-self: center; }
+  /* 본문(body)처럼 카드 행 아래 별도 줄 — 텍스트 입력칸과 한 줄에 같이 두면
+     칩/뱃지가 늘어날 때마다 줄바꿈이 지저분해져서 뺐습니다. */
+  .bylaws-tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 8px 8px 45px; }
+  .bylaws-tag-menu { position: relative; flex: 0 0 auto; }
   .bylaws-tag-dropdown {
     display: none; flex-direction: column; gap: 1px; position: absolute; top: calc(100% + 6px); left: 0; z-index: 5;
     min-width: 176px; background: var(--bg); border: 1px solid rgba(128,128,128,.25); border-radius: 10px;
@@ -1701,26 +1704,30 @@ const BYLAWS_TREE_SCRIPT = `
       var numHtml = n.label ? '<span class="bylaws-num">' + esc(n.label) + "</span>" : "";
 
       // 태그는 텍스트 안에 글자로 박히는 게 아니라 이 노드에 딸린 메타데이터라,
-      // 이미 붙은 태그는 뱃지로 따로 보여주고(각자 × 로 제거), "+ 태그"는 새로
-      // 추가할 때만 씁니다. 드롭다운 안(태그 · 날짜 목록)은 열 때마다 개정이력
-      // 카드의 최신 입력값을 다시 읽어서 채웁니다(renderTagMenuItems) — 여기서는
-      // 빈 채로 둡니다.
-      var tagBadgesHtml = (n.tags || [])
-        .map(function (t, idx) {
-          var date = dateForNum(t.num);
-          var label = t.kind + (date ? " · " + date : "");
-          return (
-            '<span class="bylaws-tag-badge">' + esc(label) +
-            '<button type="button" data-action="tag-remove" data-id="' + n.id + '" data-index="' + idx + '" aria-label="태그 제거" title="태그 제거">×</button></span>'
-          );
-        })
-        .join("");
+      // 본문(body)처럼 카드 행 아래 별도 줄에 둡니다 — 텍스트 입력칸이 있는 줄에
+      // 같이 끼워두면 줄바꿈이 지저분해집니다. 이미 붙은 태그는 뱃지로 보여주고
+      // (각자 × 로 제거), "+ 태그"로 새로 추가합니다. 드롭다운 안(태그 · 날짜
+      // 목록)은 열 때마다 개정이력 카드의 최신 입력값을 다시 읽어서 채웁니다
+      // (renderTagMenuItems) — 여기서는 빈 채로 둡니다.
       var tagOptions = TAG_OPTIONS[n.type];
-      var tagMenu = tagOptions
-        ? '<div class="bylaws-tag-menu">' +
+      var tagRow = "";
+      if (tagOptions) {
+        var tagBadgesHtml = (n.tags || [])
+          .map(function (t, idx) {
+            var date = dateForNum(t.num);
+            var label = t.kind + (date ? " · " + date : "");
+            return (
+              '<span class="bylaws-tag-badge">' + esc(label) +
+              '<button type="button" data-action="tag-remove" data-id="' + n.id + '" data-index="' + idx + '" aria-label="태그 제거" title="태그 제거">×</button></span>'
+            );
+          })
+          .join("");
+        var tagMenu =
+          '<div class="bylaws-tag-menu">' +
           '<button type="button" class="bylaws-chip bylaws-tag-btn" data-action="tag-toggle" data-id="' + n.id + '" data-type="' + n.type + '" aria-haspopup="true" aria-expanded="false" title="개정/신설 표시 추가">+ 태그</button>' +
-          '<div class="bylaws-tag-dropdown" role="menu"></div></div>'
-        : "";
+          '<div class="bylaws-tag-dropdown" role="menu"></div></div>';
+        tagRow = '<div class="bylaws-tag-row">' + tagBadgesHtml + tagMenu + "</div>";
+      }
 
       var bodyChip = "";
       var bodyRow = "";
@@ -1744,11 +1751,10 @@ const BYLAWS_TREE_SCRIPT = `
         (HIDE_BADGE[n.type] ? "" : '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>") +
         numHtml +
         '<textarea class="bs-autosize" rows="1" data-text-id="' + n.id + '" placeholder="' + esc(PLACEHOLDER[n.type] || "") + '">' + esc(n.text) + "</textarea>" +
-        tagBadgesHtml +
-        tagMenu +
         bodyChip +
         '<span class="bylaws-node-actions"><button type="button" data-action="remove" data-id="' + n.id + '" aria-label="삭제" title="삭제">×</button></span>' +
         "</div>" +
+        tagRow +
         bodyRow +
         "</div>";
 
