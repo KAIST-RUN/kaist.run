@@ -87,6 +87,10 @@ body {
     sans-serif;
 }
 
+#main-scroll {
+  scrollbar-gutter: stable;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   *,
   *::before,

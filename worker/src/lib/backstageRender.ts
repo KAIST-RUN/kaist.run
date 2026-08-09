@@ -4,6 +4,7 @@ import type { NoticeRow, ArchiveRow, ContactRow, ContactInfoRow, ContactSocial, 
 import type { UploadedFile } from "./uploads";
 
 const FORM_STYLE = `
+  html { scrollbar-gutter: stable; }
   body { max-width: 960px; }
   h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
 
