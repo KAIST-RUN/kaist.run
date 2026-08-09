@@ -14,9 +14,15 @@ import fontkit from "@pdf-lib/fontkit";
 
 const API_BASE = process.env.CONTENT_API_BASE_URL ?? "https://kaist.run/api/content";
 const OUT_DIR = path.join(process.cwd(), "public", "bylaws");
-// alternative/*.ttf 사용 — static/*.otf(CFF)는 fontkit의 서브셋 임베더가
-// "Not a CFF Font" 에러를 내서 실패합니다. alternative는 순수 glyf 기반 TTF라 안전합니다.
-const FONT_DIR = path.join(process.cwd(), "node_modules", "pretendard", "dist", "public", "static", "alternative");
+// Pretendard(alternative/*.ttf, 순수 glyf 기반이라 fontkit 서브셋 임베더 자체는
+// 통과함)로는 실제 리더에서 글자가 깨진다는 제보가 있어서 Spoqa Han Sans Neo로
+// 바꿨습니다 — Pretendard가 원래 이 폰트를 기반으로 만들어진 폰트라 골격이
+// 비슷하고, 서로 다른 제작사가 준비한 별개의 TTF라 Pretendard 쪽 변환 과정에
+// 있었을 수 있는 문제를 우회합니다. static/*.otf(CFF)는 fontkit이 "Not a CFF
+// Font"로 실패하니 반드시 Subset/SpoqaHanSansNeo의 *.ttf만 씁니다. 실제 회칙
+// 본문에 쓰인 글자는 전부 이 폰트에 있는지 이미 확인했습니다(흔히 쓰는 한글
+// 2,350자 기준 서브셋이라 아주 희귀한 음절이 새로 들어오면 없을 수 있음).
+const FONT_DIR = path.join(process.cwd(), "node_modules", "spoqa-han-sans", "Subset", "SpoqaHanSansNeo");
 
 const PAGE_W = 595.28; // A4
 const PAGE_H = 841.89;
@@ -302,8 +308,8 @@ async function main() {
     return;
   }
 
-  const regular = fs.readFileSync(path.join(FONT_DIR, "Pretendard-Regular.ttf"));
-  const bold = fs.readFileSync(path.join(FONT_DIR, "Pretendard-Bold.ttf"));
+  const regular = fs.readFileSync(path.join(FONT_DIR, "SpoqaHanSansNeo-Regular.ttf"));
+  const bold = fs.readFileSync(path.join(FONT_DIR, "SpoqaHanSansNeo-Bold.ttf"));
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
 

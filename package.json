@@ -27,6 +27,7 @@
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-rehype": "^11.1.2",
+    "spoqa-han-sans": "^3.3.0",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
