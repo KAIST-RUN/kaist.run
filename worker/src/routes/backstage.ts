@@ -16,6 +16,7 @@ import {
   upsertContact,
   listBylawsVersions,
   getBylawsVersion,
+  getCurrentBylawsVersion,
   upsertBylawsVersion,
   deleteBylawsVersion,
   type Season,
@@ -545,15 +546,18 @@ backstage.get("/bylaws/new", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
-  const empty: BylawsVersionFormData = {
+  // 새 버전은 보통 직전 버전을 그대로 고쳐서 만드는 개정 작업이라, 빈 폼 대신
+  // 현재(가장 최신) 버전의 본문/개정이력을 그대로 채워서 시작합니다.
+  const current = await getCurrentBylawsVersion(c.env);
+  const prefilled: BylawsVersionFormData = {
     slug: "",
-    title: "RUN 회칙",
+    title: current?.title ?? "RUN 회칙",
     versionLabel: "",
     effectiveDate: "",
-    revisionHistory: [],
-    blocks: [],
+    revisionHistory: current?.revisionHistory ?? [],
+    blocks: current?.blocks ?? [],
   };
-  return c.html(renderBylawsVersionForm("new", empty));
+  return c.html(renderBylawsVersionForm("new", prefilled));
 });
 
 backstage.post("/bylaws/new", async (c) => {

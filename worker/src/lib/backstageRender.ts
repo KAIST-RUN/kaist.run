@@ -179,7 +179,7 @@ const FORM_STYLE = `
   /* 회칙 본문 행: 타입 select + 텍스트 + 위/아래/삭제 버튼. .bs-row-item과 구조가
      달라서(2컬럼 텍스트가 아니라 select+textarea) 별도 클래스를 씁니다. */
   .bylaws-blocks { display: flex; flex-direction: column; gap: 8px; }
-  .bylaws-block-row { display: flex; gap: 8px; align-items: flex-start; }
+  .bylaws-block-row { display: flex; gap: 8px; align-items: flex-start; margin-left: 0; transition: margin-left .1s; }
   .bylaws-block-row select {
     flex: 0 0 150px; font: inherit; font-size: 0.8125rem; padding: 8px; border-radius: 6px;
     border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit;
@@ -197,9 +197,32 @@ const FORM_STYLE = `
   }
   .bylaws-block-actions button:hover { background: rgba(128,128,128,.1); }
   .bylaws-block-actions button[data-move="remove"]:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
+
+  /* 위계(장>절>조>항>호>목) 표현: data-type에 따라 행을 단계적으로 들여쓰고,
+     장/절/조 select는 굵게 표시합니다. select가 change될 때 data-type을 갱신하는
+     스크립트는 BYLAWS_BLOCK_MOVE_SCRIPT 참고. */
+  .bylaws-block-row[data-type="chapter"],
+  .bylaws-block-row[data-type="buchik"] { margin-left: 0; }
+  .bylaws-block-row[data-type="chapter"] select,
+  .bylaws-block-row[data-type="buchik"] select { font-weight: 700; }
+  .bylaws-block-row[data-type="section"] { margin-left: 14px; }
+  .bylaws-block-row[data-type="section"] select { font-weight: 600; }
+  .bylaws-block-row[data-type="article"] { margin-left: 14px; }
+  .bylaws-block-row[data-type="article"] select { font-weight: 600; }
+  .bylaws-block-row[data-type="clause"] { margin-left: 34px; }
+  .bylaws-block-row[data-type="body"] { margin-left: 34px; }
+  .bylaws-block-row[data-type="tagline"] { margin-left: 34px; }
+  .bylaws-block-row[data-type="tagline"] textarea { font-style: italic; }
+  .bylaws-block-row[data-type="item"] { margin-left: 54px; }
+  .bylaws-block-row[data-type="subitem"] { margin-left: 74px; }
   @media (max-width: 640px) {
     .bylaws-block-row { flex-wrap: wrap; }
     .bylaws-block-row select, .bylaws-block-row textarea { flex: 1 1 100%; }
+    .bylaws-block-row[data-type="clause"],
+    .bylaws-block-row[data-type="body"],
+    .bylaws-block-row[data-type="tagline"] { margin-left: 16px; }
+    .bylaws-block-row[data-type="item"] { margin-left: 28px; }
+    .bylaws-block-row[data-type="subitem"] { margin-left: 40px; }
   }
 
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -1026,7 +1049,7 @@ function bylawsBlockRow(type: BylawsBlockType, text: string): string {
   const options = BLOCK_TYPE_OPTIONS.map(
     (o) => `<option value="${o.value}"${o.value === type ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
   ).join("");
-  return `<div class="bylaws-block-row">
+  return `<div class="bylaws-block-row" data-type="${type}">
     <select name="blockType[]">${options}</select>
     <textarea
       name="blockText[]" class="bs-autosize" rows="1"
@@ -1040,8 +1063,10 @@ function bylawsBlockRow(type: BylawsBlockType, text: string): string {
   </div>`;
 }
 
-// ↑/↓/× 버튼은 [data-move]에 이벤트 위임으로 붙습니다 — 행이 add-row 스크립트로
-// 복제/추가돼도(BS_ROWS_SCRIPT) 따로 다시 바인딩할 필요가 없습니다.
+// ↑/↓/× 버튼은 [data-move]에, 유형 select는 change에 이벤트 위임으로 붙습니다 —
+// 행이 add-row 스크립트로 복제/추가돼도(BS_ROWS_SCRIPT) 따로 다시 바인딩할 필요가
+// 없습니다. select의 값이 바뀌면 row의 data-type을 갱신해서 CSS 들여쓰기(위계)가
+// 실시간으로 따라오게 합니다.
 const BYLAWS_BLOCK_MOVE_SCRIPT = `
   (function () {
     var container = document.getElementById("bylaws-blocks");
@@ -1058,6 +1083,11 @@ const BYLAWS_BLOCK_MOVE_SCRIPT = `
       } else if (btn.dataset.move === "down" && row.nextElementSibling) {
         row.parentNode.insertBefore(row.nextElementSibling, row);
       }
+    });
+    container.addEventListener("change", function (e) {
+      if (e.target.tagName !== "SELECT") return;
+      var row = e.target.closest(".bylaws-block-row");
+      if (row) row.dataset.type = e.target.value;
     });
   })();
 `;

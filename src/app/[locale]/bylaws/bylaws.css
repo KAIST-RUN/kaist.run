@@ -4,7 +4,7 @@
 .bylaws-title {
   text-align: center;
   font-weight: 800;
-  font-size: 1.5rem;
+  font-size: 1.625rem;
   margin: 0 0 1.25rem;
 }
 
@@ -14,7 +14,7 @@
 
 .bylaws-history-line {
   text-align: right;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.6;
   opacity: 0.55;
 }
@@ -23,21 +23,21 @@
 .bylaws-buchik {
   text-align: center;
   font-weight: 800;
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   margin: 2.25rem 0 1rem;
 }
 
 .bylaws-section {
   text-align: center;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.0625rem;
   margin: 1.25rem 0 0.6rem;
   opacity: 0.75;
 }
 
 .bylaws-article {
   font-weight: 700;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   margin: 1.1rem 0 0.2rem;
 }
 
@@ -49,7 +49,7 @@
   align-items: baseline;
   text-align: justify;
   line-height: 1.75;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   margin: 0.15rem 0;
 }
 
@@ -86,7 +86,7 @@
 
 .bylaws-tagline {
   text-align: right;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   padding-left: 1.1em;
   margin: 0.15rem 0 0.9rem;
   color: #0e7490;
