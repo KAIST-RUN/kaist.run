@@ -17,7 +17,8 @@ import {
   type Season,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
-import { syncMembersFromSheet, getMembersLastSyncedAt, listMembers } from "../lib/members";
+import { syncMembersFromSheet, connectRosterSheet, getMembersLastSyncedAt, listMembers } from "../lib/members";
+import { getEffectiveSheetId, RosterSheetValidationError } from "../lib/rosterSheet";
 import {
   getApplyFormConfig,
   connectApplyForm,
@@ -381,8 +382,9 @@ backstage.get("/members", async (c) => {
         }
       : null;
   const lastSyncedAt = await getMembersLastSyncedAt(c.env);
+  const sheetId = await getEffectiveSheetId(c.env);
 
-  return c.html(renderMemberList(pageItems, meta, syncResult, lastSyncedAt));
+  return c.html(renderMemberList(pageItems, meta, { syncResult, lastSyncedAt, sheetId }));
 });
 
 // 회원 명단 페이지의 "지금 동기화"(강제 캐싱) 버튼. cron(index.ts의 scheduled, 매시
@@ -401,6 +403,39 @@ backstage.post("/members/sync", async (c) => {
     deleted: String(result.deleted),
   });
   return c.redirect(`/members?${params.toString()}`);
+});
+
+// 역대 회원 시트 연결/교체. 잘못된 링크를 저장해서 로그인이 전부 막히는 일이 없도록,
+// connectRosterSheet가 실제로 동기화까지 성공해야만 저장합니다 — 실패하면 여기서
+// 잡아서 에러 메시지와 함께 목록을 다시 보여줍니다.
+backstage.post("/members/roster-sheet", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  const sheetInput = get("sheetUrl").trim();
+
+  try {
+    const result = await connectRosterSheet(c.env, sheetInput);
+    const params = new URLSearchParams({
+      synced: "1",
+      total: String(result.total),
+      written: String(result.written),
+      deleted: String(result.deleted),
+    });
+    return c.redirect(`/members?${params.toString()}`);
+  } catch (err) {
+    console.error("Failed to connect roster sheet", err);
+    const members = await listMembers(c.env);
+    const { pageItems, meta } = paginateMembers(c, members);
+    const lastSyncedAt = await getMembersLastSyncedAt(c.env);
+    const sheetId = await getEffectiveSheetId(c.env);
+    const message =
+      err instanceof RosterSheetValidationError
+        ? err.message
+        : "시트에 연결하지 못했습니다. 링크와 공유 권한을 확인해 주세요.";
+    return c.html(renderMemberList(pageItems, meta, { lastSyncedAt, sheetId, error: message }), 400);
+  }
 });
 
 // ---------- contact ----------

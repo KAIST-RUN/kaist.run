@@ -79,12 +79,10 @@ const FORM_STYLE = `
        한 줄에 붙어버리지 않도록, 항상 개행해서 보여줍니다. */
     .bs-list li { flex-direction: column; align-items: flex-start; gap: 4px; }
 
-    /* 텍스트 입력 옆 버튼(검색/업로드/연결 등)이 줄바꿈되지 않게 — 입력 필드가
-       먼저 줄어들고, 버튼(아래에서 아이콘 전용으로 바뀜)은 항상 고정 크기를
-       유지합니다. */
-    .bs-upload input[type="text"] { min-width: 0; flex: 1 1 80px; }
-    .bs-search { flex-wrap: nowrap; }
-    .bs-search input[type="text"] { min-width: 0; flex: 1 1 auto; max-width: none; }
+    /* 업로드 목록 한 행: 파일 정보(썸네일+이름)는 항상 자기 줄을 다 차지하고,
+       상대 URL과 삭제 버튼은 항상 그 다음 한 줄에 같이 있도록(URL이 줄어듦). */
+    .bs-upload-open { flex: 1 1 100%; }
+    .bs-upload-list .snippet { width: auto; flex: 1 1 auto; min-width: 0; }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
@@ -180,14 +178,18 @@ const FORM_STYLE = `
   @media (prefers-reduced-motion: no-preference) { .bs-error { animation: bs-fade-up .3s ease both; } }
   @media (max-width: 640px) { .bs-row2 { grid-template-columns: 1fr; } }
 
+  /* 파일 선택 버튼은 항상 자기 줄을 혼자 쓰고, 파일 이름 입력+업로드 버튼이 그
+     다음 줄에서 양 끝까지 채웁니다 — 화면 폭과 무관하게 항상 이 2줄 구성입니다. */
   .bs-upload { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
-  .bs-upload input[type="file"] { font-size: 0.8125rem; color: inherit; }
+  .bs-upload input[type="file"] { font-size: 0.8125rem; color: inherit; flex: 1 1 100%; }
   .bs-upload input[type="file"]::file-selector-button { border: none; margin-right: 12px; background: var(--logo-primary); color: var(--bg); }
   .bs-upload input[type="file"]::file-selector-button:hover { opacity: 0.88; }
-  .bs-upload input[type="text"] { font: inherit; font-size: 0.8125rem; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; min-width: 220px; flex: 1; }
+  .bs-upload input[type="text"] { font: inherit; font-size: 0.8125rem; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; min-width: 0; flex: 1 1 auto; }
   .bs-upload input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
-  .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
-  .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; max-width: 260px; }
+  /* 검색창도 항상 버튼과 한 줄에서 양 끝까지 채웁니다(모바일/PC 공통) — PC에서는
+     max-width로 너무 안 넓어지게만 막아둡니다. */
+  .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
+  .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex: 1 1 auto; min-width: 0; max-width: 420px; }
   .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
   .bs-cancel-btn { border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
@@ -701,12 +703,16 @@ function renderMemberRow(member: MemberRecord): string {
   </li>`;
 }
 
-export function renderMemberList(
-  members: MemberRecord[],
-  meta: MemberListPage,
-  syncResult?: MemberSyncResult | null,
-  lastSyncedAt?: number | null,
-): string {
+export type MemberListOptions = {
+  syncResult?: MemberSyncResult | null;
+  lastSyncedAt?: number | null;
+  sheetId?: string;
+  error?: string;
+};
+
+export function renderMemberList(members: MemberRecord[], meta: MemberListPage, options: MemberListOptions = {}): string {
+  const { syncResult, lastSyncedAt, sheetId, error } = options;
+
   const body =
     members.length === 0
       ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "회원 명단이 비어 있습니다. 아래에서 동기화해 주세요."}</p>`
@@ -730,6 +736,26 @@ export function renderMemberList(
     <p class="bs-eyebrow">Backstage</p>
     <h1>회원 명단</h1>
     <p class="bs-note" style="margin-bottom:16px">Google Sheets 기준으로 KV에 캐싱된 명단이에요.</p>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+
+    <div class="bs-card">
+      <p class="bs-card-title">역대 명단 시트 연결</p>
+      ${
+        sheetId
+          ? `<p class="bs-note">현재 연결된 시트: <code>${escapeHtml(sheetId)}</code> ·
+              <a href="https://docs.google.com/spreadsheets/d/${escapeHtml(sheetId)}/edit" target="_blank" rel="noopener">원본 보기</a></p>`
+          : `<p class="bs-note">연결된 시트가 없습니다.</p>`
+      }
+      <form method="post" action="/members/roster-sheet" style="margin-top:12px;display:flex;gap:10px;flex-wrap:nowrap;">
+        <input
+          type="text" name="sheetUrl" required
+          placeholder="구글 시트 링크 또는 ID"
+          style="flex:1 1 auto;min-width:0;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
+        />
+        <button type="submit" class="bs-submit bs-icon-btn" aria-label="연결">${LINK_ICON_SVG}</button>
+      </form>
+      <p class="bs-note" style="margin-top:8px">연결 시 바로 한 번 동기화를 시도해서, 실제로 접근 가능한 시트일 때만 저장됩니다.</p>
+    </div>
 
     <div class="bs-card">
       <p class="bs-card-title">동기화</p>
@@ -918,7 +944,7 @@ function renderApplyQuestion(q: ApplyFormQuestion): string {
   const choicesHtml = hasChoices
     ? `<div class="bs-rows" style="margin-top:12px;">
         <div class="bs-row-item" style="opacity:.5;font-size:.75rem;">
-          <span style="flex:0 0 160px;">제출 값(고정)</span><span>한국어 라벨</span><span>영어 라벨</span>
+          <span style="flex:0 0 160px;">제출 값(고정)</span><span style="flex:1;min-width:0;">한국어 라벨</span><span style="flex:1;min-width:0;">영어 라벨</span>
         </div>
         ${q.choices
           .map(
@@ -938,11 +964,11 @@ function renderApplyQuestion(q: ApplyFormQuestion): string {
     <div class="bs-row2" style="margin-top:10px;">
       <div class="bs-field">
         <label>질문 (한국어)</label>
-        <input type="text" name="labelKo__${escapeHtml(q.entryId)}" value="${escapeHtml(q.labelKo)}" placeholder="${escapeHtml(q.sourceTitle)}" required />
+        <textarea class="bs-autosize" name="labelKo__${escapeHtml(q.entryId)}" rows="2" placeholder="${escapeHtml(q.sourceTitle)}" required oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(q.labelKo)}</textarea>
       </div>
       <div class="bs-field">
         <label>질문 (영어)</label>
-        <input type="text" name="labelEn__${escapeHtml(q.entryId)}" value="${escapeHtml(q.labelEn)}" placeholder="${escapeHtml(q.sourceTitle)}" required />
+        <textarea class="bs-autosize" name="labelEn__${escapeHtml(q.entryId)}" rows="2" placeholder="${escapeHtml(q.sourceTitle)}" required oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(q.labelEn)}</textarea>
       </div>
     </div>
     ${validationField}
@@ -1011,6 +1037,11 @@ export function renderApplyFormPage(config: ApplyFormConfig | null, options: App
         <button type="submit" class="bs-submit" id="apply-save" disabled>저장</button>
       </div>
     </form>
+    <script>
+      document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
+        el.style.height = el.scrollHeight + "px";
+      });
+    </script>
     <script>${APPLY_FORM_VALIDITY_SCRIPT}</script>
   `,
   );

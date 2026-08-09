@@ -90,12 +90,12 @@ function cell(row: string[], headers: string[], headerName: string): string | nu
 // GOOGLE_SHEET_RANGE가 기본값("Sheet1")에서 안 바뀌었으면, 실제 탭 이름을 몰라도
 // 되도록 스프레드시트 메타데이터에서 첫 번째 탭 이름을 직접 찾아옵니다.
 // 특정 탭/범위를 지정하고 싶으면 GOOGLE_SHEET_RANGE를 그 값으로 바꾸면 됩니다.
-async function resolveRange(env: Env, accessToken: string): Promise<string> {
+async function resolveRange(env: Env, accessToken: string, sheetId: string): Promise<string> {
   if (env.GOOGLE_SHEET_RANGE && env.GOOGLE_SHEET_RANGE !== "Sheet1") {
     return env.GOOGLE_SHEET_RANGE;
   }
 
-  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${env.ROSTER_ALL_TIME_SHEET_ID}?fields=sheets.properties.title`;
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`;
   const res = await fetch(metaUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) {
     throw new Error(`Sheet metadata fetch failed: ${res.status} ${await res.text()}`);
@@ -113,9 +113,9 @@ async function resolveRange(env: Env, accessToken: string): Promise<string> {
 // 읽기에 실패해도, 전체 회원 동기화 자체는 막고 싶지 않아서 빈 목록으로 넘어가고
 // 에러만 로그로 남깁니다 (그 회차는 새로 관리자가 반영 안 될 뿐, 로그인 자체는
 // 계속 됩니다).
-async function fetchAdminDiscordIds(env: Env, accessToken: string): Promise<Set<string>> {
+async function fetchAdminDiscordIds(env: Env, accessToken: string, sheetId: string): Promise<Set<string>> {
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${env.ROSTER_ALL_TIME_SHEET_ID}/values/${encodeURIComponent(ADMIN_SHEET_TAB)}`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ADMIN_SHEET_TAB)}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
     if (!res.ok) {
@@ -147,13 +147,15 @@ async function fetchAdminDiscordIds(env: Env, accessToken: string): Promise<Set<
   }
 }
 
-export async function fetchMembersFromSheet(env: Env): Promise<MemberRecord[]> {
+// sheetId는 호출부(members.ts)가 결정해서 넘겨줍니다 — 이 파일은 D1의 backstage
+// override 여부 같은 건 몰라도 되도록, 순수하게 "이 시트를 읽어온다"는 역할만 합니다.
+export async function fetchMembersFromSheet(env: Env, sheetId: string): Promise<MemberRecord[]> {
   const accessToken = await getAccessToken(env);
   const [range, adminIds] = await Promise.all([
-    resolveRange(env, accessToken),
-    fetchAdminDiscordIds(env, accessToken),
+    resolveRange(env, accessToken, sheetId),
+    fetchAdminDiscordIds(env, accessToken, sheetId),
   ]);
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${env.ROSTER_ALL_TIME_SHEET_ID}/values/${encodeURIComponent(range)}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`;
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },

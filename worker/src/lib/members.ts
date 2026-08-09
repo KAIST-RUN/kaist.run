@@ -1,5 +1,6 @@
 import type { Env } from "../types";
 import { fetchMembersFromSheet, type MemberRecord } from "./googleSheets";
+import { getEffectiveSheetId, setRosterSheetOverride, parseSheetIdOrUrl } from "./rosterSheet";
 
 export type { MemberRecord };
 
@@ -74,8 +75,13 @@ async function removeStaleMembers(env: Env, currentIds: Set<string>): Promise<nu
 // KV 쓰기(write)는 무료 티어에서 하루 1,000회로 제한되어 있어서, 매번 전체를
 // 덮어쓰지 않고 기존 값과 비교해 실제로 바뀐 회원만 씁니다. 대신 회원 수만큼
 // 읽기(read)가 늘어나는데, 읽기는 하루 100,000회로 훨씬 여유롭습니다.
-export async function syncMembersFromSheet(env: Env): Promise<SyncResult> {
-  const members = await fetchMembersFromSheet(env);
+//
+// sheetIdOverride를 안 주면 getEffectiveSheetId(env)로 알아서 결정합니다(D1에
+// backstage로 연결해 둔 시트가 있으면 그걸, 없으면 기존 시크릿). connectRosterSheet가
+// "새 시트가 진짜 동작하는지" 저장 전에 시험해볼 때만 명시적으로 넘겨줍니다.
+export async function syncMembersFromSheet(env: Env, sheetIdOverride?: string): Promise<SyncResult> {
+  const sheetId = sheetIdOverride ?? (await getEffectiveSheetId(env));
+  const members = await fetchMembersFromSheet(env, sheetId);
   const currentIds = new Set(members.map((m) => m.discordId));
 
   const [results, deleted] = await Promise.all([
@@ -96,4 +102,14 @@ export async function syncMembersFromSheet(env: Env): Promise<SyncResult> {
   await env.MEMBERS.put(LAST_SYNCED_KEY, String(Date.now()));
 
   return { total: members.length, written: results.filter(Boolean).length, deleted };
+}
+
+// backstage에서 "역대 명단 시트"를 새로 연결할 때 씁니다. 잘못된 링크를 저장해서
+// 로그인/회원 시스템 전체가 막히는 일이 없도록, 실제로 한 번 동기화까지 성공해야만
+// D1에 override로 저장합니다(실패하면 예외가 그대로 올라가고 아무것도 안 바뀜).
+export async function connectRosterSheet(env: Env, sheetIdOrUrl: string): Promise<SyncResult> {
+  const sheetId = parseSheetIdOrUrl(sheetIdOrUrl);
+  const result = await syncMembersFromSheet(env, sheetId);
+  await setRosterSheetOverride(env, sheetId);
+  return result;
 }
