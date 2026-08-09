@@ -706,10 +706,9 @@ function renderMemberRow(member: MemberRecord): string {
   const metaParts = [member.studentId, member.email, `Discord ${member.discordId}`].filter(
     (v): v is string => Boolean(v),
   );
-  const initial = (member.name || member.discordId).trim().slice(0, 1).toUpperCase();
   const avatar = member.avatarUrl
     ? `<img class="bs-member-avatar" src="${escapeHtml(member.avatarUrl)}" alt="" loading="lazy" />`
-    : `<div class="bs-member-avatar bs-member-avatar-fallback" aria-hidden="true">${escapeHtml(initial)}</div>`;
+    : `<div class="bs-member-avatar bs-member-avatar-fallback" aria-hidden="true">?</div>`;
 
   return `<li>
     ${avatar}
