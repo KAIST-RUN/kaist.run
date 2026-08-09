@@ -1,0 +1,96 @@
+/* src/lib/bylaws.ts가 만들어내는 고정 클래스들에 대응하는 스타일입니다.
+   .claude/preview.py의 인쇄용(pt, A4) CSS를 반응형 웹 화면에 맞게 옮겼습니다. */
+
+.bylaws-title {
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.5rem;
+  margin: 0 0 1.25rem;
+}
+
+.bylaws-history-block {
+  margin: 0 0 2rem;
+}
+
+.bylaws-history-line {
+  text-align: right;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  opacity: 0.55;
+}
+
+.bylaws-chapter,
+.bylaws-buchik {
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.15rem;
+  margin: 2.25rem 0 1rem;
+}
+
+.bylaws-section {
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  margin: 1.25rem 0 0.6rem;
+  opacity: 0.75;
+}
+
+.bylaws-article {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  margin: 1.1rem 0 0.2rem;
+}
+
+.bylaws-clause,
+.bylaws-item,
+.bylaws-subitem,
+.bylaws-body {
+  display: flex;
+  align-items: baseline;
+  text-align: justify;
+  line-height: 1.75;
+  font-size: 0.9375rem;
+  margin: 0.15rem 0;
+}
+
+.bylaws-clause {
+  padding-left: 1.1em;
+}
+.bylaws-item {
+  padding-left: 2.3em;
+}
+.bylaws-subitem {
+  padding-left: 3.5em;
+}
+.bylaws-body {
+  padding-left: 1.1em;
+}
+
+.bylaws-marker {
+  flex: 0 0 auto;
+  margin-right: 0.45em;
+}
+
+.bylaws-ptext {
+  flex: 1 1 auto;
+  text-align: justify;
+}
+
+.bylaws-tag {
+  color: #0e7490;
+  font-weight: 600;
+}
+.dark .bylaws-tag {
+  color: #67e8f9;
+}
+
+.bylaws-tagline {
+  text-align: right;
+  font-size: 0.8125rem;
+  padding-left: 1.1em;
+  margin: 0.15rem 0 0.9rem;
+  color: #0e7490;
+}
+.dark .bylaws-tagline {
+  color: #67e8f9;
+}
