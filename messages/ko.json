@@ -152,7 +152,9 @@
       "title": "회칙을 준비 중입니다",
       "body": "잠시 후 다시 확인해 주세요."
     },
-    "koreanOnlyNotice": "회칙은 현재 한국어로만 제공됩니다."
+    "koreanOnlyNotice": "회칙은 현재 한국어로만 제공됩니다.",
+    "pastVersions": "역대 회칙",
+    "backToCurrent": "← 현행 회칙으로"
   },
   "account": {
     "pageTitle": "마이페이지",

@@ -14,9 +14,12 @@ import {
   deleteArchiveEntry,
   getContact,
   upsertContact,
-  getBylaws,
-  upsertBylaws,
+  listBylawsVersions,
+  getBylawsVersion,
+  upsertBylawsVersion,
+  deleteBylawsVersion,
   type Season,
+  type BylawsBlockType,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
 import { syncMembersFromSheet, connectRosterSheet, getMembersLastSyncedAt, listMembers } from "../lib/members";
@@ -39,7 +42,9 @@ import {
   renderMemberList,
   renderContactForm,
   contactRowsToFormData,
-  renderBylawsForm,
+  renderBylawsList,
+  renderBylawsVersionForm,
+  type BylawsVersionFormData,
   renderUploadList,
   renderApplyFormPage,
   type NoticeFormData,
@@ -508,31 +513,123 @@ backstage.post("/contact", async (c) => {
 });
 
 // ---------- bylaws ----------
+// 역대 회칙 — 버전 목록 + 버전별 편집(장/조/항/호/목 행 에디터). effective_date가
+// 가장 최신인 버전이 kaist.run/bylaws에 뜹니다(별도 "현재 버전" 플래그 없음).
+
+function readBylawsBlocks(body: Record<string, unknown>): { type: BylawsBlockType; text: string }[] {
+  const types = getFormArray(body, "blockType[]");
+  const texts = getFormArray(body, "blockText[]");
+  const blocks: { type: BylawsBlockType; text: string }[] = [];
+  const len = Math.max(types.length, texts.length);
+  for (let i = 0; i < len; i++) {
+    const text = (texts[i] ?? "").trim();
+    if (!text) continue; // 내용 없이 빈 채로 남겨둔 행은 저장 안 함
+    blocks.push({ type: (types[i] ?? "clause") as BylawsBlockType, text });
+  }
+  return blocks;
+}
+
+function readBylawsRevisionHistory(body: Record<string, unknown>) {
+  return zipRows(getFormArray(body, "revDate[]"), getFormArray(body, "revLabel[]")).map((r) => ({ date: r.name, label: r.link }));
+}
 
 backstage.get("/bylaws", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
-  const bylaws = await getBylaws(c.env);
-  const saved = c.req.query("saved") === "1";
-  return c.html(renderBylawsForm(bylaws?.content ?? "", { saved }));
+  const versions = await listBylawsVersions(c.env);
+  return c.html(renderBylawsList(versions));
 });
 
-backstage.post("/bylaws", async (c) => {
+backstage.get("/bylaws/new", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
-  const { get } = await readForm(c);
-  const content = get("content");
+  const empty: BylawsVersionFormData = {
+    slug: "",
+    title: "RUN 회칙",
+    versionLabel: "",
+    effectiveDate: "",
+    revisionHistory: [],
+    blocks: [],
+  };
+  return c.html(renderBylawsVersionForm("new", empty));
+});
 
-  if (!content.trim()) {
-    return c.html(renderBylawsForm(content, { error: "내용을 입력해 주세요." }), 400);
+backstage.post("/bylaws/new", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { body, get } = await readForm(c);
+  const slug = get("slug").trim();
+  const data: BylawsVersionFormData = {
+    slug,
+    title: get("title"),
+    versionLabel: get("versionLabel"),
+    effectiveDate: get("effectiveDate"),
+    revisionHistory: readBylawsRevisionHistory(body),
+    blocks: readBylawsBlocks(body),
+  };
+
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    return c.html(renderBylawsVersionForm("new", data, "slug는 영문 소문자/숫자/하이픈만 가능합니다."), 400);
+  }
+  if (await getBylawsVersion(c.env, slug)) {
+    return c.html(renderBylawsVersionForm("new", data, "이미 존재하는 slug입니다."), 400);
+  }
+  if (data.blocks.length === 0) {
+    return c.html(renderBylawsVersionForm("new", data, "본문 내용을 하나 이상 입력해 주세요."), 400);
   }
 
-  await upsertBylaws(c.env, content);
+  await upsertBylawsVersion(c.env, slug, data);
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
-  return c.redirect("/bylaws?saved=1");
+  return c.redirect("/bylaws");
+});
+
+backstage.get("/bylaws/:slug/edit", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const version = await getBylawsVersion(c.env, c.req.param("slug"));
+  if (!version) return c.html(renderErrorPage("찾을 수 없습니다", "존재하지 않는 회칙 버전입니다."), 404);
+
+  return c.html(renderBylawsVersionForm("edit", version));
+});
+
+backstage.post("/bylaws/:slug/edit", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const slug = c.req.param("slug");
+  const { body, get } = await readForm(c);
+  const data: BylawsVersionFormData = {
+    slug,
+    title: get("title"),
+    versionLabel: get("versionLabel"),
+    effectiveDate: get("effectiveDate"),
+    revisionHistory: readBylawsRevisionHistory(body),
+    blocks: readBylawsBlocks(body),
+  };
+
+  if (data.blocks.length === 0) {
+    return c.html(renderBylawsVersionForm("edit", data, "본문 내용을 하나 이상 입력해 주세요."), 400);
+  }
+
+  await upsertBylawsVersion(c.env, slug, data);
+  c.executionCtx.waitUntil(triggerRebuild(c.env));
+
+  return c.redirect("/bylaws");
+});
+
+backstage.post("/bylaws/:slug/delete", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  await deleteBylawsVersion(c.env, c.req.param("slug"));
+  c.executionCtx.waitUntil(triggerRebuild(c.env));
+
+  return c.redirect("/bylaws");
 });
 
 // ---------- apply form ----------

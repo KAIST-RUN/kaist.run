@@ -1,6 +1,16 @@
 import { page, escapeHtml, formatKstDateTime } from "./emailRender";
 import type { MemberRecord } from "./members";
-import type { NoticeRow, ArchiveRow, ContactRow, ContactInfoRow, ContactSocial, Season } from "./content";
+import type {
+  NoticeRow,
+  ArchiveRow,
+  ContactRow,
+  ContactInfoRow,
+  ContactSocial,
+  Season,
+  BylawsVersionSummary,
+  BylawsBlockType,
+  BylawsRevision,
+} from "./content";
 import type { UploadedFile } from "./uploads";
 import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
 
@@ -165,6 +175,33 @@ const FORM_STYLE = `
   .bs-add-row { align-self: flex-start; margin-top: 6px; border: 1px dashed rgba(128,128,128,.4); background: transparent; color: inherit; transition: background .15s, border-color .15s, color .15s; }
   .bs-add-row:hover { background: rgba(128,128,128,.08); border-color: var(--logo-primary); color: var(--logo-primary); }
   @media (max-width: 560px) { .bs-row-item { flex-wrap: wrap; } .bs-row-item input { min-width: 100%; } }
+
+  /* 회칙 본문 행: 타입 select + 텍스트 + 위/아래/삭제 버튼. .bs-row-item과 구조가
+     달라서(2컬럼 텍스트가 아니라 select+textarea) 별도 클래스를 씁니다. */
+  .bylaws-blocks { display: flex; flex-direction: column; gap: 8px; }
+  .bylaws-block-row { display: flex; gap: 8px; align-items: flex-start; }
+  .bylaws-block-row select {
+    flex: 0 0 150px; font: inherit; font-size: 0.8125rem; padding: 8px; border-radius: 6px;
+    border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit;
+  }
+  .bylaws-block-row textarea {
+    flex: 1; min-width: 0; font: inherit; font-size: 0.875rem; line-height: 1.5; padding: 8px 10px;
+    border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04);
+    color: inherit; resize: none; overflow: hidden; box-sizing: border-box;
+  }
+  .bylaws-block-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .bylaws-block-actions button {
+    width: 28px; height: 34px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3);
+    background: transparent; color: inherit; cursor: pointer; font-size: 0.8125rem; line-height: 1;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .bylaws-block-actions button:hover { background: rgba(128,128,128,.1); }
+  .bylaws-block-actions button[data-move="remove"]:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
+  @media (max-width: 640px) {
+    .bylaws-block-row { flex-wrap: wrap; }
+    .bylaws-block-row select, .bylaws-block-row textarea { flex: 1 1 100%; }
+  }
+
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .bs-check { flex-direction: row; align-items: center; gap: 8px; }
   .bs-check input { width: auto; accent-color: var(--logo-primary); }
@@ -556,13 +593,15 @@ function archiveRowsField(
     </div>`;
 }
 
-const ARCHIVE_ROWS_SCRIPT = `
-  document.querySelectorAll(".bs-add-row").forEach((btn) => {
+// [data-rows]/[data-template]로 표시해둔 아무 "+ 추가" 버튼에나 다 먹습니다 — 아카이브
+// 자료/저지 행뿐 아니라 회칙 개정이력 행에서도 그대로 재사용합니다.
+const BS_ROWS_SCRIPT = `
+  document.querySelectorAll(".bs-add-row[data-rows]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const rows = document.getElementById(btn.dataset.rows);
       const tpl = document.getElementById(btn.dataset.template);
       const clone = tpl.content.cloneNode(true);
-      const row = clone.querySelector(".bs-row-item");
+      const row = clone.firstElementChild;
       if (row) row.classList.add("bs-row-enter");
       rows.appendChild(clone);
     });
@@ -646,7 +685,7 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
           )}
         </div>
       </div>
-      <script>${ARCHIVE_ROWS_SCRIPT}</script>
+      <script>${BS_ROWS_SCRIPT}</script>
 
       <div class="bs-card">
         <p class="bs-card-title">본문 (마크다운)</p>
@@ -924,42 +963,194 @@ export function renderContactForm(data: ContactFormData, error?: string): string
 }
 
 // ---------- bylaws ----------
-// 번역이 없는 한국어 단일 문서라 로케일 구분 없이 원문 텍스트 하나만 다룹니다.
-// 문법(제목/개정이력/장·조·항·호·목 자동 채번)은 .claude/preview.py와
-// src/lib/bylaws.ts(메인 사이트 렌더러)를 참고하세요 — 큰 구조를 바꾸려면 세 곳
-// (.claude/preview.py, src/lib/bylaws.ts, 여기 안내 문구)을 같이 맞춰야 합니다.
+// 역대 회칙(버전 여러 개, effective_date가 가장 최신인 게 사이트에 뜨는 "현재 버전")을
+// 다룹니다. 본문은 텍스트가 아니라 "장/조/항/호/목 타입 + 텍스트" 행(row)들의
+// 순서입니다 — 번호는 src/lib/bylaws.ts(메인 사이트 렌더러)가 그 순서를 보고 매번
+// 새로 계산하므로, backstage에서는 dash 문법 없이 행을 추가/삭제/이동만 하면 됩니다.
 
-export type BylawsFormOptions = { saved?: boolean; error?: string };
+export function renderBylawsList(versions: BylawsVersionSummary[]): string {
+  const items =
+    versions.length === 0
+      ? `<p class="empty">등록된 회칙이 없습니다.</p>`
+      : `<ul class="bs-list">
+        ${versions
+          .map(
+            (v, i) => `<li>
+              <span>
+                ${i === 0 ? '<span class="pin">⭐</span>' : ""}
+                <a class="title" href="/bylaws/${encodeURIComponent(v.slug)}/edit">${escapeHtml(v.title)} — ${escapeHtml(v.versionLabel)}</a>
+              </span>
+              <span class="meta">${escapeHtml(v.effectiveDate)} · ${escapeHtml(v.slug)}</span>
+            </li>`,
+          )
+          .join("\n")}
+      </ul>`;
 
-export function renderBylawsForm(content: string, options: BylawsFormOptions = {}): string {
-  const { saved, error } = options;
   return shell(
-    "회칙 편집",
+    "회칙 관리",
     "bylaws",
     `
     <p class="bs-eyebrow">Backstage</p>
-    <h1>회칙</h1>
-    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
-    ${saved ? `<p class="bs-note" style="color:var(--logo-primary);font-weight:700;margin-bottom:12px;">저장되었습니다 — 잠시 후 사이트에 반영됩니다.</p>` : ""}
+    <h1>역대 회칙</h1>
     <p class="bs-note" style="margin-bottom:16px">
-      첫 줄은 제목, 둘째 줄은 <code>[날짜 날짜 ...]</code> 개정이력. 줄 앞의 '-' 개수로
-      장(-)/조(--)/항(---)/호(----)/목(-----)이 자동 채번됩니다. <code>&lt;개정 N&gt;</code>처럼
-      쓰면 개정이력의 N번째 날짜가 채워집니다(생략하면 최신 날짜).
-      <a href="https://kaist.run/bylaws" target="_blank" rel="noopener">사이트에서 미리보기</a>
+      시행일(⭐표시)이 가장 최신인 버전이 <a href="https://kaist.run/bylaws" target="_blank" rel="noopener">kaist.run/bylaws</a>에 뜹니다.
+      나머지는 그 페이지의 "역대 회칙" 목록에서 링크로 연결됩니다.
     </p>
-    <form class="bs-form" method="post" action="/bylaws">
-      <div class="bs-field">
-        <textarea name="content" class="bs-autosize" rows="30" required>${escapeHtml(content)}</textarea>
+    <a class="bs-new" href="/bylaws/new">+ 새 버전 추가</a>
+    ${items}
+  `,
+  );
+}
+
+const BLOCK_TYPE_OPTIONS: { value: BylawsBlockType; label: string }[] = [
+  { value: "chapter", label: "장 (제N장)" },
+  { value: "section", label: "절 (제N절)" },
+  { value: "article", label: "조 (제N조)" },
+  { value: "buchik", label: "부칙 표제" },
+  { value: "clause", label: "항 (①②③)" },
+  { value: "item", label: "호 (1. 2. 3.)" },
+  { value: "subitem", label: "목 (가. 나. 다.)" },
+  { value: "body", label: "본문 (번호 없음)" },
+  { value: "tagline", label: "강조 문구 (우측 정렬)" },
+];
+
+function bylawsRevisionRow(dateVal: string, labelVal: string): string {
+  return `<div class="bs-row-item">
+    <input type="text" name="revDate[]" value="${escapeHtml(dateVal)}" placeholder="예: 2017. 03. 18." />
+    <input type="text" name="revLabel[]" value="${escapeHtml(labelVal)}" placeholder="제정 / 일부개정" />
+    <button type="button" class="bs-row-remove" aria-label="삭제" onclick="this.closest('.bs-row-item').remove()">×</button>
+  </div>`;
+}
+
+function bylawsBlockRow(type: BylawsBlockType, text: string): string {
+  const options = BLOCK_TYPE_OPTIONS.map(
+    (o) => `<option value="${o.value}"${o.value === type ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
+  ).join("");
+  return `<div class="bylaws-block-row">
+    <select name="blockType[]">${options}</select>
+    <textarea
+      name="blockText[]" class="bs-autosize" rows="1"
+      oninput="this.style.height='';this.style.height=this.scrollHeight+'px'"
+    >${escapeHtml(text)}</textarea>
+    <div class="bylaws-block-actions">
+      <button type="button" data-move="up" aria-label="위로 이동">↑</button>
+      <button type="button" data-move="down" aria-label="아래로 이동">↓</button>
+      <button type="button" data-move="remove" aria-label="삭제">×</button>
+    </div>
+  </div>`;
+}
+
+// ↑/↓/× 버튼은 [data-move]에 이벤트 위임으로 붙습니다 — 행이 add-row 스크립트로
+// 복제/추가돼도(BS_ROWS_SCRIPT) 따로 다시 바인딩할 필요가 없습니다.
+const BYLAWS_BLOCK_MOVE_SCRIPT = `
+  (function () {
+    var container = document.getElementById("bylaws-blocks");
+    if (!container) return;
+    container.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-move]");
+      if (!btn) return;
+      var row = btn.closest(".bylaws-block-row");
+      if (!row) return;
+      if (btn.dataset.move === "remove") {
+        row.remove();
+      } else if (btn.dataset.move === "up" && row.previousElementSibling) {
+        row.parentNode.insertBefore(row, row.previousElementSibling);
+      } else if (btn.dataset.move === "down" && row.nextElementSibling) {
+        row.parentNode.insertBefore(row.nextElementSibling, row);
+      }
+    });
+  })();
+`;
+
+export type BylawsVersionFormData = {
+  slug: string;
+  title: string;
+  versionLabel: string;
+  effectiveDate: string;
+  revisionHistory: BylawsRevision[];
+  blocks: { type: BylawsBlockType; text: string }[];
+};
+
+export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersionFormData, error?: string): string {
+  const action = mode === "new" ? "/bylaws/new" : `/bylaws/${escapeHtml(data.slug)}/edit`;
+  const revisionRows = (data.revisionHistory.length > 0 ? data.revisionHistory : [{ date: "", label: "" }])
+    .map((r) => bylawsRevisionRow(r.date, r.label))
+    .join("");
+  const blockRows = (data.blocks.length > 0 ? data.blocks : [{ type: "chapter" as BylawsBlockType, text: "" }])
+    .map((b) => bylawsBlockRow(b.type, b.text))
+    .join("");
+
+  return shell(
+    mode === "new" ? "새 회칙 버전" : `회칙 수정 — ${data.versionLabel}`,
+    "bylaws",
+    `
+    <p class="bs-eyebrow">Backstage · 회칙</p>
+    <h1>${mode === "new" ? "새 회칙 버전 추가" : "회칙 버전 수정"}</h1>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    <form class="bs-form" method="post" action="${action}">
+      <div class="bs-card">
+        <p class="bs-card-title">기본 정보</p>
+        <div class="bs-field">
+          <label>slug (URL에 쓰임, 영문 소문자/숫자/하이픈 — 예: 2017-founding)</label>
+          <input type="text" name="slug" value="${escapeHtml(data.slug)}" pattern="[a-z0-9-]+" required ${mode === "edit" ? "readonly" : ""} />
+        </div>
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>제목 (문서 맨 위, 예: RUN 회칙)</label>
+            <input type="text" name="title" value="${escapeHtml(data.title)}" required />
+          </div>
+          <div class="bs-field">
+            <label>버전 이름 (목록에 표시 — 예: 2017년 제정, 현행(2026년 개정))</label>
+            <input type="text" name="versionLabel" value="${escapeHtml(data.versionLabel)}" required />
+          </div>
+        </div>
+        <div class="bs-field" style="margin-top:18px">
+          <label>시행일 — 가장 최신인 버전이 kaist.run/bylaws에 표시됩니다</label>
+          <input type="date" name="effectiveDate" value="${escapeHtml(data.effectiveDate)}" required />
+        </div>
       </div>
+
+      <div class="bs-card">
+        <p class="bs-card-title">개정이력 (문서 상단에 우측 정렬로 표시)</p>
+        <div class="bs-rows" id="bylaws-revisions">${revisionRows}</div>
+        <button type="button" class="bs-add-row" data-rows="bylaws-revisions" data-template="bylaws-revision-template">+ 추가</button>
+        <template id="bylaws-revision-template">${bylawsRevisionRow("", "")}</template>
+        <p class="bs-note" style="margin-top:8px">본문에서 <code>&lt;개정 2&gt;</code>처럼 쓰면 여기 2번째 날짜로 채워집니다(생략하면 최신 날짜).</p>
+      </div>
+
+      <div class="bs-card">
+        <p class="bs-card-title">본문</p>
+        <p class="bs-note" style="margin-bottom:12px">
+          행마다 종류(장/절/조/항/호/목/본문/강조 문구)를 고르고 내용을 입력하세요. 번호(제1장, ①, 1. 등)는
+          이 순서를 보고 자동으로 매겨집니다. <code>&lt;개정 N&gt;</code>/<code>[본조신설 N]</code>처럼
+          쓰면 위 개정이력의 N번째 날짜로 자동 치환됩니다.
+        </p>
+        <div class="bylaws-blocks" id="bylaws-blocks">${blockRows}</div>
+        <button type="button" class="bs-add-row" data-rows="bylaws-blocks" data-template="bylaws-block-template">+ 문단 추가</button>
+        <template id="bylaws-block-template">${bylawsBlockRow("clause", "")}</template>
+      </div>
+      <script>${BS_ROWS_SCRIPT}</script>
+      <script>${BYLAWS_BLOCK_MOVE_SCRIPT}</script>
+      <script>
+        document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
+          el.style.height = el.scrollHeight + "px";
+        });
+      </script>
+
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>
+        ${mode === "edit" ? `<a href="/bylaws" class="bs-cancel">취소</a>` : ""}
       </div>
     </form>
-    <script>
-      document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
-        el.style.height = el.scrollHeight + "px";
-      });
-    </script>
+    ${
+      mode === "edit"
+        ? `<div class="bs-danger-zone">
+            <form method="post" action="/bylaws/${escapeHtml(data.slug)}/delete" onsubmit="return confirm('정말 이 버전을 삭제할까요?')">
+              <button type="submit" class="bs-danger">이 버전 삭제</button>
+            </form>
+          </div>`
+        : ""
+    }
   `,
   );
 }

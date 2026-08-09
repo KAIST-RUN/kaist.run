@@ -42,12 +42,27 @@ export type ContactRow = {
   updated_at: string;
 };
 
-// 번역이 없는 한국어 단일 문서라 apply_form처럼 locale 구분 없이 한 행(id=1)만
-// 씁니다. content 문법은 src/lib/bylaws.ts(메인 사이트)가 파싱합니다.
-export type BylawsRow = {
-  content: string;
+// backstage가 +버튼으로 만드는 구조화된 문단 목록입니다(원문 텍스트가 아니라
+// "타입 + 텍스트" 순서). 번호는 저장 안 하고 src/lib/bylaws.ts가 렌더링할 때
+// 순서를 보고 매번 새로 계산합니다.
+export type BylawsBlockType = "chapter" | "section" | "article" | "buchik" | "clause" | "item" | "subitem" | "body" | "tagline";
+export type BylawsBlock = { type: BylawsBlockType; text: string };
+export type BylawsRevision = { date: string; label: string };
+
+// 번역이 없는 한국어 문서라 locale 구분이 없습니다. "역대 회칙"이라 slug로 여러
+// 버전(2017년 제정, 2026년 개정 ...)을 두고, effective_date가 가장 최신인 게
+// "현재 버전"입니다(별도 플래그 없음 — 새 버전을 추가하기만 하면 자동으로 넘어감).
+export type BylawsVersionRow = {
+  slug: string;
+  title: string;
+  versionLabel: string;
+  effectiveDate: string;
+  revisionHistory: BylawsRevision[];
+  blocks: BylawsBlock[];
   updated_at: string;
 };
+
+export type BylawsVersionSummary = Omit<BylawsVersionRow, "revisionHistory" | "blocks">;
 
 // D1에서 그대로 나온 row(불리언/JSON이 문자열)를 앱에서 쓰는 타입으로 바꿉니다.
 type RawNoticeRow = Omit<NoticeRow, "pinned"> & { pinned: number };
@@ -201,16 +216,78 @@ export async function upsertContact(env: Env, locale: Locale, input: ContactInpu
 
 // ---------- bylaws ----------
 
-export async function getBylaws(env: Env): Promise<BylawsRow | null> {
-  const row = await env.CONTENT_DB.prepare("SELECT content, updated_at FROM bylaws_page WHERE id = 1").first<BylawsRow>();
-  return row ?? null;
+type RawBylawsVersionRow = {
+  slug: string;
+  title: string;
+  version_label: string;
+  effective_date: string;
+  revision_history: string;
+  blocks: string;
+  updated_at: string;
+};
+type RawBylawsVersionSummaryRow = Omit<RawBylawsVersionRow, "revision_history" | "blocks">;
+
+function fromRawBylawsVersion(row: RawBylawsVersionRow): BylawsVersionRow {
+  return {
+    slug: row.slug,
+    title: row.title,
+    versionLabel: row.version_label,
+    effectiveDate: row.effective_date,
+    revisionHistory: JSON.parse(row.revision_history),
+    blocks: JSON.parse(row.blocks),
+    updated_at: row.updated_at,
+  };
 }
 
-export async function upsertBylaws(env: Env, content: string): Promise<void> {
+function fromRawBylawsVersionSummary(row: RawBylawsVersionSummaryRow): BylawsVersionSummary {
+  return {
+    slug: row.slug,
+    title: row.title,
+    versionLabel: row.version_label,
+    effectiveDate: row.effective_date,
+    updated_at: row.updated_at,
+  };
+}
+
+// 최신순(effective_date DESC) — 목록 화면과 "현재 버전 = 첫 번째" 판단 둘 다 이 순서를 씁니다.
+export async function listBylawsVersions(env: Env): Promise<BylawsVersionSummary[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    "SELECT slug, title, version_label, effective_date, updated_at FROM bylaws_version ORDER BY effective_date DESC",
+  ).all<RawBylawsVersionSummaryRow>();
+  return results.map(fromRawBylawsVersionSummary);
+}
+
+export async function getBylawsVersion(env: Env, slug: string): Promise<BylawsVersionRow | null> {
+  const row = await env.CONTENT_DB.prepare("SELECT * FROM bylaws_version WHERE slug = ?1").bind(slug).first<RawBylawsVersionRow>();
+  return row ? fromRawBylawsVersion(row) : null;
+}
+
+// 별도 "현재 버전" 플래그가 없으므로, effective_date가 가장 최신인 행을 그대로 씁니다.
+export async function getCurrentBylawsVersion(env: Env): Promise<BylawsVersionRow | null> {
+  const row = await env.CONTENT_DB.prepare("SELECT * FROM bylaws_version ORDER BY effective_date DESC LIMIT 1").first<RawBylawsVersionRow>();
+  return row ? fromRawBylawsVersion(row) : null;
+}
+
+export type BylawsVersionInput = {
+  title: string;
+  versionLabel: string;
+  effectiveDate: string;
+  revisionHistory: BylawsRevision[];
+  blocks: BylawsBlock[];
+};
+
+export async function upsertBylawsVersion(env: Env, slug: string, input: BylawsVersionInput): Promise<void> {
   await env.CONTENT_DB.prepare(
-    `INSERT INTO bylaws_page (id, content, updated_at) VALUES (1, ?1, datetime('now'))
-     ON CONFLICT (id) DO UPDATE SET content = excluded.content, updated_at = datetime('now')`,
+    `INSERT INTO bylaws_version (slug, title, version_label, effective_date, revision_history, blocks, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+     ON CONFLICT (slug) DO UPDATE SET
+       title = excluded.title, version_label = excluded.version_label, effective_date = excluded.effective_date,
+       revision_history = excluded.revision_history, blocks = excluded.blocks, updated_at = datetime('now')`,
   )
-    .bind(content)
+    .bind(slug, input.title, input.versionLabel, input.effectiveDate, JSON.stringify(input.revisionHistory), JSON.stringify(input.blocks))
     .run();
+}
+
+export async function deleteBylawsVersion(env: Env, slug: string): Promise<void> {
+  await env.CONTENT_DB.prepare("DELETE FROM bylaws_version WHERE slug = ?1").bind(slug).run();
 }

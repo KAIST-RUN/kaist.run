@@ -6,7 +6,9 @@ import {
   listArchiveEntries,
   getArchiveEntry,
   getContact,
-  getBylaws,
+  listBylawsVersions,
+  getBylawsVersion,
+  getCurrentBylawsVersion,
   type Locale,
   type Season,
 } from "../lib/content";
@@ -64,10 +66,22 @@ content.get("/contact/:locale", async (c) => {
   return c.json(contact);
 });
 
-// apply-form과 마찬가지로 :locale이 없는 단일 엔드포인트입니다 — 번역이 없는
-// 한국어 단일 문서라서요.
+// 역대 회칙 — :locale이 없습니다(번역이 없는 한국어 문서라서요, apply-form과 동일 이유).
+// "현재 버전"(effective_date 최신)만 보여주는 /bylaws 페이지용, 목록용, 특정
+// 버전(과거 버전 포함)용으로 세 개입니다. /bylaws-versions를 먼저 등록해야
+// /bylaws/:slug가 "versions"를 slug로 잘못 먹지 않습니다.
 content.get("/bylaws", async (c) => {
-  const bylaws = await getBylaws(c.env);
+  const bylaws = await getCurrentBylawsVersion(c.env);
+  if (!bylaws) return c.notFound();
+  return c.json(bylaws);
+});
+
+content.get("/bylaws-versions", async (c) => {
+  return c.json(await listBylawsVersions(c.env));
+});
+
+content.get("/bylaws/:slug", async (c) => {
+  const bylaws = await getBylawsVersion(c.env, c.req.param("slug"));
   if (!bylaws) return c.notFound();
   return c.json(bylaws);
 });
