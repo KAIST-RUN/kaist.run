@@ -42,6 +42,13 @@ export type ContactRow = {
   updated_at: string;
 };
 
+// 번역이 없는 한국어 단일 문서라 apply_form처럼 locale 구분 없이 한 행(id=1)만
+// 씁니다. content 문법은 src/lib/bylaws.ts(메인 사이트)가 파싱합니다.
+export type BylawsRow = {
+  content: string;
+  updated_at: string;
+};
+
 // D1에서 그대로 나온 row(불리언/JSON이 문자열)를 앱에서 쓰는 타입으로 바꿉니다.
 type RawNoticeRow = Omit<NoticeRow, "pinned"> & { pinned: number };
 type RawArchiveRow = Omit<ArchiveRow, "resources" | "judges"> & { resources: string; judges: string };
@@ -189,5 +196,21 @@ export async function upsertContact(env: Env, locale: Locale, input: ContactInpu
        content = excluded.content, updated_at = datetime('now')`,
   )
     .bind(locale, input.title, JSON.stringify(input.info), JSON.stringify(input.socials), input.content)
+    .run();
+}
+
+// ---------- bylaws ----------
+
+export async function getBylaws(env: Env): Promise<BylawsRow | null> {
+  const row = await env.CONTENT_DB.prepare("SELECT content, updated_at FROM bylaws_page WHERE id = 1").first<BylawsRow>();
+  return row ?? null;
+}
+
+export async function upsertBylaws(env: Env, content: string): Promise<void> {
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO bylaws_page (id, content, updated_at) VALUES (1, ?1, datetime('now'))
+     ON CONFLICT (id) DO UPDATE SET content = excluded.content, updated_at = datetime('now')`,
+  )
+    .bind(content)
     .run();
 }

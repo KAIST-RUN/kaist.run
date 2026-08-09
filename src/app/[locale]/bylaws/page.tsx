@@ -1,17 +1,8 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { setRequestLocale } from "next-intl/server";
+import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
+import { getBylaws } from "@/lib/content/bylaws";
 import { renderBylaws } from "@/lib/bylaws";
 import "./bylaws.css";
-
-// 지금은 회칙 원문을 리포에 커밋된 텍스트 파일로 관리합니다(공지/연락처처럼
-// D1 + backstage 편집 UI로 옮기는 건 다음 단계 — 우선 사이트에 보이는 탭부터).
-// .claude/preview.py로 미리보기하며 편집한 뒤 이 파일에 반영하면 됩니다.
-async function readBylawsSource(): Promise<string> {
-  const filePath = path.join(process.cwd(), "content", "bylaws", "ko.txt");
-  return fs.readFile(filePath, "utf-8");
-}
 
 export default async function BylawsPage({
   params,
@@ -20,15 +11,29 @@ export default async function BylawsPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale as Locale);
+  const t = await getTranslations({ locale: locale as Locale, namespace: "bylaws" });
 
-  const raw = await readBylawsSource();
-  const html = renderBylaws(raw);
+  // null이면 "backstage에서 아직 회칙을 한 번도 저장 안 한 상태" — apply 폼 페이지와
+  // 같은 원칙으로 404 대신 안내 문구를 보여줍니다. 네트워크 오류 등 진짜 fetch 실패는
+  // fetchContentJson이 그대로 throw해서 빌드 자체가 실패합니다.
+  const bylaws = await getBylaws();
+
+  if (!bylaws) {
+    return (
+      <main className="mx-auto flex min-h-full max-w-2xl flex-col items-center justify-center px-6 py-24 text-center">
+        <h1 className="text-2xl font-bold sm:text-3xl">{t("notReady.title")}</h1>
+        <p className="mt-3 max-w-sm text-sm leading-relaxed opacity-70 sm:text-base">{t("notReady.body")}</p>
+      </main>
+    );
+  }
+
+  const html = renderBylaws(bylaws.content);
 
   return (
     <main className="animate-fade-in-up mx-auto max-w-2xl px-6 py-12 sm:px-10 sm:py-16 lg:max-w-3xl lg:px-12">
       {locale !== "ko" && (
         <p className="mb-8 rounded-xl border border-black/10 p-4 text-sm opacity-70 dark:border-white/15">
-          The club bylaws are currently only available in Korean.
+          {t("koreanOnlyNotice")}
         </p>
       )}
       <div dangerouslySetInnerHTML={{ __html: html }} />

@@ -14,6 +14,8 @@ import {
   deleteArchiveEntry,
   getContact,
   upsertContact,
+  getBylaws,
+  upsertBylaws,
   type Season,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
@@ -37,6 +39,7 @@ import {
   renderMemberList,
   renderContactForm,
   contactRowsToFormData,
+  renderBylawsForm,
   renderUploadList,
   renderApplyFormPage,
   type NoticeFormData,
@@ -502,6 +505,34 @@ backstage.post("/contact", async (c) => {
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/contact");
+});
+
+// ---------- bylaws ----------
+
+backstage.get("/bylaws", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const bylaws = await getBylaws(c.env);
+  const saved = c.req.query("saved") === "1";
+  return c.html(renderBylawsForm(bylaws?.content ?? "", { saved }));
+});
+
+backstage.post("/bylaws", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  const content = get("content");
+
+  if (!content.trim()) {
+    return c.html(renderBylawsForm(content, { error: "내용을 입력해 주세요." }), 400);
+  }
+
+  await upsertBylaws(c.env, content);
+  c.executionCtx.waitUntil(triggerRebuild(c.env));
+
+  return c.redirect("/bylaws?saved=1");
 });
 
 // ---------- apply form ----------

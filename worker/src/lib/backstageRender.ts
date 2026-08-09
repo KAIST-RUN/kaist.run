@@ -291,6 +291,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
       ${navLink("/archive", "대회 아카이브", active === "archive")}
       ${navLink("/members", "회원 명단", active === "members")}
       ${navLink("/contact", "연락처", active === "contact")}
+      ${navLink("/bylaws", "회칙", active === "bylaws")}
       ${navLink("/apply", "지원 폼", active === "apply")}
       ${navLink("/uploads", "업로드", active === "uploads")}
       ${drawerLogout}
@@ -918,6 +919,47 @@ export function renderContactForm(data: ContactFormData, error?: string): string
         <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
+  `,
+  );
+}
+
+// ---------- bylaws ----------
+// 번역이 없는 한국어 단일 문서라 로케일 구분 없이 원문 텍스트 하나만 다룹니다.
+// 문법(제목/개정이력/장·조·항·호·목 자동 채번)은 .claude/preview.py와
+// src/lib/bylaws.ts(메인 사이트 렌더러)를 참고하세요 — 큰 구조를 바꾸려면 세 곳
+// (.claude/preview.py, src/lib/bylaws.ts, 여기 안내 문구)을 같이 맞춰야 합니다.
+
+export type BylawsFormOptions = { saved?: boolean; error?: string };
+
+export function renderBylawsForm(content: string, options: BylawsFormOptions = {}): string {
+  const { saved, error } = options;
+  return shell(
+    "회칙 편집",
+    "bylaws",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>회칙</h1>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    ${saved ? `<p class="bs-note" style="color:var(--logo-primary);font-weight:700;margin-bottom:12px;">저장되었습니다 — 잠시 후 사이트에 반영됩니다.</p>` : ""}
+    <p class="bs-note" style="margin-bottom:16px">
+      첫 줄은 제목, 둘째 줄은 <code>[날짜 날짜 ...]</code> 개정이력. 줄 앞의 '-' 개수로
+      장(-)/조(--)/항(---)/호(----)/목(-----)이 자동 채번됩니다. <code>&lt;개정 N&gt;</code>처럼
+      쓰면 개정이력의 N번째 날짜가 채워집니다(생략하면 최신 날짜).
+      <a href="https://kaist.run/bylaws" target="_blank" rel="noopener">사이트에서 미리보기</a>
+    </p>
+    <form class="bs-form" method="post" action="/bylaws">
+      <div class="bs-field">
+        <textarea name="content" class="bs-autosize" rows="30" required>${escapeHtml(content)}</textarea>
+      </div>
+      <div class="bs-actions">
+        <button type="submit" class="bs-submit">저장</button>
+      </div>
+    </form>
+    <script>
+      document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
+        el.style.height = el.scrollHeight + "px";
+      });
+    </script>
   `,
   );
 }

@@ -6,6 +6,7 @@ import {
   listArchiveEntries,
   getArchiveEntry,
   getContact,
+  getBylaws,
   type Locale,
   type Season,
 } from "../lib/content";
@@ -61,6 +62,14 @@ content.get("/contact/:locale", async (c) => {
   const contact = await getContact(c.env, locale);
   if (!contact) return c.notFound();
   return c.json(contact);
+});
+
+// apply-form과 마찬가지로 :locale이 없는 단일 엔드포인트입니다 — 번역이 없는
+// 한국어 단일 문서라서요.
+content.get("/bylaws", async (c) => {
+  const bylaws = await getBylaws(c.env);
+  if (!bylaws) return c.notFound();
+  return c.json(bylaws);
 });
 
 // notices/archive/contact와 달리 :locale이 없는 단일 엔드포인트입니다 — 문항 구조

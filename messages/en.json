@@ -147,6 +147,13 @@
     "successBody": "Thanks for your interest in RUN. We'll get back to you after reviewing your application.",
     "backHome": "Back to home"
   },
+  "bylaws": {
+    "notReady": {
+      "title": "The club bylaws are being set up",
+      "body": "Please check back again shortly."
+    },
+    "koreanOnlyNotice": "The club bylaws are currently only available in Korean."
+  },
   "account": {
     "pageTitle": "My page",
     "loading": "Loading your account...",
