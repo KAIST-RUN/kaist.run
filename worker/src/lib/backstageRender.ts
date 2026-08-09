@@ -2075,6 +2075,7 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
     `
     <p class="bs-eyebrow">Backstage · 회칙</p>
     <h1>${mode === "new" ? "새 회칙 버전 추가" : "회칙 버전 수정"}</h1>
+    <p class="bs-note">⚠️ 이 탭은 수정이 필요함</p>
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
     <form class="bs-form" method="post" action="${action}">
       <div class="bs-card">
