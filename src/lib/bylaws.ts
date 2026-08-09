@@ -1,20 +1,16 @@
-// 회칙은 backstage에서 "장/절/조/항/호/목" 타입을 고른 행(row)들의 순서로 편집합니다
-// (worker/src/lib/backstageRender.ts의 +버튼 에디터). 번호(제1장, ①, 1. 등)는 여기서
-// 그 순서를 보고 매번 새로 계산합니다 — 저장된 텍스트에 번호가 박혀있지 않으므로
-// 중간에 행을 추가/삭제해도 뒤의 번호가 자동으로 밀립니다.
+// 회칙은 backstage에서 "장/조/항/호/목" 타입 노드를 중첩된 트리로 편집합니다
+// (worker/src/lib/backstageRender.ts의 트리 에디터 — 어디에 추가하는지가 곧 위계입니다).
+// 저장은 그 트리를 문서 순서대로 평평하게 펼친 배열이고(worker에서 flatten),
+// 번호(제1장, ①, 1. 등)는 여기서 그 순서를 보고 매번 새로 계산합니다 — 저장된
+// 텍스트에 번호가 박혀있지 않으므로 트리에서 항목을 추가/삭제해도 뒤의 번호가
+// 자동으로 밀립니다.
+//
+// "절"과 "강조문구"는 RUN 회칙에 실제로 쓰인 적이 없어서 뺐고, "본문"은 별도
+// 타입이 아니라 장/부칙/조/항 자신에게 선택적으로 붙는 문단(body 필드)입니다.
 
-export type BylawsBlockType =
-  | "chapter" // 장 — "제N장"
-  | "section" // 절 — "제N절" (장이 바뀌면 리셋)
-  | "article" // 조 — "제N조(...)" (장/절이 바뀌어도 리셋 안 됨, 문서 전체 연속)
-  | "buchik" // 부칙 표제(장급, 가운데 정렬)
-  | "clause" // 항 — ①②③... (조가 바뀌면 리셋)
-  | "item" // 호 — 1. 2. 3. ... (항이 바뀌면 리셋)
-  | "subitem" // 목 — 가. 나. 다. ... (호가 바뀌면 리셋)
-  | "body" // 번호 없는 문단(조 바로 아래 한 문단짜리 조문 등)
-  | "tagline"; // [본조신설 ...] 같은 우측 정렬 강조 문구
+export type BylawsBlockType = "chapter" | "article" | "buchik" | "clause" | "item" | "subitem";
 
-export type BylawsBlock = { type: BylawsBlockType; text: string };
+export type BylawsBlock = { type: BylawsBlockType; text: string; body?: string };
 export type BylawsRevision = { date: string; label: string };
 
 export type BylawsDocument = {
@@ -22,6 +18,9 @@ export type BylawsDocument = {
   revisionHistory: BylawsRevision[];
   blocks: BylawsBlock[];
 };
+
+// body(번호 없는 문단)를 선택적으로 가질 수 있는 타입들.
+const BODY_ELIGIBLE = new Set<BylawsBlockType>(["chapter", "buchik", "article", "clause"]);
 
 const CIRCLED = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩", "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳"];
 const SUBITEM = ["가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카", "타", "파", "하"];
@@ -64,15 +63,20 @@ function colorizeTags(text: string): string {
     .join("");
 }
 
-// counters[0]=장, [1]=조, [2]=항, [3]=호, [4]=목. 조는 장/절이 바뀌어도 리셋 안 함.
+// counters[0]=장, [1]=조, [2]=항, [3]=호, [4]=목. 조는 장이 바뀌어도 리셋 안 함.
 function resetBelow(counters: number[], level: number) {
   for (let i = Math.max(level, 1) + 1; i < counters.length; i++) counters[i] = 0;
+}
+
+function renderBody(block: BylawsBlock, revisionHistory: BylawsRevision[]): string {
+  if (!BODY_ELIGIBLE.has(block.type) || !block.body) return "";
+  const text = substituteTagDates(block.body, revisionHistory);
+  return `<div class="bylaws-body"><span class="bylaws-ptext">${colorizeTags(text)}</span></div>\n`;
 }
 
 export function renderBylawsDocument(doc: BylawsDocument): string {
   const { revisionHistory, blocks } = doc;
   const counters = [0, 0, 0, 0, 0]; // chapter, article, clause, item, subitem
-  let sectionCounter = 0;
 
   const html: string[] = [];
   html.push(`<div class="bylaws-title">${escapeHtml(doc.title)}</div>`);
@@ -89,19 +93,12 @@ export function renderBylawsDocument(doc: BylawsDocument): string {
       case "chapter": {
         counters[0] += 1;
         resetBelow(counters, 0);
-        sectionCounter = 0;
         html.push(`<div class="bylaws-chapter">${escapeHtml(`제${counters[0]}장 ${text}`)}</div>`);
-        break;
-      }
-      case "section": {
-        sectionCounter += 1;
-        html.push(`<div class="bylaws-section">${escapeHtml(`제${sectionCounter}절 ${text}`)}</div>`);
         break;
       }
       case "buchik": {
         counters[1] = 0;
         resetBelow(counters, 1);
-        sectionCounter = 0;
         html.push(`<div class="bylaws-buchik">${colorizeTags(text)}</div>`);
         break;
       }
@@ -109,10 +106,6 @@ export function renderBylawsDocument(doc: BylawsDocument): string {
         counters[1] += 1;
         resetBelow(counters, 1);
         html.push(`<div class="bylaws-article">${colorizeTags(`제${counters[1]}조(${text})`)}</div>`);
-        break;
-      }
-      case "tagline": {
-        html.push(`<div class="bylaws-tagline">${colorizeTags(text)}</div>`);
         break;
       }
       case "clause": {
@@ -140,11 +133,10 @@ export function renderBylawsDocument(doc: BylawsDocument): string {
         );
         break;
       }
-      case "body": {
-        html.push(`<div class="bylaws-body"><span class="bylaws-ptext">${colorizeTags(text)}</span></div>`);
-        break;
-      }
     }
+
+    const bodyHtml = renderBody(block, revisionHistory);
+    if (bodyHtml) html.push(bodyHtml.trimEnd());
   }
 
   return html.join("\n");

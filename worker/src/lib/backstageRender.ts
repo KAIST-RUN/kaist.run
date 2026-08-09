@@ -8,7 +8,7 @@ import type {
   ContactSocial,
   Season,
   BylawsVersionSummary,
-  BylawsBlockType,
+  BylawsBlock,
   BylawsRevision,
 } from "./content";
 import type { UploadedFile } from "./uploads";
@@ -176,53 +176,112 @@ const FORM_STYLE = `
   .bs-add-row:hover { background: rgba(128,128,128,.08); border-color: var(--logo-primary); color: var(--logo-primary); }
   @media (max-width: 560px) { .bs-row-item { flex-wrap: wrap; } .bs-row-item input { min-width: 100%; } }
 
-  /* 회칙 본문 행: 타입 select + 텍스트 + 위/아래/삭제 버튼. .bs-row-item과 구조가
-     달라서(2컬럼 텍스트가 아니라 select+textarea) 별도 클래스를 씁니다. */
-  .bylaws-blocks { display: flex; flex-direction: column; gap: 8px; }
-  .bylaws-block-row { display: flex; gap: 8px; align-items: flex-start; margin-left: 0; transition: margin-left .1s; }
-  .bylaws-block-row select {
-    flex: 0 0 150px; font: inherit; font-size: 0.8125rem; padding: 8px; border-radius: 6px;
-    border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit;
+  /* 회칙 트리 에디터 — 장/조/항/호/목을 중첩 카드로 표현합니다. 타입을 고르고
+     순서를 옮기는 flat 목록 대신, "+"로 어디에 추가하는지가 곧 위계입니다.
+     저장 시엔 문서 순서대로 평평하게 펼쳐서(flatten) blocksJson 하나로 제출합니다
+     (BYLAWS_TREE_SCRIPT 참고). */
+  .bylaws-node-children { display: flex; flex-direction: column; gap: 6px; margin-left: 18px; padding-left: 14px; border-left: 2px solid rgba(128,128,128,.18); }
+  .bylaws-node-children.root { margin-left: 0; padding-left: 0; border-left: none; gap: 8px; }
+  /* 접기 애니메이션: grid-template-rows 1fr↔0fr 트릭 — JS가 높이를 안 재도 항상 맞습니다. */
+  .bylaws-children-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .2s ease; }
+  .bylaws-children-wrap.collapsed { grid-template-rows: 0fr; }
+  .bylaws-children-wrap > .bylaws-node-children { overflow: hidden; min-height: 0; }
+
+  @keyframes bylaws-node-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+  .bylaws-node-card { border-radius: 8px; background: rgba(128,128,128,.05); border: 1px solid rgba(128,128,128,.14); animation: bylaws-node-in .18s ease; }
+  .bylaws-node-card:focus-within { border-color: var(--logo-primary); }
+  .bylaws-node-row { display: flex; align-items: flex-start; gap: 7px; padding: 7px 8px; border-radius: 8px; transition: box-shadow .1s ease; }
+  .bylaws-node-row.drop-before { box-shadow: inset 0 2px 0 var(--logo-primary); }
+  .bylaws-node-row.drop-after { box-shadow: inset 0 -2px 0 var(--logo-primary); }
+  .bylaws-node.dragging { opacity: .4; }
+
+  .bylaws-drag-handle { flex: 0 0 auto; width: 18px; padding-top: 6px; text-align: center; letter-spacing: -1px; font-size: .8125rem; color: rgba(128,128,128,.8); cursor: grab; user-select: none; }
+  .bylaws-drag-handle:active { cursor: grabbing; }
+
+  .bylaws-fold-btn, .bylaws-fold-spacer { flex: 0 0 auto; width: 26px; height: 26px; }
+  .bylaws-fold-btn {
+    display: flex; align-items: center; justify-content: center; padding: 0;
+    border-radius: 7px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit;
+    cursor: pointer; font-size: .8125rem; transition: background .15s, border-color .15s, color .15s, transform .1s ease;
   }
-  .bylaws-block-row textarea {
-    flex: 1; min-width: 0; font: inherit; font-size: 0.875rem; line-height: 1.5; padding: 8px 10px;
+  .bylaws-fold-btn:hover { background: rgba(128,128,128,.1); border-color: var(--logo-primary); color: var(--logo-primary); }
+  .bylaws-fold-btn:active { transform: scale(.9); }
+
+  .bylaws-badge { flex: 0 0 auto; font-size: .6875rem; font-weight: 700; letter-spacing: .02em; background: rgba(128,128,128,.14); padding: 4px 8px; border-radius: 999px; margin-top: 2px; white-space: nowrap; }
+  .bylaws-num { flex: 0 0 auto; font-size: .8125rem; font-weight: 700; opacity: .65; padding: 6px 2px; white-space: nowrap; min-width: 2.4em; }
+
+  .bylaws-node-row textarea {
+    flex: 1 1 auto; min-width: 0; font: inherit; font-size: .875rem; line-height: 1.5; padding: 7px 9px;
     border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04);
     color: inherit; resize: none; overflow: hidden; box-sizing: border-box;
   }
-  .bylaws-block-actions { display: flex; gap: 4px; flex-shrink: 0; }
-  .bylaws-block-actions button {
-    width: 28px; height: 34px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3);
-    background: transparent; color: inherit; cursor: pointer; font-size: 0.8125rem; line-height: 1;
-    transition: background .15s, border-color .15s, color .15s;
-  }
-  .bylaws-block-actions button:hover { background: rgba(128,128,128,.1); }
-  .bylaws-block-actions button[data-move="remove"]:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
 
-  /* 위계(장>절>조>항>호>목) 표현: data-type에 따라 행을 단계적으로 들여쓰고,
-     장/절/조 select는 굵게 표시합니다. select가 change될 때 data-type을 갱신하는
-     스크립트는 BYLAWS_BLOCK_MOVE_SCRIPT 참고. */
-  .bylaws-block-row[data-type="chapter"],
-  .bylaws-block-row[data-type="buchik"] { margin-left: 0; }
-  .bylaws-block-row[data-type="chapter"] select,
-  .bylaws-block-row[data-type="buchik"] select { font-weight: 700; }
-  .bylaws-block-row[data-type="section"] { margin-left: 14px; }
-  .bylaws-block-row[data-type="section"] select { font-weight: 600; }
-  .bylaws-block-row[data-type="article"] { margin-left: 14px; }
-  .bylaws-block-row[data-type="article"] select { font-weight: 600; }
-  .bylaws-block-row[data-type="clause"] { margin-left: 34px; }
-  .bylaws-block-row[data-type="body"] { margin-left: 34px; }
-  .bylaws-block-row[data-type="tagline"] { margin-left: 34px; }
-  .bylaws-block-row[data-type="tagline"] textarea { font-style: italic; }
-  .bylaws-block-row[data-type="item"] { margin-left: 54px; }
-  .bylaws-block-row[data-type="subitem"] { margin-left: 74px; }
+  .bylaws-node-actions { flex: 0 0 auto; display: flex; gap: 3px; padding-top: 1px; }
+  .bylaws-node-actions button {
+    width: 24px; height: 28px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3);
+    background: transparent; color: inherit; cursor: pointer; font-size: .75rem; line-height: 1;
+    transition: background .15s, border-color .15s, color .15s, transform .1s ease;
+  }
+  .bylaws-node-actions button:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
+  .bylaws-node-actions button:active { transform: scale(.9); }
+
+  .bylaws-add-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
+  .bylaws-chip {
+    flex: 0 0 auto; font: inherit; font-size: .75rem; font-weight: 600; color: var(--logo-primary);
+    background: transparent; border: 1px dashed var(--logo-primary); border-radius: 999px; padding: 4px 11px;
+    cursor: pointer; transition: background .15s, border-style .15s, transform .1s ease;
+  }
+  .bylaws-chip:hover { background: rgba(128,128,128,.08); border-style: solid; }
+  .bylaws-chip:active { transform: scale(.94); }
+  .bylaws-chip-ghost { color: inherit; opacity: .65; border-color: rgba(128,128,128,.35); }
+  .bylaws-chip-ghost:hover { opacity: 1; color: var(--logo-primary); border-color: var(--logo-primary); }
+  .bylaws-chip-inline { align-self: center; }
+
+  .bylaws-tag-select {
+    flex: 0 0 auto; align-self: center; font: inherit; font-size: .75rem; font-weight: 600; color: var(--logo-primary);
+    background: transparent; border: 1px dashed var(--logo-primary); border-radius: 999px; padding: 4px 8px; cursor: pointer;
+  }
+
+  .bylaws-body-row { display: flex; align-items: flex-start; gap: 6px; padding: 0 8px 8px 45px; animation: bylaws-node-in .16s ease; }
+  .bylaws-body-row textarea { background: rgba(128,128,128,.02); }
+  .bylaws-body-row textarea::placeholder { font-style: italic; }
+  .bylaws-body-remove {
+    flex: 0 0 auto; width: 22px; height: 26px; border: none; border-radius: 6px; background: transparent;
+    color: rgba(128,128,128,.8); cursor: pointer; font-size: .75rem; transition: background .15s, color .15s, transform .1s ease;
+  }
+  .bylaws-body-remove:hover { background: rgba(220,38,38,.12); color: #f87171; }
+  .bylaws-body-remove:active { transform: scale(.9); }
+
+  /* 오른쪽 미리보기 — kaist.run/bylaws와 완전히 같은 클래스/규칙(src/app/[locale]/bylaws/bylaws.css). */
+  .bylaws-split { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(0,.95fr); gap: 18px; align-items: start; }
+  .bylaws-preview-wrap { background: #faf8f3; border-radius: 10px; padding: 26px 24px; border: 1px solid rgba(128,128,128,.16); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .bylaws-preview-wrap { background: #201e1a; }
+    :root:not([data-theme="light"]) .bylaws-preview .bylaws-tag { color: #67e8f9; }
+  }
+  :root[data-theme="dark"] .bylaws-preview-wrap { background: #201e1a; }
+  :root[data-theme="dark"] .bylaws-preview .bylaws-tag { color: #67e8f9; }
+  .bylaws-preview .bylaws-title { text-align: center; font-weight: 800; font-size: 1.375rem; margin: 0 0 1.1rem; }
+  .bylaws-preview .bylaws-chapter, .bylaws-preview .bylaws-buchik { text-align: center; font-weight: 800; font-size: 1.1rem; margin: 1.8rem 0 .8rem; }
+  .bylaws-preview .bylaws-article { font-weight: 700; font-size: .9rem; margin: .95rem 0 .2rem; }
+  .bylaws-preview .bylaws-clause, .bylaws-preview .bylaws-item, .bylaws-preview .bylaws-subitem, .bylaws-preview .bylaws-body {
+    display: flex; align-items: baseline; text-align: justify; line-height: 1.7; font-size: .9rem; margin: .15rem 0;
+  }
+  .bylaws-preview .bylaws-clause { padding-left: 1.1em; }
+  .bylaws-preview .bylaws-item { padding-left: 2.3em; }
+  .bylaws-preview .bylaws-subitem { padding-left: 3.5em; }
+  .bylaws-preview .bylaws-body { padding-left: 1.1em; }
+  .bylaws-preview .bylaws-marker { flex: 0 0 auto; margin-right: .45em; }
+  .bylaws-preview .bylaws-ptext { flex: 1 1 auto; text-align: justify; }
+  .bylaws-preview .bylaws-ptext.placeholder, .bylaws-preview .bylaws-article.placeholder { opacity: .5; font-style: italic; }
+  .bylaws-preview .bylaws-tag { color: #0e7490; font-weight: 600; }
+  .bylaws-preview-empty { opacity: .5; font-size: .875rem; text-align: center; padding: 30px 0; }
+
+  @media (max-width: 900px) { .bylaws-split { grid-template-columns: 1fr; } }
   @media (max-width: 640px) {
-    .bylaws-block-row { flex-wrap: wrap; }
-    .bylaws-block-row select, .bylaws-block-row textarea { flex: 1 1 100%; }
-    .bylaws-block-row[data-type="clause"],
-    .bylaws-block-row[data-type="body"],
-    .bylaws-block-row[data-type="tagline"] { margin-left: 16px; }
-    .bylaws-block-row[data-type="item"] { margin-left: 28px; }
-    .bylaws-block-row[data-type="subitem"] { margin-left: 40px; }
+    .bylaws-node-row { flex-wrap: wrap; }
+    .bylaws-node-row textarea { flex: 1 1 100%; }
   }
 
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -1025,18 +1084,6 @@ export function renderBylawsList(versions: BylawsVersionSummary[]): string {
   );
 }
 
-const BLOCK_TYPE_OPTIONS: { value: BylawsBlockType; label: string }[] = [
-  { value: "chapter", label: "장 (제N장)" },
-  { value: "section", label: "절 (제N절)" },
-  { value: "article", label: "조 (제N조)" },
-  { value: "buchik", label: "부칙 표제" },
-  { value: "clause", label: "항 (①②③)" },
-  { value: "item", label: "호 (1. 2. 3.)" },
-  { value: "subitem", label: "목 (가. 나. 다.)" },
-  { value: "body", label: "본문 (번호 없음)" },
-  { value: "tagline", label: "강조 문구 (우측 정렬)" },
-];
-
 function bylawsRevisionRow(dateVal: string, labelVal: string): string {
   return `<div class="bs-row-item">
     <input type="text" name="revDate[]" value="${escapeHtml(dateVal)}" placeholder="예: 2017. 03. 18." />
@@ -1045,50 +1092,454 @@ function bylawsRevisionRow(dateVal: string, labelVal: string): string {
   </div>`;
 }
 
-function bylawsBlockRow(type: BylawsBlockType, text: string): string {
-  const options = BLOCK_TYPE_OPTIONS.map(
-    (o) => `<option value="${o.value}"${o.value === type ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
-  ).join("");
-  return `<div class="bylaws-block-row" data-type="${type}">
-    <select name="blockType[]">${options}</select>
-    <textarea
-      name="blockText[]" class="bs-autosize" rows="1"
-      oninput="this.style.height='';this.style.height=this.scrollHeight+'px'"
-    >${escapeHtml(text)}</textarea>
-    <div class="bylaws-block-actions">
-      <button type="button" data-move="up" aria-label="위로 이동">↑</button>
-      <button type="button" data-move="down" aria-label="아래로 이동">↓</button>
-      <button type="button" data-move="remove" aria-label="삭제">×</button>
-    </div>
-  </div>`;
-}
-
-// ↑/↓/× 버튼은 [data-move]에, 유형 select는 change에 이벤트 위임으로 붙습니다 —
-// 행이 add-row 스크립트로 복제/추가돼도(BS_ROWS_SCRIPT) 따로 다시 바인딩할 필요가
-// 없습니다. select의 값이 바뀌면 row의 data-type을 갱신해서 CSS 들여쓰기(위계)가
-// 실시간으로 따라오게 합니다.
-const BYLAWS_BLOCK_MOVE_SCRIPT = `
+// 트리 에디터 본체. 장/조/항/호/목을 중첩 카드로 보여주고, "+" 버튼으로 어디에
+// 추가하는지가 곧 위계입니다(타입 선택 드롭다운도, 위/아래 이동도 없음 — 순서를
+// 바꾸고 싶으면 드래그). 초기 데이터는 #bylaws-initial-blocks에 심어둔 JSON(문서
+// 순서대로 평평한 배열, src/lib/bylaws.ts와 같은 구조)을 rank 기반으로 다시
+// 트리로 복원해서(unflatten) 채우고, 제출 직전엔 반대로 트리를 평평하게
+// 펼쳐서(flatten) #bylaws-blocks-json 히든 인풋에 넣습니다. 번호/미리보기 규칙은
+// src/lib/bylaws.ts의 renderBylawsDocument와 반드시 같아야 합니다.
+const BYLAWS_TREE_SCRIPT = `
   (function () {
-    var container = document.getElementById("bylaws-blocks");
-    if (!container) return;
-    container.addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-move]");
+    var root = document.getElementById("bylaws-tree");
+    if (!root) return;
+    var previewEl = document.getElementById("bylaws-preview");
+    var hiddenInput = document.getElementById("bylaws-blocks-json");
+    var initialEl = document.getElementById("bylaws-initial-blocks");
+    var form = root.closest("form");
+
+    var TYPE_LABEL = {
+      chapter: "장", article: "조", buchik: "부칙",
+      clause: "항", item: "호", subitem: "목",
+    };
+    var PLACEHOLDER = {
+      chapter: "장 제목 (예: 총칙)", article: "조 제목 (예: 명칭)",
+      buchik: "부칙 표제 (예: 부칙)", clause: "항 내용", item: "호 내용", subitem: "목 내용",
+    };
+    var BODY_ELIGIBLE = { chapter: 1, buchik: 1, article: 1, clause: 1 };
+    var CHILD_TYPES = {
+      root: ["chapter", "buchik", "article"],
+      chapter: ["article"],
+      buchik: ["clause"],
+      article: ["clause"],
+      clause: ["item"],
+      item: ["subitem"],
+      subitem: [],
+    };
+    var RANK = { chapter: 0, buchik: 0, article: 1, clause: 2, item: 3, subitem: 4 };
+    var TAG_SYNTAX = { 개정: "<개정>", 신설: "<신설>", 삭제: "<삭제>", 본조신설: "[본조신설]" };
+    var CIRCLED = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
+    var SUBITEM_M = ["가","나","다","라","마","바","사","아","자","차","카","타","파","하"];
+    var RE_SPLIT = /(<[^>]+>|\\[[^\\]]+])/;
+    var RE_FULL = /^(<[^>]+>|\\[[^\\]]+])$/;
+
+    var uid = 0;
+    function nid() { uid += 1; return "bn" + uid; }
+    function makeNode(type, text, body) {
+      return { id: nid(), type: type, text: text || "", children: [], body: body == null ? null : body, collapsed: false, label: "" };
+    }
+
+    // 문서 순서대로 평평한 blocks[]를 rank(장/부칙=0, 조=1, 항=2, 호=3, 목=4)로
+    // 다시 트리로 복원합니다 — 원래 렌더러가 이 flat 순서를 해석하는 방식 그대로.
+    function unflatten(blocks) {
+      var out = [];
+      var stack = [];
+      blocks.forEach(function (b) {
+        var n = makeNode(b.type, b.text, b.body);
+        var rank = RANK[b.type];
+        if (rank === undefined) return;
+        if (rank === 0) {
+          out.push(n);
+          stack = [{ node: n, rank: rank }];
+          return;
+        }
+        while (stack.length && stack[stack.length - 1].rank >= rank) stack.pop();
+        if (stack.length === 0) out.push(n);
+        else stack[stack.length - 1].node.children.push(n);
+        stack.push({ node: n, rank: rank });
+      });
+      return out;
+    }
+
+    function flatten(nodes, out) {
+      out = out || [];
+      nodes.forEach(function (n) {
+        var block = { type: n.type, text: n.text };
+        if (BODY_ELIGIBLE[n.type] && n.body) block.body = n.body;
+        out.push(block);
+        flatten(n.children, out);
+      });
+      return out;
+    }
+
+    var rootNodes = [];
+    try {
+      rootNodes = unflatten(JSON.parse(initialEl ? initialEl.textContent : "[]"));
+    } catch (e) {
+      rootNodes = [];
+    }
+    var dragId = null;
+
+    function locate(list, id) {
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i].id === id) return { list: list, index: i, node: list[i] };
+        var found = locate(list[i].children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    function numberTree(nodes) {
+      var counters = [0, 0, 0, 0, 0];
+      function resetBelow(level) {
+        for (var i = Math.max(level, 1) + 1; i < counters.length; i += 1) counters[i] = 0;
+      }
+      function walk(list) {
+        for (var i = 0; i < list.length; i += 1) {
+          var n = list[i];
+          switch (n.type) {
+            case "chapter":
+              counters[0] += 1; resetBelow(0);
+              n.label = "제" + counters[0] + "장";
+              break;
+            case "buchik":
+              counters[1] = 0; resetBelow(1);
+              n.label = "부칙";
+              break;
+            case "article":
+              counters[1] += 1; resetBelow(1);
+              n.label = "제" + counters[1] + "조";
+              break;
+            case "clause":
+              counters[2] += 1; resetBelow(2);
+              n.label = counters[2] - 1 < CIRCLED.length ? CIRCLED[counters[2] - 1] : "(" + counters[2] + ")";
+              break;
+            case "item":
+              counters[3] += 1; resetBelow(3);
+              n.label = counters[3] + ".";
+              break;
+            case "subitem":
+              counters[4] += 1;
+              n.label = counters[4] - 1 < SUBITEM_M.length ? SUBITEM_M[counters[4] - 1] + "." : counters[4] + ")";
+              break;
+          }
+          walk(n.children);
+        }
+      }
+      walk(nodes);
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function colorize(text) {
+      if (!text) return "";
+      var parts = text.split(RE_SPLIT).filter(Boolean);
+      return parts.map(function (p) {
+        return RE_FULL.test(p) ? '<span class="bylaws-tag">' + esc(p) + "</span>" : esc(p);
+      }).join("");
+    }
+
+    function renderAddRow(parentId, type) {
+      var kids = CHILD_TYPES[type] || [];
+      if (kids.length === 0) return "";
+      var buttons = kids.map(function (t) {
+        return '<button type="button" class="bylaws-chip" data-action="add" data-parent="' + parentId + '" data-type="' + t + '">+ ' + TYPE_LABEL[t] + "</button>";
+      }).join("");
+      return '<div class="bylaws-add-row">' + buttons + "</div>";
+    }
+
+    function renderEditorNode(n) {
+      var addRow = renderAddRow(n.id, n.type);
+      var hasFoldableChildren = n.children.length > 0;
+      var showBlock = hasFoldableChildren || addRow;
+
+      var foldBtn = hasFoldableChildren
+        ? '<button type="button" class="bylaws-fold-btn" data-action="fold" data-id="' + n.id + '" aria-label="' + (n.collapsed ? "펼치기" : "접기") + '" title="' + (n.collapsed ? "펼치기" : "접기") + '">' + (n.collapsed ? "▸" : "▾") + "</button>"
+        : '<span class="bylaws-fold-spacer"></span>';
+
+      var numHtml = n.label ? '<span class="bylaws-num">' + esc(n.label) + "</span>" : "";
+
+      var tagSelect =
+        n.type === "clause"
+          ? '<select class="bylaws-tag-select" data-action="tag-insert" data-id="' + n.id + '" aria-label="개정 표시 삽입" title="개정/신설/삭제 표시 삽입">' +
+            '<option value="">+ 태그</option><option value="개정">개정</option><option value="신설">신설</option>' +
+            '<option value="삭제">삭제</option><option value="본조신설">본조신설</option></select>'
+          : "";
+
+      var bodyChip = "";
+      var bodyRow = "";
+      if (BODY_ELIGIBLE[n.type]) {
+        if (n.body === null || n.body === undefined) {
+          bodyChip = '<button type="button" class="bylaws-chip bylaws-chip-ghost bylaws-chip-inline" data-action="body-add" data-id="' + n.id + '">+ 본문</button>';
+        } else {
+          bodyRow =
+            '<div class="bylaws-body-row">' +
+            '<textarea class="bs-autosize" rows="1" data-body-id="' + n.id + '" placeholder="번호 없는 문단 (선택)">' + esc(n.body) + "</textarea>" +
+            '<button type="button" class="bylaws-body-remove" data-action="body-remove" data-id="' + n.id + '" aria-label="본문 제거" title="본문 제거">×</button>' +
+            "</div>";
+        }
+      }
+
+      var cardHtml =
+        '<div class="bylaws-node-card">' +
+        '<div class="bylaws-node-row">' +
+        foldBtn +
+        '<span class="bylaws-drag-handle" data-drag-handle draggable="true" aria-label="드래그해서 순서 변경" title="드래그해서 순서 변경">⠿</span>' +
+        '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>" +
+        numHtml +
+        '<textarea class="bs-autosize" rows="1" data-text-id="' + n.id + '" placeholder="' + esc(PLACEHOLDER[n.type] || "") + '">' + esc(n.text) + "</textarea>" +
+        tagSelect +
+        bodyChip +
+        '<span class="bylaws-node-actions"><button type="button" data-action="remove" data-id="' + n.id + '" aria-label="삭제" title="삭제">×</button></span>' +
+        "</div>" +
+        bodyRow +
+        "</div>";
+
+      var childrenHtml = "";
+      if (showBlock) {
+        var wrapClass = "bylaws-children-wrap" + (n.collapsed ? " collapsed" : "");
+        childrenHtml = '<div class="' + wrapClass + '"><div class="bylaws-node-children">' + n.children.map(renderEditorNode).join("") + addRow + "</div></div>";
+      }
+
+      return '<div class="bylaws-node" data-node-id="' + n.id + '">' + cardHtml + childrenHtml + "</div>";
+    }
+
+    function renderEditorPane() {
+      var rootAdd = renderAddRow("root", "root");
+      root.innerHTML = '<div class="bylaws-node-children root">' + rootNodes.map(renderEditorNode).join("") + rootAdd + "</div>";
+    }
+
+    function bodyPreviewHtml(n) {
+      if (!BODY_ELIGIBLE[n.type] || !n.body) return "";
+      return '<div class="bylaws-body"><span class="bylaws-ptext">' + colorize(n.body) + "</span></div>";
+    }
+
+    function renderPreviewNode(n) {
+      var html = "";
+      switch (n.type) {
+        case "chapter":
+          html = '<div class="bylaws-chapter">' + esc(n.label + " " + (n.text || "(제목 없음)")) + "</div>";
+          break;
+        case "buchik":
+          html = '<div class="bylaws-buchik">' + colorize(n.text || "부칙") + "</div>";
+          break;
+        case "article":
+          html = n.text
+            ? '<div class="bylaws-article">' + colorize(n.label + "(" + n.text + ")") + "</div>"
+            : '<div class="bylaws-article placeholder">' + esc(n.label + "(제목 없음)") + "</div>";
+          break;
+        case "clause":
+          html = '<div class="bylaws-clause"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? colorize(n.text) : "내용 없음") + "</span></div>";
+          break;
+        case "item":
+          html = '<div class="bylaws-item"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? colorize(n.text) : "내용 없음") + "</span></div>";
+          break;
+        case "subitem":
+          html = '<div class="bylaws-subitem"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? colorize(n.text) : "내용 없음") + "</span></div>";
+          break;
+      }
+      return html + bodyPreviewHtml(n) + n.children.map(renderPreviewNode).join("");
+    }
+
+    function renderPreviewPane() {
+      if (!previewEl) return;
+      if (rootNodes.length === 0) {
+        previewEl.innerHTML = '<div class="bylaws-preview-empty">왼쪽에서 장·조를 추가해보세요.</div>';
+        return;
+      }
+      var titleInput = form ? form.querySelector('[name="title"]') : null;
+      var title = titleInput && titleInput.value ? titleInput.value : "RUN 회칙";
+      var body = rootNodes.map(renderPreviewNode).join("");
+      previewEl.innerHTML = '<div class="bylaws-preview"><div class="bylaws-title">' + esc(title) + "</div>" + body + "</div>";
+    }
+
+    function autosize(ta) {
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    }
+    function autosizeAll() {
+      var list = root.querySelectorAll("textarea");
+      for (var i = 0; i < list.length; i += 1) autosize(list[i]);
+    }
+
+    function fullRender() {
+      numberTree(rootNodes);
+      renderEditorPane();
+      renderPreviewPane();
+      autosizeAll();
+    }
+
+    function clearDropIndicators() {
+      var els = root.querySelectorAll(".drop-before, .drop-after");
+      for (var i = 0; i < els.length; i += 1) els[i].classList.remove("drop-before", "drop-after");
+    }
+
+    function insertAtCursor(textarea, insertText) {
+      var start = textarea.selectionStart == null ? textarea.value.length : textarea.selectionStart;
+      var end = textarea.selectionEnd == null ? textarea.value.length : textarea.selectionEnd;
+      var val = textarea.value;
+      var before = val.slice(0, start);
+      var needsSpace = before.length > 0 && !/\\s$/.test(before);
+      var insert = (needsSpace ? " " : "") + insertText;
+      textarea.value = before + insert + val.slice(end);
+      var newPos = start + insert.length;
+      textarea.selectionStart = textarea.selectionEnd = newPos;
+    }
+
+    root.addEventListener("click", function (e) {
+      var btn = e.target.closest("button[data-action]");
       if (!btn) return;
-      var row = btn.closest(".bylaws-block-row");
-      if (!row) return;
-      if (btn.dataset.move === "remove") {
-        row.remove();
-      } else if (btn.dataset.move === "up" && row.previousElementSibling) {
-        row.parentNode.insertBefore(row, row.previousElementSibling);
-      } else if (btn.dataset.move === "down" && row.nextElementSibling) {
-        row.parentNode.insertBefore(row.nextElementSibling, row);
+      var action = btn.dataset.action;
+
+      if (action === "add") {
+        var parentId = btn.dataset.parent;
+        var type = btn.dataset.type;
+        var n = makeNode(type, "", null);
+        if (parentId === "root") {
+          rootNodes.push(n);
+        } else {
+          var loc = locate(rootNodes, parentId);
+          if (loc) loc.node.children.push(n);
+        }
+        fullRender();
+        requestAnimationFrame(function () {
+          var ta = root.querySelector('textarea[data-text-id="' + n.id + '"]');
+          if (ta) ta.focus();
+        });
+      } else if (action === "remove") {
+        var locR = locate(rootNodes, btn.dataset.id);
+        if (locR) locR.list.splice(locR.index, 1);
+        fullRender();
+      } else if (action === "fold") {
+        var locF = locate(rootNodes, btn.dataset.id);
+        if (!locF) return;
+        locF.node.collapsed = !locF.node.collapsed;
+        var nodeEl = btn.closest(".bylaws-node");
+        var wrap = nodeEl ? nodeEl.querySelector(".bylaws-children-wrap") : null;
+        if (wrap) wrap.classList.toggle("collapsed", locF.node.collapsed);
+        var label = locF.node.collapsed ? "펼치기" : "접기";
+        btn.textContent = locF.node.collapsed ? "▸" : "▾";
+        btn.setAttribute("aria-label", label);
+        btn.title = label;
+      } else if (action === "body-add") {
+        var locB = locate(rootNodes, btn.dataset.id);
+        if (locB) locB.node.body = "";
+        fullRender();
+        requestAnimationFrame(function () {
+          var ta = root.querySelector('textarea[data-body-id="' + btn.dataset.id + '"]');
+          if (ta) ta.focus();
+        });
+      } else if (action === "body-remove") {
+        var locBR = locate(rootNodes, btn.dataset.id);
+        if (locBR) locBR.node.body = null;
+        fullRender();
       }
     });
-    container.addEventListener("change", function (e) {
-      if (e.target.tagName !== "SELECT") return;
-      var row = e.target.closest(".bylaws-block-row");
-      if (row) row.dataset.type = e.target.value;
+
+    root.addEventListener("change", function (e) {
+      var sel = e.target.closest("select.bylaws-tag-select");
+      if (!sel) return;
+      var kind = sel.value;
+      if (!kind) return;
+      var ta = root.querySelector('textarea[data-text-id="' + sel.dataset.id + '"]');
+      if (ta) {
+        insertAtCursor(ta, TAG_SYNTAX[kind]);
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        ta.focus();
+      }
+      sel.value = "";
     });
+
+    root.addEventListener("input", function (e) {
+      var taText = e.target.closest("textarea[data-text-id]");
+      if (taText) {
+        var loc = locate(rootNodes, taText.dataset.textId);
+        if (loc) loc.node.text = taText.value;
+        autosize(taText);
+        renderPreviewPane();
+        return;
+      }
+      var taBody = e.target.closest("textarea[data-body-id]");
+      if (taBody) {
+        var locBody = locate(rootNodes, taBody.dataset.bodyId);
+        if (locBody) locBody.node.body = taBody.value;
+        autosize(taBody);
+        renderPreviewPane();
+      }
+    });
+
+    root.addEventListener("dragstart", function (e) {
+      var handle = e.target.closest("[data-drag-handle]");
+      if (!handle) { e.preventDefault(); return; }
+      var nodeEl = handle.closest(".bylaws-node");
+      if (!nodeEl) { e.preventDefault(); return; }
+      dragId = nodeEl.dataset.nodeId;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", dragId);
+      nodeEl.classList.add("dragging");
+    });
+
+    root.addEventListener("dragend", function () {
+      var el = root.querySelector(".bylaws-node.dragging");
+      if (el) el.classList.remove("dragging");
+      clearDropIndicators();
+      dragId = null;
+    });
+
+    root.addEventListener("dragover", function (e) {
+      if (!dragId) return;
+      var rowEl = e.target.closest(".bylaws-node-row");
+      if (!rowEl) return;
+      var nodeEl = rowEl.closest(".bylaws-node");
+      var targetId = nodeEl.dataset.nodeId;
+      if (targetId === dragId) return;
+      var dragLoc = locate(rootNodes, dragId);
+      var targetLoc = locate(rootNodes, targetId);
+      if (!dragLoc || !targetLoc || dragLoc.list !== targetLoc.list) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      clearDropIndicators();
+      var rect = rowEl.getBoundingClientRect();
+      var before = e.clientY - rect.top < rect.height / 2;
+      rowEl.classList.add(before ? "drop-before" : "drop-after");
+    });
+
+    root.addEventListener("drop", function (e) {
+      if (!dragId) return;
+      var rowEl = e.target.closest(".bylaws-node-row");
+      if (!rowEl) { clearDropIndicators(); return; }
+      var nodeEl = rowEl.closest(".bylaws-node");
+      var targetId = nodeEl.dataset.nodeId;
+      var dragLoc = locate(rootNodes, dragId);
+      var targetLoc = locate(rootNodes, targetId);
+      clearDropIndicators();
+      if (!dragLoc || !targetLoc || dragLoc.list !== targetLoc.list || targetId === dragId) {
+        dragId = null;
+        return;
+      }
+      e.preventDefault();
+      var rect = rowEl.getBoundingClientRect();
+      var before = e.clientY - rect.top < rect.height / 2;
+      var list = dragLoc.list;
+      var draggedNode = list[dragLoc.index];
+      list.splice(dragLoc.index, 1);
+      var newTargetIndex = list.indexOf(targetLoc.node);
+      var insertAt = before ? newTargetIndex : newTargetIndex + 1;
+      list.splice(insertAt, 0, draggedNode);
+      dragId = null;
+      fullRender();
+    });
+
+    if (form) {
+      form.addEventListener("submit", function () {
+        if (hiddenInput) hiddenInput.value = JSON.stringify(flatten(rootNodes));
+      });
+    }
+    var titleField = form ? form.querySelector('[name="title"]') : null;
+    if (titleField) titleField.addEventListener("input", renderPreviewPane);
+
+    fullRender();
   })();
 `;
 
@@ -1098,7 +1549,7 @@ export type BylawsVersionFormData = {
   versionLabel: string;
   effectiveDate: string;
   revisionHistory: BylawsRevision[];
-  blocks: { type: BylawsBlockType; text: string }[];
+  blocks: BylawsBlock[];
 };
 
 export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersionFormData, error?: string): string {
@@ -1106,9 +1557,9 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
   const revisionRows = (data.revisionHistory.length > 0 ? data.revisionHistory : [{ date: "", label: "" }])
     .map((r) => bylawsRevisionRow(r.date, r.label))
     .join("");
-  const blockRows = (data.blocks.length > 0 ? data.blocks : [{ type: "chapter" as BylawsBlockType, text: "" }])
-    .map((b) => bylawsBlockRow(b.type, b.text))
-    .join("");
+  // <script type="application/json">에 안전하게 심기 위해 "<"를 전부 이스케이프합니다
+  // (JSON 문자열 안에 우연히 "</script>"가 들어가도 태그가 조기 종료되지 않게).
+  const initialBlocksJson = JSON.stringify(data.blocks).replace(/</g, "\\u003c");
 
   return shell(
     mode === "new" ? "새 회칙 버전" : `회칙 수정 — ${data.versionLabel}`,
@@ -1145,27 +1596,26 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
         <div class="bs-rows" id="bylaws-revisions">${revisionRows}</div>
         <button type="button" class="bs-add-row" data-rows="bylaws-revisions" data-template="bylaws-revision-template">+ 추가</button>
         <template id="bylaws-revision-template">${bylawsRevisionRow("", "")}</template>
-        <p class="bs-note" style="margin-top:8px">본문에서 <code>&lt;개정 2&gt;</code>처럼 쓰면 여기 2번째 날짜로 채워집니다(생략하면 최신 날짜).</p>
+        <p class="bs-note" style="margin-top:8px">항의 "+ 태그" 드롭다운에서 개정/신설/삭제/본조신설을 고르면 <code>&lt;개정&gt;</code>처럼
+        끼워지고, 저장된 문서에선 여기 최신 날짜로 자동 치환됩니다.</p>
       </div>
 
       <div class="bs-card">
         <p class="bs-card-title">본문</p>
         <p class="bs-note" style="margin-bottom:12px">
-          행마다 종류(장/절/조/항/호/목/본문/강조 문구)를 고르고 내용을 입력하세요. 번호(제1장, ①, 1. 등)는
-          이 순서를 보고 자동으로 매겨집니다. <code>&lt;개정 N&gt;</code>/<code>[본조신설 N]</code>처럼
-          쓰면 위 개정이력의 N번째 날짜로 자동 치환됩니다.
+          "+" 버튼으로 어디에 추가하는지가 곧 위계입니다 — 타입을 고르거나 순서를 옮길 필요 없이,
+          이 조 아래에 항을 추가하면 그게 몇 번째 항인지도 자동으로 정해집니다. 순서를 바꾸려면
+          ⠿ 손잡이를 드래그하세요. 본문(번호 없는 문단)은 장/부칙/조/항 자신에게 선택적으로 붙습니다.
         </p>
-        <div class="bylaws-blocks" id="bylaws-blocks">${blockRows}</div>
-        <button type="button" class="bs-add-row" data-rows="bylaws-blocks" data-template="bylaws-block-template">+ 문단 추가</button>
-        <template id="bylaws-block-template">${bylawsBlockRow("clause", "")}</template>
+        <div class="bylaws-split">
+          <div id="bylaws-tree"></div>
+          <div class="bylaws-preview-wrap"><div id="bylaws-preview"></div></div>
+        </div>
+        <script type="application/json" id="bylaws-initial-blocks">${initialBlocksJson}</script>
+        <input type="hidden" name="blocksJson" id="bylaws-blocks-json" />
       </div>
       <script>${BS_ROWS_SCRIPT}</script>
-      <script>${BYLAWS_BLOCK_MOVE_SCRIPT}</script>
-      <script>
-        document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
-          el.style.height = el.scrollHeight + "px";
-        });
-      </script>
+      <script>${BYLAWS_TREE_SCRIPT}</script>
 
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>

@@ -21,6 +21,7 @@ import {
   deleteBylawsVersion,
   type Season,
   type BylawsBlockType,
+  type BylawsBlock,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
 import { syncMembersFromSheet, connectRosterSheet, getMembersLastSyncedAt, listMembers } from "../lib/members";
@@ -517,15 +518,33 @@ backstage.post("/contact", async (c) => {
 // 역대 회칙 — 버전 목록 + 버전별 편집(장/조/항/호/목 행 에디터). effective_date가
 // 가장 최신인 버전이 kaist.run/bylaws에 뜹니다(별도 "현재 버전" 플래그 없음).
 
-function readBylawsBlocks(body: Record<string, unknown>): { type: BylawsBlockType; text: string }[] {
-  const types = getFormArray(body, "blockType[]");
-  const texts = getFormArray(body, "blockText[]");
-  const blocks: { type: BylawsBlockType; text: string }[] = [];
-  const len = Math.max(types.length, texts.length);
-  for (let i = 0; i < len; i++) {
-    const text = (texts[i] ?? "").trim();
-    if (!text) continue; // 내용 없이 빈 채로 남겨둔 행은 저장 안 함
-    blocks.push({ type: (types[i] ?? "clause") as BylawsBlockType, text });
+const BYLAWS_BLOCK_TYPES = new Set<BylawsBlockType>(["chapter", "article", "buchik", "clause", "item", "subitem"]);
+
+// worker/src/lib/backstageRender.ts의 트리 에디터가 제출 직전 트리를 문서 순서대로
+// 평평하게 펼쳐서(flatten) blocksJson 히든 인풋 하나에 담아 보냅니다 — 예전처럼
+// blockType[]/blockText[] 병렬 배열을 zip하는 게 아니라 그 JSON을 그대로 검증만
+// 합니다. 모양이 신뢰 안 되는 값(브라우저 조작 등)은 조용히 걸러냅니다.
+function readBylawsBlocks(body: Record<string, unknown>): BylawsBlock[] {
+  const raw = typeof body.blocksJson === "string" ? body.blocksJson : "[]";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  const blocks: BylawsBlock[] = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== "object") continue;
+    const { type, text, body: paragraphBody } = item as { type?: unknown; text?: unknown; body?: unknown };
+    if (typeof type !== "string" || !BYLAWS_BLOCK_TYPES.has(type as BylawsBlockType)) continue;
+    const trimmedText = typeof text === "string" ? text.trim() : "";
+    const trimmedBody = typeof paragraphBody === "string" ? paragraphBody.trim() : "";
+    if (!trimmedText && !trimmedBody) continue; // 내용 없이 빈 채로 남겨둔 노드는 저장 안 함
+    const block: BylawsBlock = { type: type as BylawsBlockType, text: trimmedText };
+    if (trimmedBody) block.body = trimmedBody;
+    blocks.push(block);
   }
   return blocks;
 }

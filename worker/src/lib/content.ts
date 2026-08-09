@@ -42,11 +42,13 @@ export type ContactRow = {
   updated_at: string;
 };
 
-// backstage가 +버튼으로 만드는 구조화된 문단 목록입니다(원문 텍스트가 아니라
-// "타입 + 텍스트" 순서). 번호는 저장 안 하고 src/lib/bylaws.ts가 렌더링할 때
-// 순서를 보고 매번 새로 계산합니다.
-export type BylawsBlockType = "chapter" | "section" | "article" | "buchik" | "clause" | "item" | "subitem" | "body" | "tagline";
-export type BylawsBlock = { type: BylawsBlockType; text: string };
+// backstage의 트리 에디터(어디에 추가하는지가 곧 위계)에서 만드는, 문서 순서대로
+// 평평하게 펼친 문단 목록입니다. 번호는 저장 안 하고 src/lib/bylaws.ts가 렌더링할 때
+// 순서를 보고 매번 새로 계산합니다. body는 장/부칙/조/항 자신에게 선택적으로 붙는
+// 번호 없는 문단이고, 독립된 타입이 아닙니다. "절"/"강조문구"는 실제로 쓰인 적이
+// 없어서 뺐습니다.
+export type BylawsBlockType = "chapter" | "article" | "buchik" | "clause" | "item" | "subitem";
+export type BylawsBlock = { type: BylawsBlockType; text: string; body?: string };
 export type BylawsRevision = { date: string; label: string };
 
 // 번역이 없는 한국어 문서라 locale 구분이 없습니다. "역대 회칙"이라 slug로 여러
