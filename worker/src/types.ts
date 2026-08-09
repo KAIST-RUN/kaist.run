@@ -8,6 +8,11 @@ export type Env = {
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
   DISCORD_REDIRECT_URI: string;
+  // 로그인 OAuth 앱과는 별개로, 회원 명단 동기화 때 (로그인한 적 없는 사람 포함)
+  // 임의의 Discord ID의 프로필 사진을 조회하기 위한 봇 토큰입니다 — /users/{id}는
+  // 봇이 공유 서버 없이도 전역으로 쓸 수 있는 엔드포인트라 서버 초대가 필요 없습니다.
+  // Discord Developer Portal → 해당 앱 → Bot → Token으로 발급하세요.
+  DISCORD_BOT_TOKEN: string;
 
   // 기존 Discord 봇(역대 회원 스프레드시트를 편집하는)과 같은 서비스 계정을
   // 재사용합니다 — 시트에 새로 공유 권한을 추가할 필요 없음.

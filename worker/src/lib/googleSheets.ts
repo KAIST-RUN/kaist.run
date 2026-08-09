@@ -78,6 +78,10 @@ export type MemberRecord = {
   solvedAc: string | null;
   codeforces: string | null;
   atcoder: string | null;
+
+  // Discord 프로필 사진. 시트에서 오는 값이 아니라 동기화 때 members.ts가 봇
+  // 토큰으로 따로 채웁니다 — 여기서는 항상 null로 둡니다.
+  avatarUrl: string | null;
 };
 
 function cell(row: string[], headers: string[], headerName: string): string | null {
@@ -190,6 +194,7 @@ export async function fetchMembersFromSheet(env: Env, sheetId: string): Promise<
       solvedAc: cell(row, headerRow, HEADER_MAP.solvedAc),
       codeforces: cell(row, headerRow, HEADER_MAP.codeforces),
       atcoder: cell(row, headerRow, HEADER_MAP.atcoder),
+      avatarUrl: null,
     });
   }
 

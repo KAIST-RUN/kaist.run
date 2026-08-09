@@ -1,6 +1,7 @@
 import type { Env } from "../types";
 import { fetchMembersFromSheet, type MemberRecord } from "./googleSheets";
 import { getEffectiveSheetId, setRosterSheetOverride, parseSheetIdOrUrl } from "./rosterSheet";
+import { fetchDiscordAvatarUrl } from "./discord";
 
 export type { MemberRecord };
 
@@ -69,6 +70,30 @@ async function removeStaleMembers(env: Env, currentIds: Set<string>): Promise<nu
   return deletedCount;
 }
 
+// Discord 봇 토큰으로 동시에 너무 많이 요청하지 않도록 개수를 제한한 채로 아바타를
+// 채웁니다. 실패(레이트리밋 소진, 5xx 등)한 항목은 그냥 Map에서 빠집니다 — 호출부가
+// "이 discordId가 Map에 없으면 이전 캐시값 유지"로 구분해서 처리합니다.
+const AVATAR_FETCH_CONCURRENCY = 5;
+
+async function fetchAvatarsForMembers(env: Env, discordIds: string[]): Promise<Map<string, string | null>> {
+  const avatars = new Map<string, string | null>();
+  let index = 0;
+
+  async function worker() {
+    while (index < discordIds.length) {
+      const discordId = discordIds[index++];
+      try {
+        avatars.set(discordId, await fetchDiscordAvatarUrl(env.DISCORD_BOT_TOKEN, discordId));
+      } catch (err) {
+        console.error(`Failed to fetch Discord avatar for ${discordId}`, err);
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(AVATAR_FETCH_CONCURRENCY, discordIds.length) }, worker));
+  return avatars;
+}
+
 // Google Sheets → KV로 회원 명단을 다시 채웁니다.
 // index.ts의 scheduled(cron)와 routes/admin.ts(수동 트리거)에서 호출됩니다.
 //
@@ -81,15 +106,26 @@ async function removeStaleMembers(env: Env, currentIds: Set<string>): Promise<nu
 // "새 시트가 진짜 동작하는지" 저장 전에 시험해볼 때만 명시적으로 넘겨줍니다.
 export async function syncMembersFromSheet(env: Env, sheetIdOverride?: string): Promise<SyncResult> {
   const sheetId = sheetIdOverride ?? (await getEffectiveSheetId(env));
-  const members = await fetchMembersFromSheet(env, sheetId);
-  const currentIds = new Set(members.map((m) => m.discordId));
+  const fetchedMembers = await fetchMembersFromSheet(env, sheetId);
+  const currentIds = new Set(fetchedMembers.map((m) => m.discordId));
+  const avatars = await fetchAvatarsForMembers(
+    env,
+    fetchedMembers.map((m) => m.discordId),
+  );
 
   const [results, deleted] = await Promise.all([
     Promise.all(
-      members.map(async (member) => {
+      fetchedMembers.map(async (member) => {
         const key = `${MEMBER_KEY_PREFIX}${member.discordId}`;
-        const nextRaw = JSON.stringify(member);
         const existingRaw = await env.MEMBERS.get(key);
+        const existing = existingRaw ? (JSON.parse(existingRaw) as MemberRecord) : null;
+
+        // 이번에 못 가져왔으면(Map에 없음) 이전 캐시값을 그대로 둡니다 —
+        // 일시적 오류로 멀쩡한 아바타가 지워지면 안 되니까요.
+        const avatarUrl = avatars.has(member.discordId) ? (avatars.get(member.discordId) ?? null) : (existing?.avatarUrl ?? null);
+
+        const next: MemberRecord = { ...member, avatarUrl };
+        const nextRaw = JSON.stringify(next);
         if (existingRaw === nextRaw) return false; // 변경 없음 — 쓰기 생략
 
         await env.MEMBERS.put(key, nextRaw);
@@ -101,7 +137,7 @@ export async function syncMembersFromSheet(env: Env, sheetIdOverride?: string): 
 
   await env.MEMBERS.put(LAST_SYNCED_KEY, String(Date.now()));
 
-  return { total: members.length, written: results.filter(Boolean).length, deleted };
+  return { total: fetchedMembers.length, written: results.filter(Boolean).length, deleted };
 }
 
 // backstage에서 "역대 명단 시트"를 새로 연결할 때 씁니다. 잘못된 링크를 저장해서

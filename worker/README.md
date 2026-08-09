@@ -75,6 +75,7 @@ KV 생성 명령이 출력하는 `id`를 `wrangler.jsonc`의 `kv_namespaces[].id
 ```bash
 npx wrangler secret put DISCORD_CLIENT_ID
 npx wrangler secret put DISCORD_CLIENT_SECRET
+npx wrangler secret put DISCORD_BOT_TOKEN            # Developer Portal → 앱 → Bot → Token (서버 초대 불필요)
 npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
 npx wrangler secret put GOOGLE_PRIVATE_KEY            # PEM 전체를, 봇 env의 값 그대로(\n 포함) 붙여넣기
 npx wrangler secret put ROSTER_ALL_TIME_SHEET_ID

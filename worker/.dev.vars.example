@@ -5,6 +5,11 @@
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 
+# 로그인용 OAuth 앱과는 별개로, 회원 명단 동기화 때 프로필 사진을 조회하기 위한
+# 봇 토큰입니다. Discord Developer Portal → 해당 앱 → Bot → Token에서 발급하세요
+# (서버에 초대할 필요는 없음 — GET /users/{id}는 봇 토큰만 있으면 전역으로 동작).
+DISCORD_BOT_TOKEN=
+
 # 순수 로컬 테스트를 하려면(배포 전) 이 값을 로컬 Worker 주소로 바꾸고,
 # Discord Developer Portal에도 같은 주소를 Redirect로 추가 등록하세요.
 # 안 쓰면 wrangler.jsonc의 vars.DISCORD_REDIRECT_URI(프로덕션 값)가 쓰입니다.

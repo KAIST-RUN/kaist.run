@@ -44,6 +44,38 @@ export async function exchangeDiscordCode(env: Env, code: string, redirectUri: s
   return data.access_token;
 }
 
+// 봇 토큰으로 임의의 Discord 사용자 아바타를 조회합니다. GET /users/{id}는 봇과
+// 같은 서버에 없어도(공유 길드 없이) 전역으로 동작하는 엔드포인트라, 사이트에
+// 한 번도 로그인 안 한 역대 회원의 아바타도 이걸로 가져올 수 있습니다.
+// members.ts의 회원 명단 동기화에서 회원마다 한 번씩 호출됩니다.
+// 반환값 null은 "확인해봤는데 아바타가 없음"(기본 아바타뿐이거나 탈퇴한
+// 계정)이라는 확정적인 의미입니다. 일시적 실패(레이트리밋 소진, 5xx 등)는
+// 대신 예외를 던져서, 호출부(members.ts)가 이전에 캐싱해둔 아바타를 함부로
+// null로 덮어쓰지 않고 그대로 유지할 수 있게 구분해줍니다.
+export async function fetchDiscordAvatarUrl(botToken: string, discordId: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(`https://discord.com/api/v10/users/${discordId}`, {
+      headers: { Authorization: `Bot ${botToken}` },
+    });
+
+    if (res.status === 429) {
+      // 레이트리밋 — Retry-After만큼 한 번 기다렸다가 딱 한 번만 재시도합니다
+      // (수백 명을 동기화하는 도중이라 무한 재시도는 곤란).
+      const retryAfterSec = Number(res.headers.get("Retry-After")) || 1;
+      await new Promise((resolve) => setTimeout(resolve, retryAfterSec * 1000));
+      continue;
+    }
+    if (res.status === 404) return null; // 탈퇴/존재하지 않는 계정 — 아바타 없음 확정
+    if (!res.ok) throw new Error(`Discord avatar fetch failed: ${res.status} ${await res.text()}`);
+
+    const data = (await res.json()) as { id: string; avatar: string | null };
+    if (!data.avatar) return null; // 기본 아바타뿐 — 아바타 없음 확정
+    const ext = data.avatar.startsWith("a_") ? "gif" : "png";
+    return `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.${ext}`;
+  }
+  throw new Error(`Discord avatar fetch rate-limited after retry: ${discordId}`);
+}
+
 export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser> {
   const res = await fetch("https://discord.com/api/users/@me", {
     headers: { Authorization: `Bearer ${accessToken}` },

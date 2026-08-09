@@ -218,11 +218,14 @@ const FORM_STYLE = `
   .bs-upload-list .bs-danger { flex-shrink: 0; }
 
   .bs-member-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
-  .bs-member-list li { border-bottom: 1px solid rgba(128,128,128,.18); padding: 12px 6px; transition: background .15s; }
+  .bs-member-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 12px; padding: 10px 6px; transition: background .15s; }
   .bs-member-list li:hover { background: rgba(128,128,128,.05); }
+  .bs-member-avatar { width: 40px; height: 40px; border-radius: 999px; object-fit: cover; flex-shrink: 0; background: rgba(128,128,128,.12); }
+  .bs-member-avatar-fallback { display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 700; opacity: 0.55; }
+  .bs-member-body { flex: 1; min-width: 0; }
   .bs-member-main { display: flex; align-items: center; gap: 8px; }
-  .bs-member-main .name { font-weight: 600; font-size: 0.9375rem; }
-  .bs-member-list .meta { font-size: 0.8rem; opacity: 0.55; margin-top: 2px; }
+  .bs-member-main .name { font-weight: 600; font-size: 0.9375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bs-member-list .meta { font-size: 0.8rem; opacity: 0.55; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs-badge { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
 `;
 
@@ -703,13 +706,20 @@ function renderMemberRow(member: MemberRecord): string {
   const metaParts = [member.studentId, member.email, `Discord ${member.discordId}`].filter(
     (v): v is string => Boolean(v),
   );
+  const initial = (member.name || member.discordId).trim().slice(0, 1).toUpperCase();
+  const avatar = member.avatarUrl
+    ? `<img class="bs-member-avatar" src="${escapeHtml(member.avatarUrl)}" alt="" loading="lazy" />`
+    : `<div class="bs-member-avatar bs-member-avatar-fallback" aria-hidden="true">${escapeHtml(initial)}</div>`;
 
   return `<li>
-    <div class="bs-member-main">
-      <span class="name">${escapeHtml(member.name || "(이름 없음)")}</span>
-      ${member.role === "admin" ? '<span class="bs-badge">관리자</span>' : ""}
+    ${avatar}
+    <div class="bs-member-body">
+      <div class="bs-member-main">
+        <span class="name">${escapeHtml(member.name || "(이름 없음)")}</span>
+        ${member.role === "admin" ? '<span class="bs-badge">관리자</span>' : ""}
+      </div>
+      <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
     </div>
-    <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
   </li>`;
 }
 
