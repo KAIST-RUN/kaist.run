@@ -80,9 +80,17 @@ const FORM_STYLE = `
     .bs-list li { flex-direction: column; align-items: flex-start; gap: 4px; }
 
     /* 업로드 목록 한 행: 파일 정보(썸네일+이름)는 항상 자기 줄을 다 차지하고,
-       상대 URL과 삭제 버튼은 항상 그 다음 한 줄에 같이 있도록(URL이 줄어듦). */
+       상대 URL과 삭제 버튼은 항상 그 다음 한 줄에 "같이" 있도록(URL이 줄어들
+       뿐, 삭제 버튼이 그 아래로 떨어지진 않음) — flex-wrap을 li에 걸고, URL은
+       줄어들게(flex:1 1 auto) 삭제 버튼은 고정폭(flex-shrink:0)으로 둡니다. */
+    .bs-upload-list li { flex-wrap: wrap; }
     .bs-upload-open { flex: 1 1 100%; }
     .bs-upload-list .snippet { width: auto; flex: 1 1 auto; min-width: 0; }
+    .bs-upload-list li form { flex-shrink: 0; }
+
+    /* 검색창은 모바일에서 데스크톱용 상한(420px)을 풀어서 버튼과 함께 양옆
+       끝까지 채웁니다. */
+    .bs-search input[type="text"] { max-width: none; }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
@@ -152,7 +160,15 @@ const FORM_STYLE = `
   .bs-field .hint { font-size: 0.75rem; opacity: 0.5; }
   .bs-rows { display: flex; flex-direction: column; gap: 8px; }
   .bs-row-item { display: flex; gap: 8px; align-items: center; }
-  .bs-row-item input { flex: 1; min-width: 0; }
+  /* box-sizing이 border-box가 아니면 padding+border만큼 실제 렌더 너비가
+     flex-basis보다 커져서, 위 헤더 라벨(지원 폼 선택지 표의 <span>들)과 폭이
+     안 맞아 보였습니다 — 열을 맞추려면 이게 꼭 있어야 합니다. */
+  .bs-row-item input {
+    flex: 1; min-width: 0; box-sizing: border-box; font: inherit;
+    padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3);
+    background: rgba(128,128,128,.04); color: inherit;
+  }
+  .bs-row-item input[readonly] { opacity: 0.6; }
   .bs-row-remove { flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; font-size: 1rem; line-height: 1; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
   .bs-row-remove:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
   .bs-add-row { align-self: flex-start; margin-top: 6px; border: 1px dashed rgba(128,128,128,.4); background: transparent; color: inherit; transition: background .15s, border-color .15s, color .15s; }
@@ -205,7 +221,6 @@ const FORM_STYLE = `
   .bs-upload-list .meta { font-size: 0.75rem; opacity: 0.55; }
   .bs-upload-list .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; width: 220px; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex-shrink: 0; }
   .bs-upload-list .bs-danger { flex-shrink: 0; }
-  @media (max-width: 720px) { .bs-upload-list li { flex-wrap: wrap; } .bs-upload-list .snippet { width: 100%; } }
 
   .bs-member-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
   .bs-member-list li { border-bottom: 1px solid rgba(128,128,128,.18); padding: 12px 6px; transition: background .15s; }
@@ -739,7 +754,7 @@ export function renderMemberList(members: MemberRecord[], meta: MemberListPage, 
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
 
     <div class="bs-card">
-      <p class="bs-card-title">역대 명단 시트 연결</p>
+      <p class="bs-card-title">역대 명단 시트</p>
       ${
         sheetId
           ? `<p class="bs-note">현재 연결된 시트: <code>${escapeHtml(sheetId)}</code> ·
@@ -755,22 +770,21 @@ export function renderMemberList(members: MemberRecord[], meta: MemberListPage, 
         <button type="submit" class="bs-submit bs-icon-btn" aria-label="연결">${LINK_ICON_SVG}</button>
       </form>
       <p class="bs-note" style="margin-top:8px">연결 시 바로 한 번 동기화를 시도해서, 실제로 접근 가능한 시트일 때만 저장됩니다.</p>
-    </div>
 
-    <div class="bs-card">
-      <p class="bs-card-title">동기화</p>
-      <p class="bs-note">매시 정각에 자동으로 KV에 동기화됩니다. 방금 시트를 고쳤다면 여기서 강제로 바로 반영할 수 있어요.</p>
-      <p class="bs-note" style="margin-top:6px">
-        마지막 동기화: ${lastSyncedAt ? escapeHtml(formatKstDateTime(lastSyncedAt)) : "기록 없음"}
-      </p>
-      ${
-        syncResult
-          ? `<p class="bs-note" style="margin-top:10px;color:var(--logo-primary);font-weight:700;">완료 — 전체 ${syncResult.total}명 중 ${syncResult.written}명 갱신, ${syncResult.deleted}명 삭제됨</p>`
-          : ""
-      }
-      <form method="post" action="/members/sync" style="margin-top:14px">
-        <button type="submit" class="bs-submit">지금 동기화</button>
-      </form>
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(128,128,128,.16);">
+        <p class="bs-note">매시 정각에 자동으로 KV에 동기화됩니다. 방금 시트를 고쳤다면 여기서 강제로 바로 반영할 수 있어요.</p>
+        <p class="bs-note" style="margin-top:6px">
+          마지막 동기화: ${lastSyncedAt ? escapeHtml(formatKstDateTime(lastSyncedAt)) : "기록 없음"}
+        </p>
+        ${
+          syncResult
+            ? `<p class="bs-note" style="margin-top:10px;color:var(--logo-primary);font-weight:700;">완료 — 전체 ${syncResult.total}명 중 ${syncResult.written}명 갱신, ${syncResult.deleted}명 삭제됨</p>`
+            : ""
+        }
+        <form method="post" action="/members/sync" style="margin-top:14px">
+          <button type="submit" class="bs-submit">지금 동기화</button>
+        </form>
+      </div>
     </div>
 
     <form class="bs-search" method="get" action="/members">
@@ -944,7 +958,7 @@ function renderApplyQuestion(q: ApplyFormQuestion): string {
   const choicesHtml = hasChoices
     ? `<div class="bs-rows" style="margin-top:12px;">
         <div class="bs-row-item" style="opacity:.5;font-size:.75rem;">
-          <span style="flex:0 0 160px;">제출 값(고정)</span><span style="flex:1;min-width:0;">한국어 라벨</span><span style="flex:1;min-width:0;">영어 라벨</span>
+          <span style="flex:0 0 160px;padding-left:10px;box-sizing:border-box;">제출 값(고정)</span><span style="flex:1;min-width:0;padding-left:10px;box-sizing:border-box;">한국어 라벨</span><span style="flex:1;min-width:0;padding-left:10px;box-sizing:border-box;">영어 라벨</span>
         </div>
         ${q.choices
           .map(
