@@ -209,7 +209,7 @@ export async function updateUser(env: Env, uid: string, input: UserUpdateInput):
     `UPDATE users SET discord_id=?2, name=?3, email=?4, student_id=?5, phone=?6, solved_ac=?7, codeforces=?8, atcoder=?9, updated_at=datetime('now')
      WHERE uid=?1`,
   )
-    .bind(uid, input.discordId, input.name, input.email, input.studentId, input.phone, input.solvedAc, input.codeforces)
+    .bind(uid, input.discordId, input.name, input.email, input.studentId, input.phone, input.solvedAc, input.codeforces, input.atcoder)
     .run();
 }
 
