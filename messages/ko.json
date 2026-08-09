@@ -201,8 +201,10 @@
       "name": "이름",
       "email": "카이스트 이메일",
       "studentId": "학번",
-      "joinedYear": "가입 연도",
-      "joinedYearValue": "{year}",
+      "semesters": "소속 학기",
+      "semesterLabel": "{year}년 {season}",
+      "season": { "spring": "봄", "fall": "가을" },
+      "pendingBadge": "승인 대기",
       "discordAccount": "Discord 계정",
       "notRegistered": "미등록"
     },

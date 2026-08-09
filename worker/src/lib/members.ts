@@ -1,151 +1,254 @@
 import type { Env } from "../types";
-import { fetchMembersFromSheet, type MemberRecord } from "./googleSheets";
-import { getEffectiveSheetId, setRosterSheetOverride, parseSheetIdOrUrl } from "./rosterSheet";
 import { fetchDiscordAvatarUrl } from "./discord";
 
-export type { MemberRecord };
+// 예전엔 구글 스프레드시트 → MEMBERS(KV) 캐시가 회원 데이터의 원천이었지만, 이제 D1의
+// users/admins/semester_membership 테이블이 원천입니다(0012_users.sql). uid는
+// discordId 대신 예측 불가능한 crypto.randomUUID()를 PK로 씁니다 — 나중에 Discord가
+// 아닌 다른 로그인 수단이 생기거나, discordId 자체가 바뀌어야 하는 상황에서도 다른
+// 테이블(semester_membership, admins)이 참조하는 값이 안 흔들리도록.
 
-const MEMBER_KEY_PREFIX = "member:";
-// "member:" 프리픽스를 안 씁니다 — removeStaleMembers가 그 프리픽스로 나열한 키를
-// 전부 discordId로 취급해서, 시트에 없는 키는 지워버립니다. 여기에 두면 매 동기화마다
-// 자기 자신이 "탈퇴한 회원"으로 오인되어 지워지는 꼴이 됩니다.
-const LAST_SYNCED_KEY = "meta:members_last_synced_at";
+export class UserValidationError extends Error {}
 
-export async function getMember(env: Env, discordId: string): Promise<MemberRecord | null> {
-  const raw = await env.MEMBERS.get(`${MEMBER_KEY_PREFIX}${discordId}`);
-  return raw ? (JSON.parse(raw) as MemberRecord) : null;
-}
-
-// backstage 홈 화면에 "마지막 동기화" 시각을 보여주기 위함.
-export async function getMembersLastSyncedAt(env: Env): Promise<number | null> {
-  const raw = await env.MEMBERS.get(LAST_SYNCED_KEY);
-  return raw ? Number(raw) : null;
-}
-
-// backstage의 회원 명단 페이지용 — KV에 캐싱된 회원 전체를 가져옵니다. 회원 수가
-// 많지 않아(역대 전체 다 합쳐도 수백 명 수준) 한 번에 다 읽어도 괜찮습니다.
-export async function listMembers(env: Env): Promise<MemberRecord[]> {
-  const members: MemberRecord[] = [];
-  let cursor: string | undefined;
-
-  do {
-    const page = await env.MEMBERS.list({ prefix: MEMBER_KEY_PREFIX, cursor });
-    const values = await Promise.all(page.keys.map((k) => env.MEMBERS.get(k.name)));
-    for (const raw of values) {
-      if (raw) members.push(JSON.parse(raw) as MemberRecord);
-    }
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
-
-  members.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
-  return members;
-}
-
-export type SyncResult = {
-  total: number; // 시트에서 읽은 전체 회원 수
-  written: number; // 실제로 바뀌어서 KV에 다시 쓴 회원 수
-  deleted: number; // 시트에서 빠져서 KV에서 지운 회원 수
+type RawUserRow = {
+  uid: string;
+  discord_id: string;
+  name: string | null;
+  email: string | null;
+  student_id: string | null;
+  phone: string | null;
+  solved_ac: string | null;
+  codeforces: string | null;
+  atcoder: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+  is_admin: number;
+  is_current_member: number;
+  has_ever_approved: number;
 };
 
-// 시트에서 빠진(삭제된) 회원의 KV 항목을 지웁니다. 이게 없으면 시트에서 지운
-// 사람도 계속 로그인 세션이 유효해서 예전 정보로 접속할 수 있게 됩니다 —
-// /api/me가 getMember()로 매번 다시 확인하므로, 여기서 지우면 그 사람은
-// 다음 /api/me 호출부터 바로 403으로 막힙니다(다시 로그인해도 not_member).
-async function removeStaleMembers(env: Env, currentIds: Set<string>): Promise<number> {
-  let deletedCount = 0;
-  let cursor: string | undefined;
+export type UserRecord = {
+  uid: string;
+  discordId: string;
+  name: string | null;
+  email: string | null;
+  studentId: string | null;
+  phone: string | null;
+  solvedAc: string | null;
+  codeforces: string | null;
+  atcoder: string | null;
+  avatarUrl: string | null;
+  // 둘 다 저장 컬럼이 아니라 조회 시점에 admins/semester_membership을 보고 계산합니다
+  // (별도 컬럼으로 두면 그 테이블들과 값이 어긋날 수 있어서) — 아래 USER_SELECT 참고.
+  role: "member" | "admin";
+  status: "applicant" | "member" | "alumni";
+  createdAt: string;
+};
 
-  do {
-    const page = await env.MEMBERS.list({ prefix: MEMBER_KEY_PREFIX, cursor });
-    const staleKeys = page.keys
-      .map((k) => k.name)
-      .filter((name) => !currentIds.has(name.slice(MEMBER_KEY_PREFIX.length)));
+// is_current_member: "현재 학기"에 approved된 학기 소속이 있는지.
+// has_ever_approved: 학기를 막론하고 approved된 적이 한 번이라도 있는지.
+// role은 admins 테이블에 존재하는지로 판정합니다.
+const USER_SELECT = `
+  SELECT u.*,
+    EXISTS(SELECT 1 FROM admins a WHERE a.uid = u.uid) AS is_admin,
+    EXISTS(
+      SELECT 1 FROM semester_membership sm
+      JOIN semesters s ON s.year = sm.year AND s.season = sm.season AND s.is_current = 1
+      WHERE sm.uid = u.uid AND sm.status = 'approved'
+    ) AS is_current_member,
+    EXISTS(SELECT 1 FROM semester_membership sm WHERE sm.uid = u.uid AND sm.status = 'approved') AS has_ever_approved
+  FROM users u
+`;
 
-    await Promise.all(staleKeys.map((key) => env.MEMBERS.delete(key)));
-    deletedCount += staleKeys.length;
-
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
-
-  return deletedCount;
+function toUserRecord(row: RawUserRow): UserRecord {
+  return {
+    uid: row.uid,
+    discordId: row.discord_id,
+    name: row.name,
+    email: row.email,
+    studentId: row.student_id,
+    phone: row.phone,
+    solvedAc: row.solved_ac,
+    codeforces: row.codeforces,
+    atcoder: row.atcoder,
+    avatarUrl: row.avatar_url,
+    role: row.is_admin ? "admin" : "member",
+    status: row.is_current_member ? "member" : row.has_ever_approved ? "alumni" : "applicant",
+    createdAt: row.created_at,
+  };
 }
 
-// Discord 봇 토큰으로 동시에 너무 많이 요청하지 않도록 개수를 제한한 채로 아바타를
-// 채웁니다. 실패(레이트리밋 소진, 5xx 등)한 항목은 그냥 Map에서 빠집니다 — 호출부가
-// "이 discordId가 Map에 없으면 이전 캐시값 유지"로 구분해서 처리합니다.
-const AVATAR_FETCH_CONCURRENCY = 5;
+// 로그인/세션 게이트의 핵심 조회입니다 (authGuard.ts::requireSession, auth.ts의 OAuth
+// 콜백) — 예전 getMember(env, discordId)를 그대로 대체합니다.
+export async function getUserByDiscordId(env: Env, discordId: string): Promise<UserRecord | null> {
+  const row = await env.CONTENT_DB.prepare(`${USER_SELECT} WHERE u.discord_id = ?1`).bind(discordId).first<RawUserRow>();
+  return row ? toUserRecord(row) : null;
+}
 
-async function fetchAvatarsForMembers(env: Env, discordIds: string[]): Promise<Map<string, string | null>> {
-  const avatars = new Map<string, string | null>();
-  let index = 0;
+export async function getUserByUid(env: Env, uid: string): Promise<UserRecord | null> {
+  const row = await env.CONTENT_DB.prepare(`${USER_SELECT} WHERE u.uid = ?1`).bind(uid).first<RawUserRow>();
+  return row ? toUserRecord(row) : null;
+}
 
-  async function worker() {
-    while (index < discordIds.length) {
-      const discordId = discordIds[index++];
+// backstage 유저 명단 페이지용 — 회원 수가 많지 않아(역대 전체 합쳐도 수백 명 수준)
+// 한 번에 다 읽어도 괜찮습니다. SQLite엔 한글 collation이 없어서 기존 KV 시절과
+// 동일하게 JS에서 localeCompare로 정렬합니다.
+export async function listUsers(env: Env): Promise<UserRecord[]> {
+  const { results } = await env.CONTENT_DB.prepare(`${USER_SELECT} ORDER BY u.created_at ASC`).all<RawUserRow>();
+  const users = results.map(toUserRecord);
+  users.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
+  return users;
+}
+
+export type UserInput = {
+  discordId: string;
+  name?: string | null;
+  email?: string | null;
+  studentId?: string | null;
+  phone?: string | null;
+  solvedAc?: string | null;
+  codeforces?: string | null;
+  atcoder?: string | null;
+  avatarUrl?: string | null;
+};
+
+// backstage "새 유저" 수동 등록용 — 이미 있는 discordId면 명확한 에러로 거부합니다
+// (조용히 덮어쓰면 실수로 다른 사람 정보를 고칠 수 있어서 — 재등록/갱신은
+// upsertUserByDiscordId가 따로 담당합니다).
+export async function createUser(env: Env, input: UserInput): Promise<UserRecord> {
+  const existing = await getUserByDiscordId(env, input.discordId);
+  if (existing) throw new UserValidationError("이미 등록된 Discord 계정입니다.");
+
+  const uid = crypto.randomUUID();
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO users (uid, discord_id, name, email, student_id, phone, solved_ac, codeforces, atcoder, avatar_url)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+  )
+    .bind(
+      uid,
+      input.discordId,
+      input.name ?? null,
+      input.email ?? null,
+      input.studentId ?? null,
+      input.phone ?? null,
+      input.solvedAc ?? null,
+      input.codeforces ?? null,
+      input.atcoder ?? null,
+      input.avatarUrl ?? null,
+    )
+    .run();
+
+  const created = await getUserByUid(env, uid);
+  if (!created) throw new Error("Failed to read back just-created user");
+  return created;
+}
+
+// 디스코드 봇의 "신규 회원가입"용 — discordId 기준으로 있으면 갱신, 없으면 새로 만듭니다
+// (재실행해도 안전한 upsert). 넘어오지 않은(undefined) 필드는 기존 값을 그대로
+// 두고, 아바타가 없는 신규 유저는 봇 토큰으로 한 번 best-effort 조회를 시도합니다
+// (로그인 전에도 backstage 명단에서 프로필 사진이 보이도록 — 실패해도 등록 자체는
+// 막지 않습니다).
+export async function upsertUserByDiscordId(
+  env: Env,
+  discordId: string,
+  input: Omit<UserInput, "discordId">,
+): Promise<{ uid: string; created: boolean }> {
+  const existing = await getUserByDiscordId(env, discordId);
+
+  if (!existing) {
+    let avatarUrl = input.avatarUrl ?? null;
+    if (avatarUrl === null) {
       try {
-        avatars.set(discordId, await fetchDiscordAvatarUrl(env.DISCORD_BOT_TOKEN, discordId));
+        avatarUrl = await fetchDiscordAvatarUrl(env.DISCORD_BOT_TOKEN, discordId);
       } catch (err) {
-        console.error(`Failed to fetch Discord avatar for ${discordId}`, err);
+        console.error(`Failed to fetch Discord avatar for new user ${discordId}`, err);
       }
     }
+    const created = await createUser(env, { discordId, ...input, avatarUrl });
+    return { uid: created.uid, created: true };
   }
 
-  await Promise.all(Array.from({ length: Math.min(AVATAR_FETCH_CONCURRENCY, discordIds.length) }, worker));
-  return avatars;
+  const next = {
+    name: input.name !== undefined ? input.name : existing.name,
+    email: input.email !== undefined ? input.email : existing.email,
+    studentId: input.studentId !== undefined ? input.studentId : existing.studentId,
+    phone: input.phone !== undefined ? input.phone : existing.phone,
+    solvedAc: input.solvedAc !== undefined ? input.solvedAc : existing.solvedAc,
+    codeforces: input.codeforces !== undefined ? input.codeforces : existing.codeforces,
+    atcoder: input.atcoder !== undefined ? input.atcoder : existing.atcoder,
+  };
+  await env.CONTENT_DB.prepare(
+    `UPDATE users SET name=?2, email=?3, student_id=?4, phone=?5, solved_ac=?6, codeforces=?7, atcoder=?8, updated_at=datetime('now')
+     WHERE uid=?1`,
+  )
+    .bind(existing.uid, next.name, next.email, next.studentId, next.phone, next.solvedAc, next.codeforces, next.atcoder)
+    .run();
+  return { uid: existing.uid, created: false };
 }
 
-// Google Sheets → KV로 회원 명단을 다시 채웁니다.
-// index.ts의 scheduled(cron)와 routes/admin.ts(수동 트리거)에서 호출됩니다.
-//
-// KV 쓰기(write)는 무료 티어에서 하루 1,000회로 제한되어 있어서, 매번 전체를
-// 덮어쓰지 않고 기존 값과 비교해 실제로 바뀐 회원만 씁니다. 대신 회원 수만큼
-// 읽기(read)가 늘어나는데, 읽기는 하루 100,000회로 훨씬 여유롭습니다.
-//
-// sheetIdOverride를 안 주면 getEffectiveSheetId(env)로 알아서 결정합니다(D1에
-// backstage로 연결해 둔 시트가 있으면 그걸, 없으면 기존 시크릿). connectRosterSheet가
-// "새 시트가 진짜 동작하는지" 저장 전에 시험해볼 때만 명시적으로 넘겨줍니다.
-export async function syncMembersFromSheet(env: Env, sheetIdOverride?: string): Promise<SyncResult> {
-  const sheetId = sheetIdOverride ?? (await getEffectiveSheetId(env));
-  const fetchedMembers = await fetchMembersFromSheet(env, sheetId);
-  const currentIds = new Set(fetchedMembers.map((m) => m.discordId));
-  const avatars = await fetchAvatarsForMembers(
-    env,
-    fetchedMembers.map((m) => m.discordId),
-  );
+export type UserUpdateInput = {
+  discordId: string;
+  name: string | null;
+  email: string | null;
+  studentId: string | null;
+  phone: string | null;
+  solvedAc: string | null;
+  codeforces: string | null;
+  atcoder: string | null;
+};
 
-  const [results, deleted] = await Promise.all([
-    Promise.all(
-      fetchedMembers.map(async (member) => {
-        const key = `${MEMBER_KEY_PREFIX}${member.discordId}`;
-        const existingRaw = await env.MEMBERS.get(key);
-        const existing = existingRaw ? (JSON.parse(existingRaw) as MemberRecord) : null;
+// backstage 유저 수정 페이지 저장 — discordId도 고칠 수 있게 합니다(오타 정정 등
+// 드물지만 실제로 필요한 케이스라서), 단 다른 유저가 이미 쓰는 값이면 거부합니다.
+export async function updateUser(env: Env, uid: string, input: UserUpdateInput): Promise<void> {
+  const conflict = await getUserByDiscordId(env, input.discordId);
+  if (conflict && conflict.uid !== uid) {
+    throw new UserValidationError("이미 다른 유저가 쓰고 있는 Discord ID입니다.");
+  }
 
-        // 이번에 못 가져왔으면(Map에 없음) 이전 캐시값을 그대로 둡니다 —
-        // 일시적 오류로 멀쩡한 아바타가 지워지면 안 되니까요.
-        const avatarUrl = avatars.has(member.discordId) ? (avatars.get(member.discordId) ?? null) : (existing?.avatarUrl ?? null);
+  await env.CONTENT_DB.prepare(
+    `UPDATE users SET discord_id=?2, name=?3, email=?4, student_id=?5, phone=?6, solved_ac=?7, codeforces=?8, atcoder=?9, updated_at=datetime('now')
+     WHERE uid=?1`,
+  )
+    .bind(uid, input.discordId, input.name, input.email, input.studentId, input.phone, input.solvedAc, input.codeforces)
+    .run();
+}
 
-        const next: MemberRecord = { ...member, avatarUrl };
-        const nextRaw = JSON.stringify(next);
-        if (existingRaw === nextRaw) return false; // 변경 없음 — 쓰기 생략
+// 로그인 성공 시(routes/auth.ts) 매번 호출해서 아바타를 최신으로 맞춥니다 — Discord
+// OAuth 응답에 이미 들어있는 값이라 추가 API 호출 없이 공짜로 갱신됩니다. backstage
+// 명단은 이렇게 "로그인할 때마다 갱신"되는 캐시라, 오래 로그인 안 한 사람의 아바타는
+// (거의 안 바뀌는 값이라) 다소 오래될 수 있지만 치명적이지 않습니다.
+export async function touchUserAvatar(env: Env, discordId: string, avatarUrl: string | null): Promise<void> {
+  await env.CONTENT_DB.prepare("UPDATE users SET avatar_url = ?2, updated_at = datetime('now') WHERE discord_id = ?1")
+    .bind(discordId, avatarUrl)
+    .run();
+}
 
-        await env.MEMBERS.put(key, nextRaw);
-        return true;
-      }),
-    ),
-    removeStaleMembers(env, currentIds),
+export async function deleteUser(env: Env, uid: string): Promise<void> {
+  // FK cascade가 없으므로(이 저장소의 다른 마이그레이션과 같은 관례) 순서대로 지웁니다.
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("DELETE FROM semester_membership WHERE uid = ?1").bind(uid),
+    env.CONTENT_DB.prepare("DELETE FROM admins WHERE uid = ?1").bind(uid),
+    env.CONTENT_DB.prepare("DELETE FROM users WHERE uid = ?1").bind(uid),
   ]);
-
-  await env.MEMBERS.put(LAST_SYNCED_KEY, String(Date.now()));
-
-  return { total: fetchedMembers.length, written: results.filter(Boolean).length, deleted };
 }
 
-// backstage에서 "역대 명단 시트"를 새로 연결할 때 씁니다. 잘못된 링크를 저장해서
-// 로그인/회원 시스템 전체가 막히는 일이 없도록, 실제로 한 번 동기화까지 성공해야만
-// D1에 override로 저장합니다(실패하면 예외가 그대로 올라가고 아무것도 안 바뀜).
-export async function connectRosterSheet(env: Env, sheetIdOrUrl: string): Promise<SyncResult> {
-  const sheetId = parseSheetIdOrUrl(sheetIdOrUrl);
-  const result = await syncMembersFromSheet(env, sheetId);
-  await setRosterSheetOverride(env, sheetId);
-  return result;
+export async function grantAdmin(env: Env, uid: string, grantedByUid: string | null, grantedByName: string | null): Promise<void> {
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO admins (uid, granted_by_uid, granted_by_name) VALUES (?1, ?2, ?3)
+     ON CONFLICT (uid) DO NOTHING`,
+  )
+    .bind(uid, grantedByUid, grantedByName)
+    .run();
+}
+
+export async function revokeAdmin(env: Env, uid: string): Promise<void> {
+  await env.CONTENT_DB.prepare("DELETE FROM admins WHERE uid = ?1").bind(uid).run();
+}
+
+export async function listAdmins(env: Env): Promise<UserRecord[]> {
+  // USER_SELECT의 EXISTS() 서브쿼리 안에서도 "admins a"라는 별칭을 쓰므로, 여기 바깥
+  // JOIN엔 헷갈리지 않게 다른 별칭(am)을 씁니다(서로 다른 스코프라 실제로 충돌하진
+  // 않지만, 굳이 헷갈릴 이유가 없음).
+  const { results } = await env.CONTENT_DB.prepare(`${USER_SELECT} JOIN admins am ON am.uid = u.uid ORDER BY am.granted_at ASC`).all<RawUserRow>();
+  return results.map(toUserRecord);
 }

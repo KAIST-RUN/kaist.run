@@ -24,8 +24,28 @@ import {
   type BylawsBlock,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
-import { syncMembersFromSheet, connectRosterSheet, getMembersLastSyncedAt, listMembers } from "../lib/members";
-import { getEffectiveSheetId, RosterSheetValidationError } from "../lib/rosterSheet";
+import {
+  listUsers,
+  getUserByUid,
+  createUser,
+  updateUser,
+  deleteUser,
+  grantAdmin,
+  revokeAdmin,
+  listAdmins,
+  UserValidationError,
+} from "../lib/members";
+import {
+  listSemesters,
+  openSemester,
+  listSemesterMembers,
+  approveSemesterMembership,
+  rejectSemesterMembership,
+  revokeSemesterMembership,
+  addSemesterMember,
+  getUserSemesters,
+} from "../lib/semesters";
+import { toCsvDocument } from "../lib/csv";
 import {
   getApplyFormConfig,
   connectApplyForm,
@@ -42,6 +62,12 @@ import {
   renderArchiveForm,
   archiveRowsToFormData,
   renderMemberList,
+  renderUserForm,
+  userRowToFormData,
+  type UserFormData,
+  renderSemesterPicker,
+  renderSemesterRoster,
+  renderAdminList,
   renderContactForm,
   contactRowsToFormData,
   renderBylawsList,
@@ -354,13 +380,13 @@ backstage.post("/archive/:season/:slug/delete", async (c) => {
 
 const MEMBERS_PAGE_SIZE = 30;
 
-function paginateMembers(c: { req: { query(key: string): string | undefined } }, members: Awaited<ReturnType<typeof listMembers>>) {
+function paginateMembers(c: { req: { query(key: string): string | undefined } }, users: Awaited<ReturnType<typeof listUsers>>) {
   const q = (c.req.query("q") ?? "").trim().toLowerCase();
   const page = Math.max(0, Number.parseInt(c.req.query("page") ?? "0", 10) || 0);
 
   const filtered = q
-    ? members.filter((m) => [m.name, m.studentId, m.email, m.discordId].some((v) => v?.toLowerCase().includes(q)))
-    : members;
+    ? users.filter((u) => [u.name, u.studentId, u.email, u.discordId].some((v) => v?.toLowerCase().includes(q)))
+    : users;
   const start = page * MEMBERS_PAGE_SIZE;
   const pageItems = filtered.slice(start, start + MEMBERS_PAGE_SIZE);
 
@@ -380,72 +406,285 @@ backstage.get("/members", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
-  const members = await listMembers(c.env);
-  const { pageItems, meta } = paginateMembers(c, members);
-
-  const syncResult =
-    c.req.query("synced") === "1"
-      ? {
-          total: Number(c.req.query("total") ?? 0),
-          written: Number(c.req.query("written") ?? 0),
-          deleted: Number(c.req.query("deleted") ?? 0),
-        }
-      : null;
-  const lastSyncedAt = await getMembersLastSyncedAt(c.env);
-  const sheetId = await getEffectiveSheetId(c.env);
-
-  return c.html(renderMemberList(pageItems, meta, { syncResult, lastSyncedAt, sheetId }));
+  const users = await listUsers(c.env);
+  const { pageItems, meta } = paginateMembers(c, users);
+  return c.html(renderMemberList(pageItems, meta));
 });
 
-// 회원 명단 페이지의 "지금 동기화"(강제 캐싱) 버튼. cron(index.ts의 scheduled, 매시
-// 정각)이 자동으로 하는 것과 같은 작업을 그 자리에서 수동으로 트리거합니다.
-// admin.ts의 /api/admin/sync-members(비밀키 헤더 인증, CLI/외부 트리거용)와는
-// 별개로, 여기는 backstage 세션(관리자 로그인)으로 인증합니다.
-backstage.post("/members/sync", async (c) => {
+backstage.get("/members/export.csv", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
-  const result = await syncMembersFromSheet(c.env);
-  const params = new URLSearchParams({
-    synced: "1",
-    total: String(result.total),
-    written: String(result.written),
-    deleted: String(result.deleted),
+  const users = await listUsers(c.env);
+  const csv = toCsvDocument(
+    ["UID", "이름", "학번", "이메일", "전화번호", "Discord ID", "solved.ac", "Codeforces", "AtCoder", "상태", "권한", "생성일"],
+    users.map((u) => [u.uid, u.name, u.studentId, u.email, u.phone, u.discordId, u.solvedAc, u.codeforces, u.atcoder, u.status, u.role, u.createdAt]),
+  );
+  const filename = "members.csv";
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    },
   });
-  return c.redirect(`/members?${params.toString()}`);
 });
 
-// 역대 회원 시트 연결/교체. 잘못된 링크를 저장해서 로그인이 전부 막히는 일이 없도록,
-// connectRosterSheet가 실제로 동기화까지 성공해야만 저장합니다 — 실패하면 여기서
-// 잡아서 에러 메시지와 함께 목록을 다시 보여줍니다.
-backstage.post("/members/roster-sheet", async (c) => {
+backstage.get("/members/new", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const empty: UserFormData = {
+    uid: "",
+    discordId: "",
+    name: "",
+    email: "",
+    studentId: "",
+    phone: "",
+    solvedAc: "",
+    codeforces: "",
+    atcoder: "",
+    isAdmin: false,
+  };
+  return c.html(renderUserForm("new", empty, null));
+});
+
+function readUserForm(get: (key: string) => string): Omit<UserFormData, "uid"> {
+  return {
+    discordId: get("discordId").trim(),
+    name: get("name").trim(),
+    email: get("email").trim(),
+    studentId: get("studentId").trim(),
+    phone: get("phone").trim(),
+    solvedAc: get("solvedAc").trim(),
+    codeforces: get("codeforces").trim(),
+    atcoder: get("atcoder").trim(),
+    isAdmin: get("isAdmin") === "1",
+  };
+}
+
+backstage.post("/members/new", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
 
   const { get } = await readForm(c);
-  const sheetInput = get("sheetUrl").trim();
+  const input = readUserForm(get);
 
   try {
-    const result = await connectRosterSheet(c.env, sheetInput);
-    const params = new URLSearchParams({
-      synced: "1",
-      total: String(result.total),
-      written: String(result.written),
-      deleted: String(result.deleted),
+    const created = await createUser(c.env, {
+      discordId: input.discordId,
+      name: input.name || null,
+      email: input.email || null,
+      studentId: input.studentId || null,
+      phone: input.phone || null,
+      solvedAc: input.solvedAc || null,
+      codeforces: input.codeforces || null,
+      atcoder: input.atcoder || null,
     });
-    return c.redirect(`/members?${params.toString()}`);
+    if (input.isAdmin) await grantAdmin(c.env, created.uid, gate.member.uid, gate.member.name);
+    return c.redirect(`/members/${encodeURIComponent(created.uid)}/edit`);
   } catch (err) {
-    console.error("Failed to connect roster sheet", err);
-    const members = await listMembers(c.env);
-    const { pageItems, meta } = paginateMembers(c, members);
-    const lastSyncedAt = await getMembersLastSyncedAt(c.env);
-    const sheetId = await getEffectiveSheetId(c.env);
-    const message =
-      err instanceof RosterSheetValidationError
-        ? err.message
-        : "시트에 연결하지 못했습니다. 링크와 공유 권한을 확인해 주세요.";
-    return c.html(renderMemberList(pageItems, meta, { lastSyncedAt, sheetId, error: message }), 400);
+    const message = err instanceof UserValidationError ? err.message : "저장하지 못했습니다.";
+    return c.html(renderUserForm("new", { uid: "", ...input }, null, message), 400);
   }
+});
+
+backstage.get("/members/:uid/edit", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const uid = c.req.param("uid");
+  const user = await getUserByUid(c.env, uid);
+  if (!user) return c.notFound();
+
+  const semesters = await getUserSemesters(c.env, uid);
+  return c.html(renderUserForm("edit", userRowToFormData(user), semesters));
+});
+
+backstage.post("/members/:uid/edit", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const uid = c.req.param("uid");
+  const { get } = await readForm(c);
+  const input = readUserForm(get);
+
+  try {
+    await updateUser(c.env, uid, {
+      discordId: input.discordId,
+      name: input.name || null,
+      email: input.email || null,
+      studentId: input.studentId || null,
+      phone: input.phone || null,
+      solvedAc: input.solvedAc || null,
+      codeforces: input.codeforces || null,
+      atcoder: input.atcoder || null,
+    });
+    if (input.isAdmin) await grantAdmin(c.env, uid, gate.member.uid, gate.member.name);
+    else await revokeAdmin(c.env, uid);
+    return c.redirect(`/members/${encodeURIComponent(uid)}/edit`);
+  } catch (err) {
+    const message = err instanceof UserValidationError ? err.message : "저장하지 못했습니다.";
+    const semesters = await getUserSemesters(c.env, uid);
+    return c.html(renderUserForm("edit", { uid, ...input }, semesters, message), 400);
+  }
+});
+
+backstage.post("/members/:uid/delete", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  await deleteUser(c.env, c.req.param("uid"));
+  return c.redirect("/members");
+});
+
+// ---------- members: 학기별 명단 ----------
+
+backstage.get("/members/semesters", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const semesters = await listSemesters(c.env);
+  return c.html(renderSemesterPicker(semesters));
+});
+
+backstage.post("/members/semesters/open", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  const year = Number.parseInt(get("year"), 10);
+  const season = get("season");
+  if (!Number.isFinite(year) || !isSeason(season)) {
+    const semesters = await listSemesters(c.env);
+    return c.html(renderSemesterPicker(semesters, "연도와 학기를 올바르게 입력해 주세요."), 400);
+  }
+
+  await openSemester(c.env, year, season, get("makeCurrent") === "1");
+  return c.redirect(`/members/semesters/${year}/${season}`);
+});
+
+backstage.get("/members/semesters/:year/:season", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const year = Number.parseInt(c.req.param("year"), 10);
+  const season = c.req.param("season");
+  if (!Number.isFinite(year) || !isSeason(season)) return c.notFound();
+
+  const [semesters, members] = await Promise.all([listSemesters(c.env), listSemesterMembers(c.env, year, season)]);
+  const isCurrent = semesters.some((s) => s.year === year && s.season === season && s.isCurrent);
+  if (!semesters.some((s) => s.year === year && s.season === season)) return c.notFound();
+
+  return c.html(renderSemesterRoster(year, season, isCurrent, members));
+});
+
+backstage.get("/members/semesters/:year/:season/export.csv", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const year = Number.parseInt(c.req.param("year"), 10);
+  const season = c.req.param("season");
+  if (!Number.isFinite(year) || !isSeason(season)) return c.notFound();
+
+  const members = await listSemesterMembers(c.env, year, season);
+  const csv = toCsvDocument(
+    ["UID", "이름", "학번", "이메일", "Discord ID", "상태", "승인자", "승인일시", "신청일시"],
+    members.map((m) => [m.uid, m.name, m.studentId, m.email, m.discordId, m.status, m.approvedByName, m.approvedAt, m.requestedAt]),
+  );
+  const filename = `members-${year}-${season}.csv`;
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    },
+  });
+});
+
+async function requireOpenSemester(c: { req: { param(key: string): string } }, env: Env) {
+  const year = Number.parseInt(c.req.param("year"), 10);
+  const season = c.req.param("season");
+  if (!Number.isFinite(year) || !isSeason(season)) return null;
+  const semesters = await listSemesters(env);
+  if (!semesters.some((s) => s.year === year && s.season === season)) return null;
+  return { year, season };
+}
+
+backstage.post("/members/semesters/:year/:season/approve", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const target = await requireOpenSemester(c, c.env);
+  if (!target) return c.notFound();
+
+  const { get } = await readForm(c);
+  await approveSemesterMembership(c.env, get("uid"), target.year, target.season, gate.member.uid, gate.member.name);
+  return c.redirect(`/members/semesters/${target.year}/${target.season}`);
+});
+
+backstage.post("/members/semesters/:year/:season/reject", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const target = await requireOpenSemester(c, c.env);
+  if (!target) return c.notFound();
+
+  const { get } = await readForm(c);
+  await rejectSemesterMembership(c.env, get("uid"), target.year, target.season);
+  return c.redirect(`/members/semesters/${target.year}/${target.season}`);
+});
+
+backstage.post("/members/semesters/:year/:season/revoke", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const target = await requireOpenSemester(c, c.env);
+  if (!target) return c.notFound();
+
+  const { get } = await readForm(c);
+  await revokeSemesterMembership(c.env, get("uid"), target.year, target.season);
+  return c.redirect(`/members/semesters/${target.year}/${target.season}`);
+});
+
+// 관리자가 봇을 거치지 않고 기존 유저를 이름/Discord ID로 찾아 바로 그 학기에
+// 추가(=즉시 승인)합니다. 정확히 일치하는 유저가 하나가 아니면(없거나 이름이
+// 겹치면) 에러로 되돌립니다 — Discord ID로 다시 시도하면 항상 유일하게 찾깁니다.
+backstage.post("/members/semesters/:year/:season/add", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const target = await requireOpenSemester(c, c.env);
+  if (!target) return c.notFound();
+
+  const { get } = await readForm(c);
+  const query = get("query").trim();
+  const users = await listUsers(c.env);
+  const matches = users.filter((u) => u.discordId === query || u.name === query);
+
+  if (matches.length !== 1) {
+    const members = await listSemesterMembers(c.env, target.year, target.season);
+    const semesters = await listSemesters(c.env);
+    const isCurrent = semesters.some((s) => s.year === target.year && s.season === target.season && s.isCurrent);
+    const message = matches.length === 0 ? "일치하는 유저를 찾지 못했습니다." : "이름이 여러 명과 겹칩니다 — Discord ID로 다시 시도해 주세요.";
+    return c.html(renderSemesterRoster(target.year, target.season, isCurrent, members, message), 400);
+  }
+
+  await addSemesterMember(c.env, matches[0].uid, target.year, target.season, gate.member.uid, gate.member.name);
+  return c.redirect(`/members/semesters/${target.year}/${target.season}`);
+});
+
+// ---------- members: 관리자 ----------
+
+backstage.get("/members/admins", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const admins = await listAdmins(c.env);
+  return c.html(renderAdminList(admins));
+});
+
+backstage.post("/members/admins/revoke", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  await revokeAdmin(c.env, get("uid"));
+  return c.redirect("/members/admins");
 });
 
 // ---------- contact ----------

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { CurrentUser, Env } from "../types";
 import { requireSession } from "../lib/authGuard";
+import { getUserSemesters } from "../lib/semesters";
 
 export const me = new Hono<{ Bindings: Env }>();
 
@@ -15,6 +16,7 @@ me.get("/", async (c) => {
   }
 
   const { session, member } = auth;
+  const semesters = await getUserSemesters(c.env, member.uid);
   const user: CurrentUser = {
     discordId: session.discordId,
     discordUsername: session.discordUsername,
@@ -23,9 +25,9 @@ me.get("/", async (c) => {
     name: member.name,
     email: member.email,
     studentId: member.studentId,
-    joinedYear: member.joinedYear,
     status: member.status,
     role: member.role,
+    semesters,
   };
 
   return c.json(user);

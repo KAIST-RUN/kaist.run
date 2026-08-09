@@ -10,13 +10,14 @@ export type CurrentUser = {
   name: string | null;
   email: string | null;
   studentId: string | null;
-  joinedYear: number | null;
 
   status: "applicant" | "member" | "alumni";
   // 보안 참고: role은 화면 표시(관리자 메뉴 노출 여부)에만 쓰는 편의 값입니다.
   // 실제 관리자 권한이 필요한 API(예: 추후 메일 아카이브)는 이 값을 신뢰하지 말고
   // 서버(Worker)에서 세션을 기준으로 별도로 재검증해야 합니다.
   role: "member" | "admin";
+  // 승인됨/대기중 둘 다 포함, 최신순 — "가입 연도" 대신 이제 이걸로 소속을 보여줍니다.
+  semesters: { year: number; season: "spring" | "fall"; status: "pending" | "approved" }[];
 };
 
 // /api/me 호출 결과를 나타내는 판별 유니온입니다.

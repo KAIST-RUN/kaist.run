@@ -201,8 +201,10 @@
       "name": "Name",
       "email": "KAIST email",
       "studentId": "Student ID",
-      "joinedYear": "Year joined",
-      "joinedYearValue": "{year}",
+      "semesters": "Semesters",
+      "semesterLabel": "{season} {year}",
+      "season": { "spring": "Spring", "fall": "Fall" },
+      "pendingBadge": "Pending",
       "discordAccount": "Discord account",
       "notRegistered": "Not registered"
     },

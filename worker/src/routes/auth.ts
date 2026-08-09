@@ -3,7 +3,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Env } from "../types";
 import { buildDiscordAuthorizeUrl, exchangeDiscordCode, fetchDiscordUser } from "../lib/discord";
 import { createSession, deleteSession } from "../lib/session";
-import { getMember } from "../lib/members";
+import { getUserByDiscordId, touchUserAvatar } from "../lib/members";
 import { ALLOWED_ORIGINS, SESSION_COOKIE } from "../lib/constants";
 
 // state를 쿠키에 저장했다가 콜백 때 되읽는 방식은 모바일 Firefox의 ETP(Total
@@ -175,16 +175,26 @@ auth.get("/discord/callback", async (c) => {
   const accessToken = await exchangeDiscordCode(c.env, code, redirectUri);
   const discordUser = await fetchDiscordUser(accessToken);
 
-  // 역대 회원 스프레드시트(→ KV로 동기화된 것)에 없는 Discord 계정은 로그인 거부.
-  // 프런트(src/components/account/MyPageContent.tsx)가 이 쿼리 파라미터를 읽어
-  // 안내 배너를 띄웁니다. returnTo는 /discord에서 이미 origin 검증을 거쳤으므로
-  // 여기서는 그대로 절대 URL로 사용합니다 (로컬에서는 Worker와 다른 포트로
-  // 돌아가야 하므로 상대경로로 취급하면 안 됩니다).
-  const member = await getMember(c.env, discordUser.discordId);
+  // users 테이블(D1)에 없는 Discord 계정은 로그인 거부. 프런트(src/components/
+  // account/MyPageContent.tsx)가 이 쿼리 파라미터를 읽어 안내 배너를 띄웁니다.
+  // returnTo는 /discord에서 이미 origin 검증을 거쳤으므로 여기서는 그대로 절대
+  // URL로 사용합니다 (로컬에서는 Worker와 다른 포트로 돌아가야 하므로 상대경로로
+  // 취급하면 안 됩니다).
+  const member = await getUserByDiscordId(c.env, discordUser.discordId);
   if (!member) {
     const url = new URL(returnTo);
     url.searchParams.set("authError", "not_member");
     return c.redirect(url.toString());
+  }
+
+  // 로그인마다 아바타를 최신으로 맞춥니다 — OAuth 응답에 이미 들어있는 값이라 추가
+  // API 호출 없이 공짜로 갱신됩니다(members.ts::touchUserAvatar 참고). 실패해도
+  // 로그인 자체를 막을 이유는 없어서 fire-and-forget이 아니라 그냥 await만 하고
+  // 에러는 무시하지 않되(로그만) 흐름은 계속 진행합니다.
+  try {
+    await touchUserAvatar(c.env, discordUser.discordId, discordUser.avatarUrl);
+  } catch (err) {
+    console.error("Failed to refresh avatar on login", err);
   }
 
   const sessionId = await createSession(c.env, {

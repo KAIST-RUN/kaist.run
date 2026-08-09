@@ -11,9 +11,13 @@ const MOCK_MEMBER: CurrentUser = {
   name: "김런",
   email: "run@kaist.ac.kr",
   studentId: "20250123",
-  joinedYear: 2025,
   status: "member",
   role: "member",
+  semesters: [
+    { year: 2026, season: "fall", status: "approved" },
+    { year: 2026, season: "spring", status: "approved" },
+    { year: 2025, season: "fall", status: "approved" },
+  ],
 };
 
 const MOCK_ADMIN: CurrentUser = {
@@ -23,7 +27,6 @@ const MOCK_ADMIN: CurrentUser = {
   discordDisplayName: "박운영",
   name: "박운영",
   studentId: "20230456",
-  joinedYear: 2023,
   role: "admin",
 };
 
@@ -34,7 +37,7 @@ const MOCK_ALUMNI: CurrentUser = {
   discordDisplayName: null,
   avatarUrl: null,
   status: "alumni",
-  joinedYear: 2018,
+  semesters: [{ year: 2022, season: "spring", status: "approved" }],
 };
 
 // 필드가 대부분 비어 있는 케이스(가입 신청 직후 등) — 화면이 깨지지 않는지 확인용.
@@ -46,9 +49,9 @@ const MOCK_APPLICANT_WITH_NULLS: CurrentUser = {
   name: null,
   email: null,
   studentId: null,
-  joinedYear: null,
   status: "applicant",
   role: "member",
+  semesters: [{ year: 2026, season: "fall", status: "pending" }],
 };
 
 // loading 상태를 계속 유지하는 fixture 용 — 절대 resolve되지 않는 Promise.

@@ -1,0 +1,192 @@
+import type { Env } from "../types";
+import type { Season } from "./content";
+
+// "학기별 활동회원" — 신규 회원가입(users 테이블)과 별개로, 각 학기 소속은 승인
+// 워크플로를 거칩니다: 디스코드 봇이 requestSemesterMembership으로 pending을
+// 만들고, backstage에서 관리자가 approve해야만 "그 학기에 소속됨"으로 칩니다.
+// (0012_users.sql: semesters + semester_membership)
+
+export class SemesterError extends Error {}
+
+export type SemesterInfo = { year: number; season: Season; isCurrent: boolean };
+
+export async function getCurrentSemester(env: Env): Promise<{ year: number; season: Season } | null> {
+  const row = await env.CONTENT_DB.prepare("SELECT year, season FROM semesters WHERE is_current = 1").first<{
+    year: number;
+    season: Season;
+  }>();
+  return row ?? null;
+}
+
+// 최신 학기가 먼저 오도록 — season은 문자열이라 그냥 정렬하면 "spring" > "fall"이라
+// 같은 해 안에서 봄이 가을보다 먼저(더 최신처럼) 나오는 오류가 생겨서, CASE로
+// 가을=1/봄=0을 매겨 DESC 정렬합니다.
+export async function listSemesters(env: Env): Promise<SemesterInfo[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT year, season, is_current FROM semesters
+     ORDER BY year DESC, (CASE season WHEN 'fall' THEN 1 ELSE 0 END) DESC`,
+  ).all<{ year: number; season: Season; is_current: number }>();
+  return results.map((r) => ({ year: r.year, season: r.season, isCurrent: !!r.is_current }));
+}
+
+// 새 학기를 엽니다(이미 있으면 존재 확인만). makeCurrent면 기존 "현재 학기"를 내리고
+// 이 학기를 올립니다 — batch()로 한 트랜잭션에 묶어서, 항상 최대 하나만 현재 학기인
+// 상태(부분 유니크 인덱스가 최후 방어선)가 중간 상태 없이 유지되게 합니다.
+export async function openSemester(env: Env, year: number, season: Season, makeCurrent: boolean): Promise<void> {
+  const statements = [
+    env.CONTENT_DB.prepare("INSERT INTO semesters (year, season, is_current) VALUES (?1, ?2, 0) ON CONFLICT (year, season) DO NOTHING").bind(
+      year,
+      season,
+    ),
+  ];
+  if (makeCurrent) {
+    statements.push(env.CONTENT_DB.prepare("UPDATE semesters SET is_current = 0 WHERE is_current = 1"));
+    statements.push(env.CONTENT_DB.prepare("UPDATE semesters SET is_current = 1 WHERE year = ?1 AND season = ?2").bind(year, season));
+  }
+  await env.CONTENT_DB.batch(statements);
+}
+
+export type SemesterMembershipResult = { status: "pending" | "already_pending" | "already_approved" };
+
+// 디스코드 봇의 "학기별 활동회원 등록". year/season을 생략하면 현재 학기로 등록합니다
+// (봇이 학기 문자열을 하드코딩/추측하지 않게). 대상 학기가 아직 안 열려있으면 명확한
+// 에러 — 봇이 오타/구버전 값으로 쓰레기 행을 만드는 걸 막는 안전장치입니다.
+export async function requestSemesterMembership(env: Env, uid: string, year?: number, season?: Season): Promise<SemesterMembershipResult> {
+  let targetYear = year;
+  let targetSeason = season;
+
+  if (targetYear === undefined || targetSeason === undefined) {
+    const current = await getCurrentSemester(env);
+    if (!current) throw new SemesterError("아직 열린 학기가 없습니다. backstage에서 먼저 학기를 열어주세요.");
+    targetYear = current.year;
+    targetSeason = current.season;
+  } else {
+    const exists = await env.CONTENT_DB.prepare("SELECT 1 FROM semesters WHERE year = ?1 AND season = ?2").bind(targetYear, targetSeason).first();
+    if (!exists) throw new SemesterError(`${targetYear} ${targetSeason} 학기는 아직 열리지 않았습니다.`);
+  }
+
+  const existing = await env.CONTENT_DB.prepare("SELECT status FROM semester_membership WHERE uid = ?1 AND year = ?2 AND season = ?3")
+    .bind(uid, targetYear, targetSeason)
+    .first<{ status: "pending" | "approved" }>();
+  if (existing) return { status: existing.status === "approved" ? "already_approved" : "already_pending" };
+
+  await env.CONTENT_DB.prepare("INSERT INTO semester_membership (uid, year, season, status) VALUES (?1, ?2, ?3, 'pending')")
+    .bind(uid, targetYear, targetSeason)
+    .run();
+  return { status: "pending" };
+}
+
+export async function approveSemesterMembership(
+  env: Env,
+  uid: string,
+  year: number,
+  season: Season,
+  adminUid: string | null,
+  adminName: string | null,
+): Promise<void> {
+  await env.CONTENT_DB.prepare(
+    `UPDATE semester_membership SET status='approved', approved_by_uid=?4, approved_by_name=?5, approved_at=datetime('now')
+     WHERE uid=?1 AND year=?2 AND season=?3`,
+  )
+    .bind(uid, year, season, adminUid, adminName)
+    .run();
+}
+
+// 승인 대기 중인 요청을 거부합니다(행을 그냥 지움 — 거부 이력을 남기는 기능은 필요해지면
+// 나중에 status='rejected'를 추가하는 식으로 확장 가능).
+export async function rejectSemesterMembership(env: Env, uid: string, year: number, season: Season): Promise<void> {
+  await env.CONTENT_DB.prepare("DELETE FROM semester_membership WHERE uid=?1 AND year=?2 AND season=?3 AND status='pending'")
+    .bind(uid, year, season)
+    .run();
+}
+
+// 이미 승인된 소속을 취소합니다(예: 잘못 승인함).
+export async function revokeSemesterMembership(env: Env, uid: string, year: number, season: Season): Promise<void> {
+  await env.CONTENT_DB.prepare("DELETE FROM semester_membership WHERE uid=?1 AND year=?2 AND season=?3").bind(uid, year, season).run();
+}
+
+// backstage에서 관리자가 봇을 거치지 않고 기존 유저를 곧바로 그 학기에 추가(=즉시 승인)합니다.
+export async function addSemesterMember(
+  env: Env,
+  uid: string,
+  year: number,
+  season: Season,
+  adminUid: string | null,
+  adminName: string | null,
+): Promise<void> {
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO semester_membership (uid, year, season, status, approved_by_uid, approved_by_name, approved_at)
+     VALUES (?1, ?2, ?3, 'approved', ?4, ?5, datetime('now'))
+     ON CONFLICT (uid, year, season) DO UPDATE SET
+       status = 'approved', approved_by_uid = excluded.approved_by_uid,
+       approved_by_name = excluded.approved_by_name, approved_at = excluded.approved_at`,
+  )
+    .bind(uid, year, season, adminUid, adminName)
+    .run();
+}
+
+export type SemesterMemberRow = {
+  uid: string;
+  name: string | null;
+  discordId: string;
+  avatarUrl: string | null;
+  studentId: string | null;
+  email: string | null;
+  status: "pending" | "approved";
+  requestedAt: string;
+  approvedByName: string | null;
+  approvedAt: string | null;
+};
+
+// 학기별 명단 backstage 페이지용 — pending/approved 둘 다 같이 내려주고, 화면에서
+// 섹션을 나눕니다.
+export async function listSemesterMembers(env: Env, year: number, season: Season): Promise<SemesterMemberRow[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT u.uid, u.name, u.discord_id, u.avatar_url, u.student_id, u.email,
+            sm.status, sm.requested_at, sm.approved_by_name, sm.approved_at
+     FROM semester_membership sm
+     JOIN users u ON u.uid = sm.uid
+     WHERE sm.year = ?1 AND sm.season = ?2`,
+  )
+    .bind(year, season)
+    .all<{
+      uid: string;
+      name: string | null;
+      discord_id: string;
+      avatar_url: string | null;
+      student_id: string | null;
+      email: string | null;
+      status: "pending" | "approved";
+      requested_at: string;
+      approved_by_name: string | null;
+      approved_at: string | null;
+    }>();
+
+  const rows: SemesterMemberRow[] = results.map((r) => ({
+    uid: r.uid,
+    name: r.name,
+    discordId: r.discord_id,
+    avatarUrl: r.avatar_url,
+    studentId: r.student_id,
+    email: r.email,
+    status: r.status,
+    requestedAt: r.requested_at,
+    approvedByName: r.approved_by_name,
+    approvedAt: r.approved_at,
+  }));
+  rows.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "ko"));
+  return rows;
+}
+
+export type UserSemesterEntry = { year: number; season: Season; status: "pending" | "approved" };
+
+// /api/me용 — 이 유저가 신청했거나 소속된 학기 전부(최신순).
+export async function getUserSemesters(env: Env, uid: string): Promise<UserSemesterEntry[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT year, season, status FROM semester_membership WHERE uid = ?1
+     ORDER BY year DESC, (CASE season WHEN 'fall' THEN 1 ELSE 0 END) DESC`,
+  )
+    .bind(uid)
+    .all<UserSemesterEntry>();
+  return results;
+}

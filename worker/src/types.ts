@@ -22,6 +22,10 @@ export type Env = {
   GOOGLE_SHEET_RANGE: string;
 
   ADMIN_SYNC_SECRET: string;
+  // 디스코드 봇이 신규 회원가입/학기별 활동회원 등록을 호출하는 /api/bot/*용 —
+  // ADMIN_SYNC_SECRET과 별개로 둬서, 봇 쪽 자격증명만 독립적으로 회전/폐기할 수
+  // 있게 합니다 (worker/src/routes/bot.ts 참고).
+  DISCORD_BOT_API_SECRET: string;
 
   // 이메일 뷰어(kaist.run/email/<id>)용.
   EMAILS: R2Bucket;
@@ -52,8 +56,9 @@ export type CurrentUser = {
   name: string | null;
   email: string | null;
   studentId: string | null;
-  joinedYear: number | null;
 
   status: "applicant" | "member" | "alumni";
   role: "member" | "admin";
+  // 승인됨/대기중 둘 다 포함, 최신순. "가입 연도" 대신 이제 이걸로 소속을 보여줍니다.
+  semesters: { year: number; season: "spring" | "fall"; status: "pending" | "approved" }[];
 };

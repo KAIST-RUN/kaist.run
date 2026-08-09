@@ -1,5 +1,6 @@
 import { page, escapeHtml, formatKstDateTime } from "./emailRender";
-import type { MemberRecord } from "./members";
+import type { UserRecord } from "./members";
+import type { SemesterInfo, SemesterMemberRow, UserSemesterEntry } from "./semesters";
 import type {
   NoticeRow,
   ArchiveRow,
@@ -143,6 +144,10 @@ const FORM_STYLE = `
 
   .bs-new { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none; color: var(--bg); background: var(--logo-primary); transition: opacity .15s; }
   .bs-new:hover { opacity: 0.85; }
+  /* 페이지에 주된 액션(+새 글 등)과 보조 액션(CSV 다운로드 등)이 같이 있을 때, 둘 다
+     초록 알약이면 뭐가 우선인지 헷갈려서 보조 쪽만 테두리만 있는 버전으로 뺍니다. */
+  .bs-new-outline { background: transparent; color: inherit; border: 1px solid rgba(128,128,128,.3); }
+  .bs-new-outline:hover { background: rgba(128,128,128,.08); opacity: 1; }
 
   form.bs-form { display: flex; flex-direction: column; gap: 18px; }
   .bs-field { display: flex; flex-direction: column; gap: 6px; }
@@ -368,6 +373,11 @@ const FORM_STYLE = `
   .bs-member-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
   .bs-member-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 12px; padding: 10px 6px; transition: background .15s; }
   .bs-member-list li:hover { background: rgba(128,128,128,.05); }
+  /* 전체 명단에서 행 전체가 그 유저의 수정 페이지로 가는 링크입니다(학기별
+     명단/관리자 목록은 대신 승인·삭제 같은 액션 버튼이 오른쪽에 붙어서 링크로
+     안 감쌉니다) — li 자체의 flex/padding은 그대로 두고, 안에서 이 앵커가
+     아바타+본문만 남은 공간만큼 차지하게 합니다. */
+  .bs-member-link { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
   .bs-member-avatar { width: 40px; height: 40px; border-radius: 999px; object-fit: cover; flex-shrink: 0; background: rgba(128,128,128,.12); }
   .bs-member-avatar-fallback { display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 700; opacity: 0.55; }
   .bs-member-body { flex: 1; min-width: 0; }
@@ -375,6 +385,8 @@ const FORM_STYLE = `
   .bs-member-main .name { font-weight: 600; font-size: 0.9375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs-member-list .meta { font-size: 0.8rem; opacity: 0.55; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs-badge { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
+  /* 신청중/재학/졸업처럼 "관리자" 배지만큼 강조할 필요는 없는 상태 표시용 — 테두리만. */
+  .bs-badge-outline { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); opacity: .75; }
 `;
 
 function navLink(href: string, label: string, active: boolean): string {
@@ -475,7 +487,7 @@ export function renderBackstageErrorPage(title: string, message: string, action?
 export const BACKSTAGE_LOGOUT_ACTION = `<form method="post" action="/logout" style="margin-top:16px"><button type="submit" class="bs-submit">로그아웃하고 다른 계정으로 로그인</button></form>`;
 export const BACKSTAGE_RELOGIN_ACTION = `<a class="bs-new" href="/api/auth/discord">다시 로그인</a>`;
 
-export function renderBackstageHome(member: MemberRecord): string {
+export function renderBackstageHome(member: UserRecord): string {
   return shell(
     "Backstage",
     "home",
@@ -831,11 +843,30 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 }
 
 // ---------- members ----------
-// KV에 캐싱된 회원 명단(Google Sheets 동기화본)을 보여주는 페이지입니다 — 수정은
-// 항상 원본 시트에서 하고, 여기서는 그 결과를 보고 필요하면 수동으로 다시
-// 동기화("강제 캐싱")할 수만 있습니다.
+// 회원 데이터의 원천은 D1(users/admins/semester_membership)입니다 — backstage에서
+// 직접 만들고(+새 유저) 고치고(수정) 지울 수 있습니다. 세 하위 탭으로 나뉩니다:
+// 전체 명단(/members), 학기별 명단(/members/semesters/...), 관리자(/members/admins).
 
-export type MemberSyncResult = { total: number; written: number; deleted: number };
+const STATUS_LABEL: Record<UserRecord["status"], string> = { applicant: "신청중", member: "재학", alumni: "졸업" };
+const SEASON_LABEL: Record<"spring" | "fall", string> = { spring: "봄", fall: "가을" };
+
+function semesterLabel(year: number, season: "spring" | "fall"): string {
+  return `${year}년 ${SEASON_LABEL[season]}`;
+}
+
+function memberSubnav(active: "list" | "semesters" | "admins"): string {
+  return `<div class="bs-subnav">
+    <a href="/members"${active === "list" ? ' class="active"' : ""}>전체 명단</a>
+    <a href="/members/semesters"${active === "semesters" ? ' class="active"' : ""}>학기별 명단</a>
+    <a href="/members/admins"${active === "admins" ? ' class="active"' : ""}>관리자</a>
+  </div>`;
+}
+
+function memberAvatarHtml(avatarUrl: string | null): string {
+  return avatarUrl
+    ? `<img class="bs-member-avatar" src="${escapeHtml(avatarUrl)}" alt="" loading="lazy" />`
+    : `<div class="bs-member-avatar bs-member-avatar-fallback" aria-hidden="true">?</div>`;
+}
 
 export type MemberListPage = {
   q: string;
@@ -853,43 +884,29 @@ function memberPagerLink(q: string, page: number, label: string): string {
   return `<a href="/members${qs ? `?${qs}` : ""}">${label}</a>`;
 }
 
-function renderMemberRow(member: MemberRecord): string {
-  const metaParts = [
-    member.studentId,
-    member.joinedYear != null ? `${member.joinedYear}년 가입` : null,
-    member.email,
-    `Discord ${member.discordId}`,
-  ].filter((v): v is string => Boolean(v));
-  const avatar = member.avatarUrl
-    ? `<img class="bs-member-avatar" src="${escapeHtml(member.avatarUrl)}" alt="" loading="lazy" />`
-    : `<div class="bs-member-avatar bs-member-avatar-fallback" aria-hidden="true">?</div>`;
+function renderMemberRow(user: UserRecord): string {
+  const metaParts = [user.studentId, user.email, `Discord ${user.discordId}`].filter((v): v is string => Boolean(v));
 
   return `<li>
-    ${avatar}
-    <div class="bs-member-body">
-      <div class="bs-member-main">
-        <span class="name">${escapeHtml(member.name || "(이름 없음)")}</span>
-        ${member.role === "admin" ? '<span class="bs-badge">관리자</span>' : ""}
+    <a class="bs-member-link" href="/members/${encodeURIComponent(user.uid)}/edit">
+      ${memberAvatarHtml(user.avatarUrl)}
+      <div class="bs-member-body">
+        <div class="bs-member-main">
+          <span class="name">${escapeHtml(user.name || "(이름 없음)")}</span>
+          <span class="bs-badge-outline">${STATUS_LABEL[user.status]}</span>
+          ${user.role === "admin" ? '<span class="bs-badge">관리자</span>' : ""}
+        </div>
+        <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
       </div>
-      <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
-    </div>
+    </a>
   </li>`;
 }
 
-export type MemberListOptions = {
-  syncResult?: MemberSyncResult | null;
-  lastSyncedAt?: number | null;
-  sheetId?: string;
-  error?: string;
-};
-
-export function renderMemberList(members: MemberRecord[], meta: MemberListPage, options: MemberListOptions = {}): string {
-  const { syncResult, lastSyncedAt, sheetId, error } = options;
-
+export function renderMemberList(users: UserRecord[], meta: MemberListPage): string {
   const body =
-    members.length === 0
-      ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "회원 명단이 비어 있습니다. 아래에서 동기화해 주세요."}</p>`
-      : `<ul class="bs-member-list">${members.map(renderMemberRow).join("\n")}</ul>`;
+    users.length === 0
+      ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "등록된 유저가 없습니다. 위에서 새로 등록해 주세요."}</p>`
+      : `<ul class="bs-member-list">${users.map(renderMemberRow).join("\n")}</ul>`;
 
   const pager =
     meta.hasPrev || meta.hasNext
@@ -908,41 +925,12 @@ export function renderMemberList(members: MemberRecord[], meta: MemberListPage, 
     `
     <p class="bs-eyebrow">Backstage</p>
     <h1>회원 명단</h1>
-    <p class="bs-note" style="margin-bottom:16px">Google Sheets 기준으로 KV에 캐싱된 명단이에요.</p>
-    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    ${memberSubnav("list")}
+    <p class="bs-note" style="margin-bottom:16px">D1에 저장된 전체 유저 명단이에요.</p>
 
-    <div class="bs-card">
-      <p class="bs-card-title">역대 명단 시트</p>
-      ${
-        sheetId
-          ? `<p class="bs-note">현재 연결된 시트: <code>${escapeHtml(sheetId)}</code> ·
-              <a href="https://docs.google.com/spreadsheets/d/${escapeHtml(sheetId)}/edit" target="_blank" rel="noopener">원본 보기</a></p>`
-          : `<p class="bs-note">연결된 시트가 없습니다.</p>`
-      }
-      <form method="post" action="/members/roster-sheet" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
-        <input
-          type="text" name="sheetUrl" required
-          placeholder="구글 시트 링크 또는 ID"
-          style="flex:1 1 auto;min-width:0;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
-        />
-        <button type="submit" class="bs-submit bs-icon-btn" aria-label="연결">${LINK_ICON_SVG}</button>
-      </form>
-      <p class="bs-note" style="margin-top:8px">연결 시 바로 한 번 동기화를 시도해서, 실제로 접근 가능한 시트일 때만 저장됩니다.</p>
-
-      <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(128,128,128,.16);">
-        <p class="bs-note">매시 정각에 자동으로 KV에 동기화됩니다. 방금 시트를 고쳤다면 여기서 강제로 바로 반영할 수 있어요.</p>
-        <p class="bs-note" style="margin-top:6px">
-          마지막 동기화: ${lastSyncedAt ? escapeHtml(formatKstDateTime(lastSyncedAt)) : "기록 없음"}
-        </p>
-        ${
-          syncResult
-            ? `<p class="bs-note" style="margin-top:10px;color:var(--logo-primary);font-weight:700;">완료 — 전체 ${syncResult.total}명 중 ${syncResult.written}명 갱신, ${syncResult.deleted}명 삭제됨</p>`
-            : ""
-        }
-        <form method="post" action="/members/sync" style="margin-top:14px">
-          <button type="submit" class="bs-submit">지금 동기화</button>
-        </form>
-      </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <a class="bs-new" href="/members/new" style="margin-bottom:0">+ 새 유저</a>
+      <a class="bs-new bs-new-outline" href="/members/export.csv" style="margin-bottom:0">CSV 다운로드</a>
     </div>
 
     <form class="bs-search" method="get" action="/members">
@@ -952,6 +940,333 @@ export function renderMemberList(members: MemberRecord[], meta: MemberListPage, 
     </form>
     ${body}
     ${pager}
+  `,
+  );
+}
+
+export type UserFormData = {
+  uid: string; // 새 유저면 ""
+  discordId: string;
+  name: string;
+  email: string;
+  studentId: string;
+  phone: string;
+  solvedAc: string;
+  codeforces: string;
+  atcoder: string;
+  isAdmin: boolean;
+};
+
+export function userRowToFormData(user: UserRecord): UserFormData {
+  return {
+    uid: user.uid,
+    discordId: user.discordId,
+    name: user.name ?? "",
+    email: user.email ?? "",
+    studentId: user.studentId ?? "",
+    phone: user.phone ?? "",
+    solvedAc: user.solvedAc ?? "",
+    codeforces: user.codeforces ?? "",
+    atcoder: user.atcoder ?? "",
+    isAdmin: user.role === "admin",
+  };
+}
+
+// semesters가 null이면(새 유저 작성 중) 소속 학기 카드 자체를 생략합니다 — 아직
+// uid가 없어서 보여줄 게 없습니다.
+export function renderUserForm(mode: "new" | "edit", data: UserFormData, semesters: UserSemesterEntry[] | null, error?: string): string {
+  const action = mode === "new" ? "/members/new" : `/members/${encodeURIComponent(data.uid)}/edit`;
+
+  return shell(
+    mode === "new" ? "새 유저 등록" : `유저 수정 — ${data.name || data.discordId}`,
+    "members",
+    `
+    <p class="bs-eyebrow">Backstage · 회원 명단</p>
+    <h1>${mode === "new" ? "새 유저 등록" : "유저 수정"}</h1>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    <form class="bs-form" method="post" action="${action}">
+      <div class="bs-card">
+        <p class="bs-card-title">프로필</p>
+        <div class="bs-field">
+          <label>Discord ID</label>
+          <input type="text" name="discordId" value="${escapeHtml(data.discordId)}" required />
+        </div>
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>이름</label>
+            <input type="text" name="name" value="${escapeHtml(data.name)}" />
+          </div>
+          <div class="bs-field">
+            <label>학번</label>
+            <input type="text" name="studentId" value="${escapeHtml(data.studentId)}" />
+          </div>
+        </div>
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>이메일</label>
+            <input type="text" name="email" value="${escapeHtml(data.email)}" />
+          </div>
+          <div class="bs-field">
+            <label>전화번호</label>
+            <input type="text" name="phone" value="${escapeHtml(data.phone)}" />
+          </div>
+        </div>
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>solved.ac</label>
+            <input type="text" name="solvedAc" value="${escapeHtml(data.solvedAc)}" />
+          </div>
+          <div class="bs-field">
+            <label>Codeforces</label>
+            <input type="text" name="codeforces" value="${escapeHtml(data.codeforces)}" />
+          </div>
+        </div>
+        <div class="bs-field" style="margin-top:18px">
+          <label>AtCoder</label>
+          <input type="text" name="atcoder" value="${escapeHtml(data.atcoder)}" />
+        </div>
+      </div>
+
+      <div class="bs-card">
+        <p class="bs-card-title">권한</p>
+        <div class="bs-field bs-check" style="flex-direction:row;">
+          <input type="checkbox" id="isAdmin" name="isAdmin" value="1" ${data.isAdmin ? "checked" : ""} />
+          <label for="isAdmin" style="margin:0;">관리자 권한 부여</label>
+        </div>
+      </div>
+
+      ${
+        semesters !== null
+          ? `<div class="bs-card">
+              <p class="bs-card-title">소속 학기</p>
+              ${
+                semesters.length === 0
+                  ? `<p class="bs-note">소속된 학기가 없습니다 — 학기별 명단 탭에서 추가할 수 있어요.</p>`
+                  : `<ul class="bs-list">
+                      ${semesters
+                        .map(
+                          (s) =>
+                            `<li><span>${escapeHtml(semesterLabel(s.year, s.season))}</span><span class="meta">${s.status === "approved" ? "승인됨" : "승인 대기"}</span></li>`,
+                        )
+                        .join("\n")}
+                    </ul>`
+              }
+            </div>`
+          : ""
+      }
+
+      <div class="bs-actions">
+        <button type="submit" class="bs-submit">저장</button>
+        ${mode === "edit" ? `<a href="/members" class="bs-cancel">취소</a>` : ""}
+      </div>
+    </form>
+    ${
+      mode === "edit"
+        ? `<div class="bs-danger-zone">
+            <form method="post" action="/members/${encodeURIComponent(data.uid)}/delete" onsubmit="return confirm('정말 이 유저를 삭제할까요? 학기 소속/관리자 권한도 함께 지워집니다.')">
+              <button type="submit" class="bs-danger">이 유저 삭제</button>
+            </form>
+          </div>`
+        : ""
+    }
+  `,
+  );
+}
+
+// ---------- members: 학기별 명단 ----------
+
+export function renderSemesterPicker(semesters: SemesterInfo[], error?: string): string {
+  const list =
+    semesters.length === 0
+      ? `<p class="empty">아직 열린 학기가 없습니다. 아래에서 첫 학기를 열어주세요.</p>`
+      : `<ul class="bs-list">
+          ${semesters
+            .map(
+              (s) =>
+                `<li>
+                  <a class="title" href="/members/semesters/${s.year}/${s.season}">${escapeHtml(semesterLabel(s.year, s.season))}</a>
+                  ${s.isCurrent ? '<span class="bs-badge">현재 학기</span>' : ""}
+                </li>`,
+            )
+            .join("\n")}
+        </ul>`;
+
+  return shell(
+    "학기별 명단",
+    "members",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>회원 명단</h1>
+    ${memberSubnav("semesters")}
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+
+    <div class="bs-card">
+      <p class="bs-card-title">새 학기 열기</p>
+      <form method="post" action="/members/semesters/open" class="bs-row2">
+        <div class="bs-field">
+          <label>연도</label>
+          <input type="number" name="year" min="2000" max="2100" required />
+        </div>
+        <div class="bs-field">
+          <label>학기</label>
+          <select name="season" required>
+            <option value="spring">봄</option>
+            <option value="fall">가을</option>
+          </select>
+        </div>
+        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;">
+          <input type="checkbox" id="makeCurrent" name="makeCurrent" value="1" checked />
+          <label for="makeCurrent" style="margin:0;">현재 학기로 설정</label>
+        </div>
+        <div style="grid-column:1/-1;">
+          <button type="submit" class="bs-submit">학기 열기</button>
+        </div>
+      </form>
+    </div>
+
+    ${list}
+  `,
+  );
+}
+
+// D1의 datetime('now')는 "YYYY-MM-DD HH:MM:SS"(UTC, "T"/"Z" 없음)를 돌려줍니다 —
+// 그대로 new Date()에 넣으면 엔진마다 로컬 시간으로 잘못 해석될 수 있어서, ISO
+// 8601로 정규화(공백→T, 끝에 Z)한 뒤에 파싱합니다.
+function parseD1DateTime(value: string): number {
+  return new Date(`${value.replace(" ", "T")}Z`).getTime();
+}
+
+function semesterMemberRowHtml(m: SemesterMemberRow, action: string): string {
+  const metaParts = [m.studentId, m.email, `Discord ${m.discordId}`].filter((v): v is string => Boolean(v));
+  return `<li>
+    ${memberAvatarHtml(m.avatarUrl)}
+    <div class="bs-member-body">
+      <div class="bs-member-main">
+        <span class="name">${escapeHtml(m.name || "(이름 없음)")}</span>
+      </div>
+      <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
+    </div>
+    ${action}
+  </li>`;
+}
+
+export function renderSemesterRoster(
+  year: number,
+  season: "spring" | "fall",
+  isCurrent: boolean,
+  members: SemesterMemberRow[],
+  error?: string,
+): string {
+  const pending = members.filter((m) => m.status === "pending");
+  const approved = members.filter((m) => m.status === "approved");
+  const base = `/members/semesters/${year}/${season}`;
+
+  const pendingHtml =
+    pending.length === 0
+      ? `<p class="empty">승인 대기 중인 요청이 없습니다.</p>`
+      : `<ul class="bs-member-list">
+          ${pending
+            .map((m) =>
+              semesterMemberRowHtml(
+                m,
+                `<div style="display:flex;gap:6px;flex-shrink:0;">
+                  <form method="post" action="${base}/approve"><input type="hidden" name="uid" value="${escapeHtml(m.uid)}" /><button type="submit" class="bs-submit">승인</button></form>
+                  <form method="post" action="${base}/reject"><input type="hidden" name="uid" value="${escapeHtml(m.uid)}" /><button type="submit" class="bs-danger">거부</button></form>
+                </div>`,
+              ),
+            )
+            .join("\n")}
+        </ul>`;
+
+  const approvedHtml =
+    approved.length === 0
+      ? `<p class="empty">승인된 회원이 없습니다.</p>`
+      : `<ul class="bs-member-list">
+          ${approved
+            .map((m) =>
+              semesterMemberRowHtml(
+                m,
+                `<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                  <span class="bs-note" style="text-align:right;">${escapeHtml(m.approvedByName ?? "관리자")}이 승인함${m.approvedAt ? `<br />${escapeHtml(formatKstDateTime(parseD1DateTime(m.approvedAt)))}` : ""}</span>
+                  <form method="post" action="${base}/revoke" onsubmit="return confirm('이 학기 소속을 취소할까요?')"><input type="hidden" name="uid" value="${escapeHtml(m.uid)}" /><button type="submit" class="bs-danger bs-icon-btn" aria-label="회수">${TRASH_ICON_SVG}</button></form>
+                </div>`,
+              ),
+            )
+            .join("\n")}
+        </ul>`;
+
+  return shell(
+    `학기별 명단 — ${semesterLabel(year, season)}`,
+    "members",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>회원 명단</h1>
+    ${memberSubnav("semesters")}
+    <p class="bs-note" style="margin-bottom:16px">
+      <a href="/members/semesters">← 학기 목록</a> ·
+      ${escapeHtml(semesterLabel(year, season))}${isCurrent ? " · <strong>현재 학기</strong>" : ""}
+    </p>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+
+    <div style="margin-bottom:16px;">
+      <a class="bs-new bs-new-outline" href="${base}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+    </div>
+
+    <div class="bs-card">
+      <p class="bs-card-title">유저를 바로 추가(즉시 승인)</p>
+      <form method="post" action="${base}/add" style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
+        <input
+          type="text" name="query" required
+          placeholder="이름 또는 Discord ID"
+          style="flex:1 1 auto;min-width:0;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
+        />
+        <button type="submit" class="bs-submit bs-icon-btn" aria-label="추가">${LINK_ICON_SVG}</button>
+      </form>
+      <p class="bs-note" style="margin-top:8px">이름/Discord ID가 정확히 일치하는 기존 유저 한 명을 찾아 곧바로 승인 처리합니다.</p>
+    </div>
+
+    <p class="bs-card-title" style="margin-top:24px">승인 대기 중 (${pending.length})</p>
+    ${pendingHtml}
+
+    <p class="bs-card-title" style="margin-top:24px">승인됨 (${approved.length})</p>
+    ${approvedHtml}
+  `,
+  );
+}
+
+// ---------- members: 관리자 ----------
+
+export function renderAdminList(admins: UserRecord[]): string {
+  const body =
+    admins.length === 0
+      ? `<p class="empty">등록된 관리자가 없습니다.</p>`
+      : `<ul class="bs-member-list">
+          ${admins
+            .map(
+              (a) => `<li>
+                ${memberAvatarHtml(a.avatarUrl)}
+                <div class="bs-member-body">
+                  <div class="bs-member-main"><span class="name">${escapeHtml(a.name || "(이름 없음)")}</span></div>
+                  <div class="meta">${escapeHtml(`Discord ${a.discordId}`)}</div>
+                </div>
+                <form method="post" action="/members/admins/revoke" onsubmit="return confirm('${escapeHtml(a.name || a.discordId)}님의 관리자 권한을 해제할까요?')">
+                  <input type="hidden" name="uid" value="${escapeHtml(a.uid)}" />
+                  <button type="submit" class="bs-danger">권한 해제</button>
+                </form>
+              </li>`,
+            )
+            .join("\n")}
+        </ul>`;
+
+  return shell(
+    "관리자",
+    "members",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>회원 명단</h1>
+    ${memberSubnav("admins")}
+    <p class="bs-note" style="margin-bottom:16px">관리자를 새로 추가하려면 전체 명단에서 그 유저를 찾아 수정 페이지의 "관리자 권한 부여" 체크박스를 쓰세요.</p>
+    ${body}
   `,
   );
 }

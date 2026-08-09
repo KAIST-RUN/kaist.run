@@ -9,7 +9,7 @@ import { email } from "./routes/email";
 import { backstage } from "./routes/backstage";
 import { content } from "./routes/content";
 import { uploads } from "./routes/uploads";
-import { syncMembersFromSheet } from "./lib/members";
+import { bot } from "./routes/bot";
 import { storeRawEmail } from "./lib/emailStore";
 import { indexEmail } from "./lib/emailIndex";
 import { formatAddress, formatAddressList } from "./lib/emailRender";
@@ -34,6 +34,7 @@ app.route("/api/auth", auth);
 app.route("/api/me", me);
 app.route("/api/admin", admin);
 app.route("/api/content", content);
+app.route("/api/bot", bot);
 app.route("/upload", uploads);
 app.route("/email", email);
 // kaist.run에는 "/" 패턴의 Worker 라우트가 없어서(정적 사이트가 처리) 겹치지
@@ -42,11 +43,6 @@ app.route("/", backstage);
 
 export default {
   fetch: app.fetch,
-
-  // wrangler.jsonc의 triggers.crons에 맞춰 주기적으로 실행됩니다.
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(syncMembersFromSheet(env));
-  },
 
   // Cloudflare Email Routing 규칙이 이 Worker로 메일을 보내면 호출됩니다.
   // (대시보드에서 규칙을 "Send to a Worker" → 이 Worker로 설정해야 함 — README 참고)

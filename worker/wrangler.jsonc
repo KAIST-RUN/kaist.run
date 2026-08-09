@@ -56,13 +56,6 @@
 			"remote": true
 		}
 	],
-	// 매시 정각에 Google Sheets → KV로 회원 명단을 다시 동기화합니다.
-	// 필요하면 주기를 조정하세요 (cron 표현식).
-	"triggers": {
-		"crons": [
-			"0 * * * *"
-		]
-	},
 	// kaist.run/api/*, kaist.run/email(/*) 요청만 이 Worker로 오도록 합니다.
 	// 나머지 경로(정적 사이트)는 기존 배포가 그대로 처리합니다. zone에 이미 다른
 	// Worker/Pages가 연결되어 있어도 경로 패턴이 더 구체적인 쪽이 우선합니다.
