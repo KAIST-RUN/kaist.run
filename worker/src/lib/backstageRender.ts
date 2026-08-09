@@ -79,15 +79,6 @@ const FORM_STYLE = `
        한 줄에 붙어버리지 않도록, 항상 개행해서 보여줍니다. */
     .bs-list li { flex-direction: column; align-items: flex-start; gap: 4px; }
 
-    /* 업로드 목록 한 행: 파일 정보(썸네일+이름)는 항상 자기 줄을 다 차지하고,
-       상대 URL과 삭제 버튼은 항상 그 다음 한 줄에 "같이" 있도록(URL이 줄어들
-       뿐, 삭제 버튼이 그 아래로 떨어지진 않음) — flex-wrap을 li에 걸고, URL은
-       줄어들게(flex:1 1 auto) 삭제 버튼은 고정폭(flex-shrink:0)으로 둡니다. */
-    .bs-upload-list li { flex-wrap: wrap; }
-    .bs-upload-open { flex: 1 1 100%; }
-    .bs-upload-list .snippet { width: auto; flex: 1 1 auto; min-width: 0; }
-    .bs-upload-list li form { flex-shrink: 0; }
-
     /* 검색창은 모바일에서 데스크톱용 상한(420px)을 풀어서 버튼과 함께 양옆
        끝까지 채웁니다. */
     .bs-search input[type="text"] { max-width: none; }
@@ -210,16 +201,20 @@ const FORM_STYLE = `
   .bs-cancel-btn { border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
-  .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 14px; padding: 12px 6px; transition: background .15s; }
+  /* 한 행 안 공간 우선순위: 파일명(.bs-upload-open) > URL 스니펫(.snippet, 안
+     보여도 그만) > 삭제 버튼(항상 고정폭, 절대 안 줄어듦). 화면 폭과 무관하게
+     항상 한 줄로 유지하고, 좁아지면 snippet부터 줄어들게 합니다. */
+  .bs-upload-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 10px; padding: 12px 6px; transition: background .15s; }
   .bs-upload-list li:hover { background: rgba(128,128,128,.05); }
-  .bs-upload-open { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
+  .bs-upload-open { display: flex; align-items: center; gap: 14px; flex: 3 1 auto; min-width: 0; color: inherit; text-decoration: none; }
   .bs-upload-open:hover .name { text-decoration: underline; }
   .bs-upload-list .thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: rgba(128,128,128,.08); flex-shrink: 0; }
   .bs-upload-list .file-icon { width: 44px; height: 44px; border-radius: 8px; background: rgba(128,128,128,.08); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
   .bs-upload-list .info { flex: 1; min-width: 0; }
-  .bs-upload-list .name { font-weight: 600; font-size: 0.875rem; word-break: break-all; }
-  .bs-upload-list .meta { font-size: 0.75rem; opacity: 0.55; }
-  .bs-upload-list .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; width: 220px; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex-shrink: 0; }
+  .bs-upload-list .name { font-weight: 600; font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bs-upload-list .meta { font-size: 0.75rem; opacity: 0.55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bs-upload-list .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex: 0 1 160px; min-width: 36px; }
+  .bs-upload-list li form { flex-shrink: 0; }
   .bs-upload-list .bs-danger { flex-shrink: 0; }
 
   .bs-member-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
@@ -761,7 +756,7 @@ export function renderMemberList(members: MemberRecord[], meta: MemberListPage, 
               <a href="https://docs.google.com/spreadsheets/d/${escapeHtml(sheetId)}/edit" target="_blank" rel="noopener">원본 보기</a></p>`
           : `<p class="bs-note">연결된 시트가 없습니다.</p>`
       }
-      <form method="post" action="/members/roster-sheet" style="margin-top:12px;display:flex;gap:10px;flex-wrap:nowrap;">
+      <form method="post" action="/members/roster-sheet" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
         <input
           type="text" name="sheetUrl" required
           placeholder="구글 시트 링크 또는 ID"
@@ -1007,7 +1002,7 @@ export function renderApplyFormPage(config: ApplyFormConfig | null, options: App
             <a href="https://docs.google.com/forms/d/e/${escapeHtml(config.formId)}/viewform" target="_blank" rel="noopener">원본 보기</a></p>`
         : `<p class="bs-note">아직 연결된 폼이 없습니다.</p>`
     }
-    <form method="post" action="/apply/connect" style="margin-top:12px;display:flex;gap:10px;flex-wrap:nowrap;">
+    <form method="post" action="/apply/connect" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
       <input
         type="text" name="formUrl" required
         placeholder="구글 폼 링크 또는 ID (응답자용 .../forms/d/e/…/viewform)"
