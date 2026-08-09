@@ -788,8 +788,12 @@ function readBylawsBlocks(body: Record<string, unknown>): BylawsBlock[] {
   return blocks;
 }
 
-function readBylawsRevisionHistory(body: Record<string, unknown>) {
-  return zipRows(getFormArray(body, "revDate[]"), getFormArray(body, "revLabel[]")).map((r) => ({ date: r.name, label: r.link }));
+// 개정이력은 날짜만 받습니다 — 첫 항목은 항상 제정, 나머지는 항상 일부개정이라
+// 렌더링할 때 순서로 라벨을 계산합니다(worker/src/lib/backstageRender.ts, src/lib/bylaws.ts).
+function readBylawsRevisionHistory(body: Record<string, unknown>): string[] {
+  return getFormArray(body, "revDate[]")
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0);
 }
 
 backstage.get("/bylaws", async (c) => {

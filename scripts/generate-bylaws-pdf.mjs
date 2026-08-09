@@ -52,9 +52,9 @@ function substituteTagDates(text, revisionHistory) {
     if (revisionHistory.length === 0) return null;
     if (numStr) {
       const idx = Number(numStr) - 1;
-      return idx >= 0 && idx < revisionHistory.length ? revisionHistory[idx].date : null;
+      return idx >= 0 && idx < revisionHistory.length ? revisionHistory[idx] : null;
     }
-    return revisionHistory[revisionHistory.length - 1].date;
+    return revisionHistory[revisionHistory.length - 1];
   };
 
   return text
@@ -187,9 +187,10 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
   w.paragraph({ align: "center", runs: [{ text: title, tag: false }], font: boldFont, size: 19, color: BLACK, spacingAfter: 10 });
 
   if (revisionHistory.length > 0) {
-    for (const r of revisionHistory) {
-      w.paragraph({ align: "right", runs: [{ text: `${r.date} ${r.label}`, tag: false }], font: regularFont, size: 9, color: GRAY, lineHeight: 13 });
-    }
+    revisionHistory.forEach((date, i) => {
+      const label = i === 0 ? "제정" : "일부개정";
+      w.paragraph({ align: "right", runs: [{ text: `${date} ${label}`, tag: false }], font: regularFont, size: 9, color: GRAY, lineHeight: 13 });
+    });
     w.gap(18);
   } else {
     w.gap(10);

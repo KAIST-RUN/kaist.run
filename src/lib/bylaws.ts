@@ -11,11 +11,13 @@
 export type BylawsBlockType = "chapter" | "article" | "buchik" | "clause" | "item" | "subitem";
 
 export type BylawsBlock = { type: BylawsBlockType; text: string; body?: string };
-export type BylawsRevision = { date: string; label: string };
+// 개정이력은 날짜만 저장합니다 — 첫 항목은 항상 "제정", 그 뒤는 항상 "일부개정"이라
+// 라벨 없이 순서로 계산합니다(backstage의 개정이력 입력창도 날짜만 받습니다).
+export type BylawsRevisionHistory = string[];
 
 export type BylawsDocument = {
   title: string;
-  revisionHistory: BylawsRevision[];
+  revisionHistory: BylawsRevisionHistory;
   blocks: BylawsBlock[];
 };
 
@@ -34,14 +36,14 @@ function escapeHtml(s: string): string {
 
 // <개정 N>, [본조신설 N] 안의 N을 개정이력의 N번째(1부터) 날짜로 치환합니다.
 // N이 없으면(<개정>만) 최신 날짜를 씁니다.
-function substituteTagDates(text: string, revisionHistory: BylawsRevision[]): string {
+function substituteTagDates(text: string, revisionHistory: BylawsRevisionHistory): string {
   const tagDate = (numStr?: string): string | null => {
     if (revisionHistory.length === 0) return null;
     if (numStr) {
       const idx = Number(numStr) - 1;
-      return idx >= 0 && idx < revisionHistory.length ? revisionHistory[idx].date : null;
+      return idx >= 0 && idx < revisionHistory.length ? revisionHistory[idx] : null;
     }
-    return revisionHistory[revisionHistory.length - 1].date;
+    return revisionHistory[revisionHistory.length - 1];
   };
 
   return text
@@ -68,7 +70,7 @@ function resetBelow(counters: number[], level: number) {
   for (let i = Math.max(level, 1) + 1; i < counters.length; i++) counters[i] = 0;
 }
 
-function renderBody(block: BylawsBlock, revisionHistory: BylawsRevision[]): string {
+function renderBody(block: BylawsBlock, revisionHistory: BylawsRevisionHistory): string {
   if (!BODY_ELIGIBLE.has(block.type) || !block.body) return "";
   const text = substituteTagDates(block.body, revisionHistory);
   return `<div class="bylaws-body"><span class="bylaws-ptext">${colorizeTags(text)}</span></div>\n`;
@@ -82,7 +84,10 @@ export function renderBylawsDocument(doc: BylawsDocument): string {
   html.push(`<div class="bylaws-title">${escapeHtml(doc.title)}</div>`);
   if (revisionHistory.length > 0) {
     html.push('<div class="bylaws-history-block">');
-    revisionHistory.forEach((r) => html.push(`<div class="bylaws-history-line">${escapeHtml(`${r.date} ${r.label}`)}</div>`));
+    revisionHistory.forEach((date, i) => {
+      const label = i === 0 ? "제정" : "일부개정";
+      html.push(`<div class="bylaws-history-line">${escapeHtml(`${date} ${label}`)}</div>`);
+    });
     html.push("</div>");
   }
 
