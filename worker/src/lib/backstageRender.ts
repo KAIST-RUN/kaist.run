@@ -12,6 +12,9 @@ const FORM_STYLE = `
      끼워 넣습니다(emailRender.ts의 page() 참고) — 로고 옆에 nav, 테마 토글 오른쪽에
      로그아웃이 오도록. .bs-nav-links 자체가 데스크톱에선 그냥 가로 나열, 모바일
      폭에서는(아래 미디어 쿼리) ☰로 여닫는 왼쪽 슬라이드 서랍(drawer)이 됩니다. */
+  /* .topbar의 기본 gap은 이메일 페이지와 공유라 여기서 못 건드리고, 로고 쪽에만
+     오른쪽 여백을 추가로 줘서 backstage에서만 로고-홈 간격을 늘립니다. */
+  .topbar-logo { margin-right: 18px; }
   .bs-menu-toggle { display: none; }
   .bs-nav-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.875rem; }
   .bs-nav-links a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }

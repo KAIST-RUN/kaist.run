@@ -9,7 +9,6 @@ import {
 } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import Logo from "@/components/Logo";
 import type { Locale } from "@/i18n/routing";
 import {
   APPLY_FORM_ACTION_URL,
@@ -139,11 +138,6 @@ export default function ApplyPage() {
 
   return (
     <main className="mx-auto flex min-h-full max-w-2xl flex-col px-6 py-12 sm:px-10 sm:py-16">
-      <Link href="/" className="animate-fade-in-up flex w-fit items-center gap-2 font-bold">
-        <Logo className="h-6 w-auto" />
-        <span className="sr-only">RUN</span>
-      </Link>
-
       {status === "submitted" ? (
           <div className="animate-fade-in-up flex flex-1 flex-col items-center justify-center gap-4 py-24 text-center">
             <span className="text-4xl">🎉</span>

@@ -170,6 +170,7 @@ export function page(title: string, bodyHtml: string, topbarNav?: string, topbar
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
 <title>${escapeHtml(title)}</title>
+<script>if ("scrollRestoration" in history) history.scrollRestoration = "manual";</script>
 <script>${THEME_INIT_SCRIPT}</script>
 <style>${PAGE_STYLE}</style>
 </head>
