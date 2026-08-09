@@ -21,6 +21,9 @@ CLAUDE.md
 /.next/
 /out/
 
+# generated at build time (prebuild) from live D1 content — see scripts/generate-bylaws-pdf.mjs
+/public/bylaws/
+
 # production
 /build
 

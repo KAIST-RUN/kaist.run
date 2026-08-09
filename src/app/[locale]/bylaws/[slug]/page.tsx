@@ -30,9 +30,18 @@ export default async function BylawsVersionPage({
       <Link href="/bylaws" className="text-sm opacity-60 transition-opacity hover:opacity-100">
         {t("backToCurrent")}
       </Link>
-      <p className="mt-4 text-sm font-bold opacity-60">
-        {version.versionLabel} · {version.effectiveDate}
-      </p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-bold opacity-60">
+          {version.versionLabel} · {version.effectiveDate}
+        </p>
+        <a
+          href={`/bylaws/${slug}.pdf`}
+          download
+          className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-3 py-1.5 text-sm opacity-70 transition-opacity hover:opacity-100 dark:border-white/15"
+        >
+          {t("pdfDownload")}
+        </a>
+      </div>
       {locale !== "ko" && (
         <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm opacity-70 dark:border-white/15">
           {t("koreanOnlyNotice")}

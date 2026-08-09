@@ -154,7 +154,8 @@
     },
     "koreanOnlyNotice": "The club bylaws are currently only available in Korean.",
     "pastVersions": "Past versions",
-    "backToCurrent": "← Back to current bylaws"
+    "backToCurrent": "← Back to current bylaws",
+    "pdfDownload": "Download PDF"
   },
   "account": {
     "pageTitle": "My page",

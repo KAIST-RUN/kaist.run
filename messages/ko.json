@@ -154,7 +154,8 @@
     },
     "koreanOnlyNotice": "회칙은 현재 한국어로만 제공됩니다.",
     "pastVersions": "역대 회칙",
-    "backToCurrent": "← 현행 회칙으로"
+    "backToCurrent": "← 현행 회칙으로",
+    "pdfDownload": "PDF 다운로드"
   },
   "account": {
     "pageTitle": "마이페이지",

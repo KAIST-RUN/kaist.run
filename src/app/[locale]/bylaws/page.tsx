@@ -37,6 +37,15 @@ export default async function BylawsPage({
           {t("koreanOnlyNotice")}
         </p>
       )}
+      <div className="mb-6 flex justify-end">
+        <a
+          href={`/bylaws/${current.slug}.pdf`}
+          download
+          className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-3 py-1.5 text-sm opacity-70 transition-opacity hover:opacity-100 dark:border-white/15"
+        >
+          {t("pdfDownload")}
+        </a>
+      </div>
       <div dangerouslySetInnerHTML={{ __html: html }} />
 
       {pastVersions.length > 0 && (
