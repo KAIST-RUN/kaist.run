@@ -252,3 +252,38 @@ export async function listAdmins(env: Env): Promise<UserRecord[]> {
   const { results } = await env.CONTENT_DB.prepare(`${USER_SELECT} JOIN admins am ON am.uid = u.uid ORDER BY am.granted_at ASC`).all<RawUserRow>();
   return results.map(toUserRecord);
 }
+
+// solved.ac/Codeforces/AtCoder 핸들 목록 — 디스코드 봇이 랭킹/문제 풀이 현황을
+// 긁어올 때 씁니다(worker/src/routes/bot.ts). 핸들은 별도 테이블이 아니라 users의
+// 컬럼 하나씩입니다 — 사이트당 핸들 하나면 충분하고(같은 사람이 여러 계정을 등록할
+// 일이 거의 없음), backstage 유저 수정 페이지에서 이미 이 컬럼들을 직접 편집합니다.
+export type HandleSite = "solvedAc" | "codeforces" | "atcoder";
+export type HandleEntry = { discordId: string; handle: string };
+
+// 컬럼명은 여기 고정된 매핑에서만 나옵니다 — site는 호출부(bot.ts)가 이 타입으로
+// 미리 검증해서 넘기므로, SQL에 사용자 입력이 그대로 흘러들어갈 일이 없습니다.
+const HANDLE_COLUMN: Record<HandleSite, string> = { solvedAc: "solved_ac", codeforces: "codeforces", atcoder: "atcoder" };
+
+// "역대 모든 인원"용 — 학기 소속과 무관하게 users 테이블 전체에서 그 사이트
+// 핸들이 채워진 사람만 걸러냅니다(핸들이 없으면 목록에서 제외).
+export async function listAllTimeHandles(env: Env, site: HandleSite): Promise<HandleEntry[]> {
+  const column = HANDLE_COLUMN[site];
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT discord_id, ${column} AS handle FROM users WHERE ${column} IS NOT NULL AND ${column} != ''`,
+  ).all<{ discord_id: string; handle: string }>();
+  return results.map((r) => ({ discordId: r.discord_id, handle: r.handle }));
+}
+
+// "이번 학기 소속"용 — 현재 학기(semesters.is_current=1)에 approved된 사람 중
+// 그 사이트 핸들이 채워진 사람만.
+export async function listCurrentSemesterHandles(env: Env, site: HandleSite): Promise<HandleEntry[]> {
+  const column = HANDLE_COLUMN[site];
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT u.discord_id, u.${column} AS handle
+     FROM users u
+     JOIN semester_membership sm ON sm.uid = u.uid AND sm.status = 'approved'
+     JOIN semesters s ON s.year = sm.year AND s.season = sm.season AND s.is_current = 1
+     WHERE u.${column} IS NOT NULL AND u.${column} != ''`,
+  ).all<{ discord_id: string; handle: string }>();
+  return results.map((r) => ({ discordId: r.discord_id, handle: r.handle }));
+}

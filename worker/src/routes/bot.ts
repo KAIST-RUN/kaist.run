@@ -1,7 +1,14 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { getUserByDiscordId, upsertUserByDiscordId, UserValidationError } from "../lib/members";
-import { requestSemesterMembership, getUserSemesters, SemesterError } from "../lib/semesters";
+import {
+  getUserByDiscordId,
+  upsertUserByDiscordId,
+  UserValidationError,
+  listAllTimeHandles,
+  listCurrentSemesterHandles,
+  type HandleSite,
+} from "../lib/members";
+import { requestSemesterMembership, getUserSemesters, listAllSemesterDiscordIds, SemesterError } from "../lib/semesters";
 
 // 외부 디스코드 봇이 "신규 회원가입"/"학기별 활동회원 등록"을 처리할 때 부르는 API입니다.
 // 봇은 지금까지 구글 스프레드시트를 직접 편집해왔는데, 이제 원천이 D1로 옮겨오면서
@@ -90,4 +97,32 @@ bot.get("/users/:discordId", async (c) => {
     role: user.role,
     semesters,
   });
+});
+
+// URL 세그먼트("solved-ac")와 실제 컬럼/타입 키("solvedAc")가 달라서 여기서만
+// 매핑합니다 — HANDLE_COLUMN(members.ts)에 쓰는 site 값은 이 매핑을 거친 뒤라
+// 항상 셋 중 하나로 검증된 상태입니다.
+const SITE_PARAM: Record<string, HandleSite> = { "solved-ac": "solvedAc", codeforces: "codeforces", atcoder: "atcoder" };
+
+function parseSite(c: { req: { param(key: string): string } }): HandleSite | null {
+  return SITE_PARAM[c.req.param("site")] ?? null;
+}
+
+// 역대 모든 인원(학기 소속과 무관)의 특정 사이트 핸들 — 핸들이 없는 사람은 빠집니다.
+bot.get("/handles/:site", async (c) => {
+  const site = parseSite(c);
+  if (!site) return c.json({ error: "site는 solved-ac|codeforces|atcoder 중 하나여야 합니다." }, 400);
+  return c.json(await listAllTimeHandles(c.env, site));
+});
+
+// 이번 학기(현재 학기로 지정된 학기)에 승인된 인원만 — 핸들이 없는 사람은 빠집니다.
+bot.get("/handles/:site/current-semester", async (c) => {
+  const site = parseSite(c);
+  if (!site) return c.json({ error: "site는 solved-ac|codeforces|atcoder 중 하나여야 합니다." }, 400);
+  return c.json(await listCurrentSemesterHandles(c.env, site));
+});
+
+// 모든(열린) 학기 각각의 소속(승인된) 디스코드 ID 목록.
+bot.get("/semesters", async (c) => {
+  return c.json(await listAllSemesterDiscordIds(c.env));
 });

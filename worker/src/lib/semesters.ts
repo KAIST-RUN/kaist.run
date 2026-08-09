@@ -190,3 +190,27 @@ export async function getUserSemesters(env: Env, uid: string): Promise<UserSemes
     .all<UserSemesterEntry>();
   return results;
 }
+
+export type SemesterDiscordIds = { year: number; season: Season; isCurrent: boolean; discordIds: string[] };
+
+// 디스코드 봇용 — "모든 학기의 각 학기 소속 디스코드 ID 목록"(worker/src/routes/bot.ts).
+// LEFT JOIN이라 아직 승인된 사람이 하나도 없는(막 연) 학기도 discordIds: []로 나옵니다
+// (조용히 빠지는 대신 존재는 알 수 있게).
+export async function listAllSemesterDiscordIds(env: Env): Promise<SemesterDiscordIds[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT s.year, s.season, s.is_current, u.discord_id
+     FROM semesters s
+     LEFT JOIN semester_membership sm ON sm.year = s.year AND sm.season = s.season AND sm.status = 'approved'
+     LEFT JOIN users u ON u.uid = sm.uid
+     ORDER BY s.year DESC, (CASE s.season WHEN 'fall' THEN 1 ELSE 0 END) DESC`,
+  ).all<{ year: number; season: Season; is_current: number; discord_id: string | null }>();
+
+  const bySemester = new Map<string, SemesterDiscordIds>();
+  for (const r of results) {
+    const key = `${r.year}-${r.season}`;
+    if (!bySemester.has(key)) bySemester.set(key, { year: r.year, season: r.season, isCurrent: !!r.is_current, discordIds: [] });
+    if (r.discord_id) bySemester.get(key)!.discordIds.push(r.discord_id);
+  }
+  // Map은 삽입 순서를 유지하므로, 위 SQL의 ORDER BY(최신순) 그대로 나갑니다.
+  return [...bySemester.values()];
+}
