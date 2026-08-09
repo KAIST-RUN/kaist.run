@@ -144,6 +144,20 @@ npm run deploy
 ADMIN_SYNC_SECRET=<4번에서 등록한 값> npm run backfill-email-index
 ```
 
+> **Windows(cmd/PowerShell)에서는 위 `npm run` 방식이 안 됩니다** — `npm run`은
+> Windows에서 기본적으로 cmd.exe로 스크립트를 실행하는데, cmd.exe는 `$VAR`
+> 문법을 이해하지 못해서(`%VAR%`만 이해) 시크릿이 글자 그대로 `$ADMIN_SYNC_SECRET`
+> 라는 문자열로 전달되어 조용히 401만 돌아옵니다. Windows에서는 curl을 직접
+> 값 채워서 실행하세요 (PowerShell이면 `curl`이 `Invoke-WebRequest`로 별칭
+> 처리되니 `curl.exe`로 명시):
+>
+> ```powershell
+> curl.exe -X POST -H "x-admin-secret: <4번에서 등록한 값>" https://kaist.run/api/admin/backfill-email-index
+> ```
+>
+> 아래 회원 동기화(`sync-members`)도 Windows에서는 마찬가지로 curl을 직접
+> 실행해야 합니다.
+
 ## 9. 첫 회원 동기화
 
 Cron(매시 정각)이 돌 때까지 기다리거나, 바로 실행하려면:

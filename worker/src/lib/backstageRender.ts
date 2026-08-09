@@ -2,6 +2,7 @@ import { page, escapeHtml, formatKstDateTime } from "./emailRender";
 import type { MemberRecord } from "./members";
 import type { NoticeRow, ArchiveRow, ContactRow, ContactInfoRow, ContactSocial, Season } from "./content";
 import type { UploadedFile } from "./uploads";
+import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
 
 const FORM_STYLE = `
   html { scrollbar-gutter: stable; }
@@ -225,6 +226,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
       ${navLink("/archive", "대회 아카이브", active === "archive")}
       ${navLink("/members", "회원 명단", active === "members")}
       ${navLink("/contact", "연락처", active === "contact")}
+      ${navLink("/apply", "지원 폼", active === "apply")}
       ${navLink("/uploads", "업로드", active === "uploads")}
     </div>
   `;
@@ -816,6 +818,147 @@ export function renderContactForm(data: ContactFormData, error?: string): string
         <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
+  `,
+  );
+}
+
+// ---------- apply form ----------
+// 문항/선택지 목록은 구글 폼에서 그대로 가져온 고정 집합이라(관리자가 여기서
+// 추가/삭제하지 않음), 아카이브 폼의 <template> 복제 방식과 달리 add/remove UI가
+// 필요 없습니다 — 필드 개수가 고정이라 훨씬 단순합니다.
+
+const APPLY_TYPE_LABELS: Record<ApplyFormQuestion["type"], string> = {
+  short_answer: "단답형",
+  paragraph: "장문형",
+  radio: "단일선택",
+  checkbox: "체크박스",
+  dropdown: "드롭다운",
+};
+
+// 저장 버튼을 기본 비활성화해두고, 라벨 입력이 하나라도 비면 계속 비활성 상태를
+// 유지합니다(모든 required 필드가 채워져야 form.checkValidity()가 true가 됨) —
+// 지금의 React /apply 페이지가 하는 것과 같은 방식을 여기선 순수 JS로 재현합니다.
+const APPLY_FORM_VALIDITY_SCRIPT = `
+  (function () {
+    var form = document.getElementById("apply-form");
+    var btn = document.getElementById("apply-save");
+    if (!form || !btn) return;
+    function update() { btn.disabled = !form.checkValidity(); }
+    form.addEventListener("input", update);
+    form.addEventListener("change", update);
+    update();
+  })();
+`;
+
+function renderApplyQuestion(q: ApplyFormQuestion): string {
+  const hasChoices = q.type === "radio" || q.type === "checkbox" || q.type === "dropdown";
+
+  const validationField =
+    q.type === "short_answer" || q.type === "paragraph"
+      ? `<div class="bs-field" style="margin-top:12px;">
+          <label>검증 정규식 (선택)</label>
+          <input type="text" name="validationPattern__${escapeHtml(q.entryId)}" value="${escapeHtml(q.validationPattern)}" placeholder="예: ^[^\\s@]+@kaist\\.ac\\.kr$" />
+          <span class="hint">비워두면 검증 안 함. 입력하면 이 정규식과 안 맞는 값은 제출이 막힙니다.</span>
+        </div>`
+      : "";
+
+  const choicesHtml = hasChoices
+    ? `<div class="bs-rows" style="margin-top:12px;">
+        <div class="bs-row-item" style="opacity:.5;font-size:.75rem;">
+          <span style="flex:0 0 160px;">제출 값(고정)</span><span>한국어 라벨</span><span>영어 라벨</span>
+        </div>
+        ${q.choices
+          .map(
+            (choice, i) => `<div class="bs-row-item">
+              <input type="text" value="${escapeHtml(choice.value)}" readonly style="flex:0 0 160px;" />
+              <input type="text" name="choiceKo__${escapeHtml(q.entryId)}__${i}" value="${escapeHtml(choice.labelKo)}" placeholder="${escapeHtml(choice.sourceLabel)}" required />
+              <input type="text" name="choiceEn__${escapeHtml(q.entryId)}__${i}" value="${escapeHtml(choice.labelEn)}" placeholder="${escapeHtml(choice.sourceLabel)}" required />
+            </div>`,
+          )
+          .join("")}
+      </div>`
+    : "";
+
+  return `<div class="bs-card">
+    <p class="bs-card-title">${q.position}. ${APPLY_TYPE_LABELS[q.type]}${q.required ? "" : " · 선택 문항"}</p>
+    <p class="bs-note">구글 폼 원문: ${escapeHtml(q.sourceTitle)}</p>
+    <div class="bs-row2" style="margin-top:10px;">
+      <div class="bs-field">
+        <label>질문 (한국어)</label>
+        <input type="text" name="labelKo__${escapeHtml(q.entryId)}" value="${escapeHtml(q.labelKo)}" placeholder="${escapeHtml(q.sourceTitle)}" required />
+      </div>
+      <div class="bs-field">
+        <label>질문 (영어)</label>
+        <input type="text" name="labelEn__${escapeHtml(q.entryId)}" value="${escapeHtml(q.labelEn)}" placeholder="${escapeHtml(q.sourceTitle)}" required />
+      </div>
+    </div>
+    ${validationField}
+    ${choicesHtml}
+  </div>`;
+}
+
+export type ApplyFormPageOptions = {
+  summary?: ConnectResult;
+  error?: string;
+  saved?: boolean;
+};
+
+export function renderApplyFormPage(config: ApplyFormConfig | null, options: ApplyFormPageOptions = {}): string {
+  const { summary, error, saved } = options;
+
+  const connectSection = `<div class="bs-card">
+    <p class="bs-card-title">구글 폼 연결</p>
+    ${
+      config && config.formId
+        ? `<p class="bs-note">현재 연결된 폼: <code>${escapeHtml(config.formId)}</code> ·
+            <a href="https://docs.google.com/forms/d/e/${escapeHtml(config.formId)}/viewform" target="_blank" rel="noopener">원본 보기</a></p>`
+        : `<p class="bs-note">아직 연결된 폼이 없습니다.</p>`
+    }
+    <form method="post" action="/apply/connect" style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+      <input
+        type="text" name="formUrl" required
+        placeholder="구글 폼 링크 또는 ID (응답자용 .../forms/d/e/…/viewform)"
+        style="flex:1;min-width:240px;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
+      />
+      <button type="submit" class="bs-submit">연결</button>
+    </form>
+    ${
+      summary
+        ? `<p class="bs-note" style="margin-top:10px;color:var(--logo-primary);font-weight:700;">
+            완료 — 문항 ${summary.total}개(추가 ${summary.added}개, 삭제 ${summary.removed}개${summary.skipped ? `, 미지원 유형 ${summary.skipped}개 건너뜀` : ""})
+            ${summary.choicesAdded || summary.choicesRemoved ? ` · 선택지 추가 ${summary.choicesAdded}개, 삭제 ${summary.choicesRemoved}개` : ""}
+            ${summary.added || summary.choicesAdded ? " — 새로 생긴 문항/선택지는 라벨을 채우고 아래에서 저장해야 실제 지원 폼에 반영됩니다." : ""}
+          </p>`
+        : ""
+    }
+  </div>`;
+
+  const header = `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>지원 폼</h1>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    ${saved ? `<p class="bs-note" style="color:var(--logo-primary);font-weight:700;">저장되었습니다 — 잠시 후 사이트에 반영됩니다.</p>` : ""}
+    ${connectSection}
+  `;
+
+  if (!config || config.questions.length === 0) {
+    return shell("지원 폼 편집", "apply", `${header}<p class="empty">아직 문항이 없습니다. 위에서 구글 폼을 연결해 주세요.</p>`);
+  }
+
+  const questionsHtml = config.questions.map(renderApplyQuestion).join("\n");
+
+  return shell(
+    "지원 폼 편집",
+    "apply",
+    `
+    ${header}
+    <form class="bs-form" id="apply-form" method="post" action="/apply">
+      ${questionsHtml}
+      <div class="bs-actions">
+        <button type="submit" class="bs-submit" id="apply-save" disabled>저장</button>
+      </div>
+    </form>
+    <script>${APPLY_FORM_VALIDITY_SCRIPT}</script>
   `,
   );
 }

@@ -9,6 +9,7 @@ import {
   type Locale,
   type Season,
 } from "../lib/content";
+import { getApplyFormConfig } from "../lib/applyForm";
 
 // 공개 읽기 전용 API입니다 — 인증이 전혀 필요 없습니다. 메인 사이트(정적 export)가
 // `next build` 시점(GitHub Actions 안에서 실행, 로그인 세션이 있을 수 없음)에
@@ -60,4 +61,13 @@ content.get("/contact/:locale", async (c) => {
   const contact = await getContact(c.env, locale);
   if (!contact) return c.notFound();
   return c.json(contact);
+});
+
+// notices/archive/contact와 달리 :locale이 없는 단일 엔드포인트입니다 — 문항 구조
+// (순서/유형/entry ID/선택지 값)는 로케일과 무관하게 동일하고 라벨(labelKo/labelEn)만
+// 언어별로 다르므로, 굳이 두 번 fetch할 이유가 없어서 한 번에 둘 다 내려줍니다.
+content.get("/apply-form", async (c) => {
+  const config = await getApplyFormConfig(c.env);
+  if (!config) return c.notFound();
+  return c.json(config);
 });

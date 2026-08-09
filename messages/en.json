@@ -132,19 +132,12 @@
   "apply": {
     "pageTitle": "Apply to RUN",
     "intro": "Thanks for your interest in RUN. Please fill out the form below to apply.",
-    "sections": {
-      "basicInfo": "Basic Information",
-      "content": "Application",
-      "confirmation": "Confirmation"
+    "notReady": {
+      "title": "The application form is being set up",
+      "body": "Please check back again shortly."
     },
     "fields": {
-      "name": "Name",
-      "studentId": "Student ID",
-      "contact": "Your phone number (on the form 0XX-XXXX-XXXX) or any method to contact you",
-      "email": "Your email that ends with @kaist.ac.kr",
-      "emailError": "Please enter a valid @kaist.ac.kr email address.",
-      "motivation": "How did you decide to apply?",
-      "experience": "Problem solving experience (you can join regardless of your answer!)"
+      "patternError": "Please enter a value in the required format."
     },
     "submit": "Submit",
     "submitting": "Submitting...",

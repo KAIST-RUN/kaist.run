@@ -19,6 +19,14 @@ import {
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
 import { syncMembersFromSheet, getMembersLastSyncedAt, listMembers } from "../lib/members";
 import {
+  getApplyFormConfig,
+  connectApplyForm,
+  saveApplyFormLabels,
+  ApplyFormValidationError,
+  type SaveQuestionInput,
+} from "../lib/applyForm";
+import { GoogleFormAccessError, GoogleFormParseError } from "../lib/googleForms";
+import {
   renderBackstageHome,
   renderNoticeList,
   renderNoticeForm,
@@ -29,6 +37,7 @@ import {
   renderContactForm,
   contactRowsToFormData,
   renderUploadList,
+  renderApplyFormPage,
   type NoticeFormData,
 } from "../lib/backstageRender";
 import { renderErrorPage } from "../lib/emailRender";
@@ -458,6 +467,76 @@ backstage.post("/contact", async (c) => {
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/contact");
+});
+
+// ---------- apply form ----------
+// 지원 폼(/apply)의 문항 구조는 구글 폼에서 가져오고(연결), 화면에 보일 한국어/영어
+// 문구만 여기서 편집합니다. 구조(연결)와 라벨(저장)은 별도 POST — 연결 직후엔 새
+// 문항 라벨이 비어 있을 수 있어서 그 시점엔 재배포(triggerRebuild)를 안 부릅니다.
+
+backstage.get("/apply", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const config = await getApplyFormConfig(c.env);
+  const saved = c.req.query("saved") === "1";
+  return c.html(renderApplyFormPage(config, { saved }));
+});
+
+backstage.post("/apply/connect", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  const formInput = get("formUrl").trim();
+
+  try {
+    const summary = await connectApplyForm(c.env, formInput);
+    const config = await getApplyFormConfig(c.env);
+    return c.html(renderApplyFormPage(config, { summary }));
+  } catch (err) {
+    console.error("Failed to connect apply form", err);
+    const config = await getApplyFormConfig(c.env);
+    const message =
+      err instanceof GoogleFormAccessError || err instanceof GoogleFormParseError
+        ? err.message
+        : "폼을 연결하지 못했습니다. 링크를 확인하고 잠시 후 다시 시도해 주세요.";
+    return c.html(renderApplyFormPage(config, { error: message }), 400);
+  }
+});
+
+backstage.post("/apply", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const config = await getApplyFormConfig(c.env);
+  if (!config) return c.notFound();
+
+  const { get } = await readForm(c);
+
+  const questions: SaveQuestionInput[] = config.questions.map((q) => ({
+    entryId: q.entryId,
+    labelKo: get(`labelKo__${q.entryId}`).trim(),
+    labelEn: get(`labelEn__${q.entryId}`).trim(),
+    validationPattern: get(`validationPattern__${q.entryId}`).trim(),
+    choices: q.choices.map((choice, i) => ({
+      value: choice.value,
+      labelKo: get(`choiceKo__${q.entryId}__${i}`).trim(),
+      labelEn: get(`choiceEn__${q.entryId}__${i}`).trim(),
+    })),
+  }));
+
+  try {
+    await saveApplyFormLabels(c.env, questions);
+  } catch (err) {
+    if (err instanceof ApplyFormValidationError) {
+      return c.html(renderApplyFormPage(config, { error: err.message }), 400);
+    }
+    throw err;
+  }
+
+  c.executionCtx.waitUntil(triggerRebuild(c.env));
+  return c.redirect("/apply?saved=1");
 });
 
 // ---------- uploads ----------

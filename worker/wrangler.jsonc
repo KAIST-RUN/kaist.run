@@ -15,7 +15,10 @@
 		},
 		{
 			"binding": "MEMBERS",
-			"id": "6e8d45c7760640a1add8fb62e7ad3f23"
+			"id": "6e8d45c7760640a1add8fb62e7ad3f23",
+			// CONTENT_DB/UPLOADS와 같은 이유입니다 — 로컬 dev에서도 텅 빈 로컬 시뮬레이션이
+			// 아니라 실제 배포된 회원 명단을 봐야 로그인 테스트가 됩니다.
+			"remote": true
 		},
 		{
 			"binding": "EMAIL_INDEX",

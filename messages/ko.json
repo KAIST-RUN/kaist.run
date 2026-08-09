@@ -132,19 +132,12 @@
   "apply": {
     "pageTitle": "가입 신청",
     "intro": "RUN에 관심 가져주셔서 감사합니다. 아래 양식을 작성해 신청해 주세요.",
-    "sections": {
-      "basicInfo": "기본 정보",
-      "content": "지원 내용",
-      "confirmation": "확인 사항"
+    "notReady": {
+      "title": "지원 폼을 준비 중입니다",
+      "body": "잠시 후 다시 확인해 주세요."
     },
     "fields": {
-      "name": "이름",
-      "studentId": "학번",
-      "contact": "전화번호 (0XX-XXXX-XXXX 형식으로 써 주세요) 또는 기타 연락처",
-      "email": "카이스트 이메일",
-      "emailError": "@kaist.ac.kr 형식의 이메일을 입력해 주세요.",
-      "motivation": "지원 동기",
-      "experience": "Problem Solving 관련 경험(없어도 상관없음!!!!)"
+      "patternError": "올바른 형식으로 입력해 주세요."
     },
     "submit": "제출하기",
     "submitting": "제출 중...",
