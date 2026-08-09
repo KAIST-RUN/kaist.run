@@ -23,6 +23,10 @@ export function getLogoutEndpoint(): string {
   return `${getApiBase()}/api/auth/logout`;
 }
 
+export function getUpdateHandlesEndpoint(): string {
+  return `${getApiBase()}/api/me/handles`;
+}
+
 export function getDiscordLoginHref(locale: Locale): string {
   const returnToPath = withBasePath(`/${locale}/my/`);
   // 절대 URL로 보냅니다 — Worker가 다른 origin(로컬에서는 다른 포트)에 있어도

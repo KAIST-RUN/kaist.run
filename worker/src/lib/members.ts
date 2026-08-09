@@ -213,6 +213,18 @@ export async function updateUser(env: Env, uid: string, input: UserUpdateInput):
     .run();
 }
 
+export type OwnHandlesInput = { solvedAc: string | null; codeforces: string | null; atcoder: string | null };
+
+// 마이페이지 본인 수정용 — backstage의 updateUser(전체 필드 + discordId 충돌 검사)와
+// 달리, 세션으로 이미 확인된 본인 uid에 대해 핸들 3개만 딱 고칩니다. 이름/이메일/
+// 학번/Discord ID는 여기서 절대 안 건드립니다(신원 관련 필드라 본인 수정 범위 밖 —
+// 그건 계속 backstage 관리자만 고칠 수 있음).
+export async function updateUserHandles(env: Env, uid: string, input: OwnHandlesInput): Promise<void> {
+  await env.CONTENT_DB.prepare(`UPDATE users SET solved_ac=?2, codeforces=?3, atcoder=?4, updated_at=datetime('now') WHERE uid=?1`)
+    .bind(uid, input.solvedAc, input.codeforces, input.atcoder)
+    .run();
+}
+
 // 로그인 성공 시(routes/auth.ts) 매번 호출해서 아바타를 최신으로 맞춥니다 — Discord
 // OAuth 응답에 이미 들어있는 값이라 추가 API 호출 없이 공짜로 갱신됩니다. backstage
 // 명단은 이렇게 "로그인할 때마다 갱신"되는 캐시라, 오래 로그인 안 한 사람의 아바타는

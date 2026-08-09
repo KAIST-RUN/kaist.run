@@ -18,6 +18,9 @@ const MOCK_MEMBER: CurrentUser = {
     { year: 2026, season: "spring", status: "approved" },
     { year: 2025, season: "fall", status: "approved" },
   ],
+  solvedAc: "run_handle",
+  codeforces: null,
+  atcoder: "run_ac",
 };
 
 const MOCK_ADMIN: CurrentUser = {
@@ -52,6 +55,9 @@ const MOCK_APPLICANT_WITH_NULLS: CurrentUser = {
   status: "applicant",
   role: "member",
   semesters: [{ year: 2026, season: "fall", status: "pending" }],
+  solvedAc: null,
+  codeforces: null,
+  atcoder: null,
 };
 
 // loading 상태를 계속 유지하는 fixture 용 — 절대 resolve되지 않는 Promise.

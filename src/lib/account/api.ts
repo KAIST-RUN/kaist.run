@@ -1,5 +1,5 @@
 import type { CurrentUserState } from "@/types/account";
-import { getLogoutEndpoint, getMeEndpoint } from "./authLinks";
+import { getLogoutEndpoint, getMeEndpoint, getUpdateHandlesEndpoint } from "./authLinks";
 
 // -----------------------------------------------------------------------------
 // 개발 중 mock 사용법 (프로덕션 빌드에는 영향 없음)
@@ -54,6 +54,31 @@ export async function fetchCurrentUser(): Promise<CurrentUserState> {
     return { status: "signed-in", user };
   } catch {
     return { status: "error" };
+  }
+}
+
+export type HandlesInput = { solvedAc: string; codeforces: string; atcoder: string };
+
+// 마이페이지 UserInfoCard의 연필 아이콘 → 저장. 성공하면 호출부가
+// useCurrentUser().refetch()로 화면을 최신화합니다.
+export async function updateHandles(handles: HandlesInput): Promise<boolean> {
+  if (isUseMockEnabled()) {
+    // mock 모드는 고정 fixture라 실제로 저장되진 않지만, 저장 버튼 자체의
+    // 로딩/성공 흐름은 그대로 눈으로 확인할 수 있게 성공으로 처리합니다.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return true;
+  }
+
+  try {
+    const res = await fetch(getUpdateHandlesEndpoint(), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(handles),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 

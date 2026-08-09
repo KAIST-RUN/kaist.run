@@ -206,7 +206,20 @@
       "season": { "spring": "봄", "fall": "가을" },
       "pendingBadge": "승인 대기",
       "discordAccount": "Discord 계정",
-      "notRegistered": "미등록"
+      "notRegistered": "미등록",
+      "handles": {
+        "label": "코딩 핸들",
+        "solvedAc": "solved.ac",
+        "codeforces": "Codeforces",
+        "atcoder": "AtCoder",
+        "empty": "등록된 핸들이 없습니다.",
+        "edit": "코딩 핸들 수정",
+        "placeholder": "핸들 입력",
+        "save": "저장",
+        "cancel": "취소",
+        "saving": "저장 중...",
+        "saveError": "저장하지 못했습니다. 다시 시도해 주세요."
+      }
     },
     "menu": {
       "language": "언어",

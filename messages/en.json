@@ -206,7 +206,20 @@
       "season": { "spring": "Spring", "fall": "Fall" },
       "pendingBadge": "Pending",
       "discordAccount": "Discord account",
-      "notRegistered": "Not registered"
+      "notRegistered": "Not registered",
+      "handles": {
+        "label": "Coding handles",
+        "solvedAc": "solved.ac",
+        "codeforces": "Codeforces",
+        "atcoder": "AtCoder",
+        "empty": "No handles registered.",
+        "edit": "Edit coding handles",
+        "placeholder": "Enter handle",
+        "save": "Save",
+        "cancel": "Cancel",
+        "saving": "Saving...",
+        "saveError": "Couldn't save. Please try again."
+      }
     },
     "menu": {
       "language": "Language",

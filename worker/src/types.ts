@@ -61,4 +61,9 @@ export type CurrentUser = {
   role: "member" | "admin";
   // 승인됨/대기중 둘 다 포함, 최신순. "가입 연도" 대신 이제 이걸로 소속을 보여줍니다.
   semesters: { year: number; season: "spring" | "fall"; status: "pending" | "approved" }[];
+
+  // 마이페이지에서 본인이 직접 수정 가능 — POST /api/me/handles (routes/me.ts) 참고.
+  solvedAc: string | null;
+  codeforces: string | null;
+  atcoder: string | null;
 };
