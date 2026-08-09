@@ -703,9 +703,12 @@ function memberPagerLink(q: string, page: number, label: string): string {
 }
 
 function renderMemberRow(member: MemberRecord): string {
-  const metaParts = [member.studentId, member.email, `Discord ${member.discordId}`].filter(
-    (v): v is string => Boolean(v),
-  );
+  const metaParts = [
+    member.studentId,
+    member.joinedYear != null ? `${member.joinedYear}년 가입` : null,
+    member.email,
+    `Discord ${member.discordId}`,
+  ].filter((v): v is string => Boolean(v));
   const avatar = member.avatarUrl
     ? `<img class="bs-member-avatar" src="${escapeHtml(member.avatarUrl)}" alt="" loading="lazy" />`
     : `<div class="bs-member-avatar bs-member-avatar-fallback" aria-hidden="true">?</div>`;
