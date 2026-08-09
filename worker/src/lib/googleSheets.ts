@@ -41,10 +41,9 @@ async function getAccessToken(env: Env): Promise<string> {
 
 // ============================================================================
 // "역대 회원 명단" 시트의 실제 헤더(1행) ↔ 우리 필드 매핑입니다.
-//   이름 | 학번 | 전화번호 | 이메일 | Discord | solved.ac | Codeforces | AtCoder
-// 시트에는 상태(신청중/재학/졸업)나 가입연도 열이 없어서, 다음처럼 처리합니다:
+//   이름 | 학번 | 전화번호 | 이메일 | Discord | 가입연도 | solved.ac | Codeforces | AtCoder
+// 시트에는 상태(신청중/재학/졸업) 열이 없어서, 다음처럼 처리합니다:
 //   - status: 시트에 올라와 있으면 무조건 "member"로 취급 (신청/졸업 구분 없음)
-//   - joinedYear: 항상 null (표시하지 않음)
 //   - role: 메인 시트가 아니라 별도의 "관리자" 서브시트(아래 참고)로 판단합니다.
 // ============================================================================
 const HEADER_MAP = {
@@ -53,6 +52,7 @@ const HEADER_MAP = {
   studentId: "학번",
   phone: "전화번호",
   email: "이메일",
+  joinedYear: "가입연도",
   solvedAc: "solved.ac",
   codeforces: "Codeforces",
   atcoder: "AtCoder",
@@ -89,6 +89,15 @@ function cell(row: string[], headers: string[], headerName: string): string | nu
   if (idx === -1) return null;
   const value = row[idx]?.trim();
   return value ? value : null;
+}
+
+// "2024" 같은 값만 받고, 빈 칸이거나 숫자가 아니면(오타 등) null로 — 잘못된 값이
+// 그대로 표시되는 것보단 안 보이는 게 낫습니다.
+function yearCell(row: string[], headers: string[], headerName: string): number | null {
+  const raw = cell(row, headers, headerName);
+  if (!raw) return null;
+  const year = Number.parseInt(raw, 10);
+  return Number.isNaN(year) ? null : year;
 }
 
 // GOOGLE_SHEET_RANGE가 기본값("Sheet1")에서 안 바뀌었으면, 실제 탭 이름을 몰라도
@@ -187,7 +196,7 @@ export async function fetchMembersFromSheet(env: Env, sheetId: string): Promise<
       name: cell(row, headerRow, HEADER_MAP.name),
       email: cell(row, headerRow, HEADER_MAP.email),
       studentId: cell(row, headerRow, HEADER_MAP.studentId),
-      joinedYear: null,
+      joinedYear: yearCell(row, headerRow, HEADER_MAP.joinedYear),
       status: "member",
       role: adminIds.has(discordId) ? "admin" : "member",
       phone: cell(row, headerRow, HEADER_MAP.phone),
