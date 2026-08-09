@@ -9,7 +9,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, PDFRawStream, PDFName, decodePDFRawStream, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
 const API_BASE = process.env.CONTENT_API_BASE_URL ?? "https://kaist.run/api/content";
@@ -32,6 +32,10 @@ const TAG_COLOR = rgb(0x0e / 255, 0x74 / 255, 0x90 / 255);
 
 const CIRCLED = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩", "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳"];
 const SUBITEM = ["가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카", "타", "파", "하"];
+
+// src/lib/bylaws.ts와 동일합니다 — "절"/"강조문구"는 실제로 쓰인 적이 없어서 뺐고,
+// "본문"은 별도 블록 타입이 아니라 장/부칙/조/항 자신에게 선택적으로 붙는 문단(body 필드)입니다.
+const BODY_ELIGIBLE = new Set(["chapter", "buchik", "article", "clause"]);
 
 const RE_INLINE_TAG_SPLIT = /(<[^>]+>|\[[^\]]+])/;
 const RE_INLINE_TAG_FULL = /^(<[^>]+>|\[[^\]]+])$/;
@@ -186,7 +190,6 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
   }
 
   const counters = [0, 0, 0, 0, 0];
-  let sectionCounter = 0;
 
   for (const block of blocks) {
     const text = substituteTagDates(block.text, revisionHistory);
@@ -195,20 +198,13 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
       case "chapter": {
         counters[0] += 1;
         resetBelow(counters, 0);
-        sectionCounter = 0;
         w.gap(10);
         w.paragraph({ align: "center", runs: [{ text: `제${counters[0]}장 ${text}`, tag: false }], font: boldFont, size: 14.5, color: BLACK, spacingAfter: 4 });
-        break;
-      }
-      case "section": {
-        sectionCounter += 1;
-        w.paragraph({ align: "center", runs: [{ text: `제${sectionCounter}절 ${text}`, tag: false }], font: boldFont, size: 12, color: GRAY, spacingAfter: 2 });
         break;
       }
       case "buchik": {
         counters[1] = 0;
         resetBelow(counters, 1);
-        sectionCounter = 0;
         w.gap(10);
         w.paragraph({ align: "center", runs: splitColorRuns(text), font: boldFont, size: 14.5, color: BLACK, spacingAfter: 4 });
         break;
@@ -217,10 +213,6 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
         counters[1] += 1;
         resetBelow(counters, 1);
         w.paragraph({ align: "left", runs: splitColorRuns(`제${counters[1]}조(${text})`), font: boldFont, size: 11.5, color: BLACK, spacingAfter: 1 });
-        break;
-      }
-      case "tagline": {
-        w.paragraph({ align: "right", runs: splitColorRuns(text), font: regularFont, size: 10, color: TAG_COLOR, indent: 14, spacingAfter: 3 });
         break;
       }
       case "clause": {
@@ -242,14 +234,61 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
         w.paragraph({ align: "left", runs: splitColorRuns(text), font: regularFont, size: 11, color: BLACK, indent: 42, marker, markerFont: regularFont, markerSize: 11 });
         break;
       }
-      case "body": {
-        w.paragraph({ align: "left", runs: splitColorRuns(text), font: regularFont, size: 11, color: BLACK, indent: 14 });
-        break;
-      }
+    }
+
+    // 본문(body)은 별도 블록이 아니라 위 타입들에 선택적으로 붙는 문단입니다 — src/lib/bylaws.ts의
+    // renderBody()와 동일한 조건(BODY_ELIGIBLE + 값이 있을 때)으로 그 블록 바로 아래에 렌더링합니다.
+    // (예전엔 "body" 타입 블록이 별도로 존재했지만 지금은 blocks[]에 그런 항목이 없어서, 이 처리가
+    // 없으면 저장된 본문 문단이 PDF에서 통째로 누락됩니다.)
+    if (BODY_ELIGIBLE.has(block.type) && block.body) {
+      const bodyText = substituteTagDates(block.body, revisionHistory);
+      w.paragraph({ align: "left", runs: splitColorRuns(bodyText), font: regularFont, size: 11, color: BLACK, indent: 14 });
     }
   }
 
   return pdfDoc.save();
+}
+
+// pdf-lib(1.17.1)이 서브셋 폰트마다 만드는 ToUnicode CMap은 쓰인 글자 전부를 하나의
+// beginbfchar/endbfchar 블록에 다 집어넣는데, CMap/PostScript 스펙은 블록당 최대 100개
+// 항목만 허용합니다(Adobe #5411). 회칙처럼 글자 수가 100자를 넘는 문서에서는 이 스펙 위반
+// 때문에 일부 PDF 리더가 그 폰트의 유니코드 매핑 전체를 무시/거부해서 텍스트 추출·검색·
+// (뷰어에 따라) 표시까지 깨지는 결과로 이어질 수 있습니다 — 저장된 바이트를 다시 읽어
+// 각 ToUnicode 스트림을 100개 이하 블록으로 쪼개 다시 씁니다.
+async function fixToUnicodeCmaps(bytes) {
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFRawStream)) continue;
+
+    let decoded;
+    try {
+      decoded = decodePDFRawStream({ dict: obj.dict, contents: obj.contents }).decode();
+    } catch {
+      continue;
+    }
+    const text = Buffer.from(decoded).toString("latin1");
+    if (!text.includes("/CMapName /Adobe-Identity-UCS")) continue; // ToUnicode CMap이 아님
+
+    const entries = [...text.matchAll(/<([0-9A-Fa-f]{4})>\s*<([0-9A-Fa-f]+)>/g)].map((m) => [m[1], m[2]]);
+    if (entries.length <= 100) continue; // 이미 스펙 범위 안 — 손댈 필요 없음
+
+    const blocks = [];
+    for (let i = 0; i < entries.length; i += 100) {
+      const chunk = entries.slice(i, i + 100);
+      blocks.push(`${chunk.length} beginbfchar\n${chunk.map(([a, b]) => `<${a}> <${b}>`).join("\n")}\nendbfchar`);
+    }
+    const rebuilt =
+      "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n" +
+      "/CIDSystemInfo <<\n  /Registry (Adobe)\n  /Ordering (UCS)\n  /Supplement 0\n>> def\n" +
+      "/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000><ffff>\nendcodespacerange\n" +
+      blocks.join("\n") +
+      "\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend";
+
+    obj.dict.delete(PDFName.of("Filter"));
+    obj.dict.delete(PDFName.of("DecodeParms"));
+    obj.contents = new TextEncoder().encode(rebuilt);
+  }
+  return doc.save();
 }
 
 async function main() {
@@ -278,7 +317,8 @@ async function main() {
       throw new Error(`Failed to fetch bylaws/${v.slug}: ${res.status} ${await res.text()}`);
     }
     const doc = await res.json();
-    const bytes = await renderDocumentToPdf(doc, { regular, bold });
+    const rawBytes = await renderDocumentToPdf(doc, { regular, bold });
+    const bytes = await fixToUnicodeCmaps(rawBytes);
     fs.writeFileSync(path.join(OUT_DIR, `${v.slug}.pdf`), bytes);
     console.log(`[generate-bylaws-pdf] wrote public/bylaws/${v.slug}.pdf`);
   }

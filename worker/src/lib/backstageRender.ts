@@ -253,8 +253,37 @@ const FORM_STYLE = `
   .bylaws-body-remove:hover { background: rgba(220,38,38,.12); color: #f87171; }
   .bylaws-body-remove:active { transform: scale(.9); }
 
-  /* 오른쪽 미리보기 — kaist.run/bylaws와 완전히 같은 클래스/규칙(src/app/[locale]/bylaws/bylaws.css). */
-  .bylaws-split { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(0,.95fr); gap: 18px; align-items: start; }
+  /* 미리보기 — 항상 보이는 좁은 반쪽 컬럼 대신, 필요할 때만 오른쪽에서 슬라이드로
+     열리는 오버레이 패널입니다. 그레서 본문 트리(#bylaws-tree)는 미리보기가 열려있든
+     아니든 항상 관리자 탭 컨테이너(960px) 전체 너비를 씁니다. 클래스/규칙 자체는
+     kaist.run/bylaws와 완전히 같습니다(src/app/[locale]/bylaws/bylaws.css). */
+  .bylaws-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .bylaws-card-header .bs-card-title { margin: 0; }
+  .bylaws-preview-toggle {
+    flex-shrink: 0; font: inherit; font-size: .8125rem; font-weight: 700; color: var(--logo-primary);
+    background: transparent; border: 1px solid var(--logo-primary); border-radius: 999px; padding: 6px 14px;
+    cursor: pointer; transition: background .15s, color .15s;
+  }
+  .bylaws-preview-toggle:hover { background: var(--logo-primary); color: var(--bg); }
+
+  .bylaws-preview-backdrop { display: none; }
+  .bylaws-preview-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 70; }
+
+  .bylaws-preview-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 92vw); z-index: 71;
+    background: var(--bg); border-left: 1px solid rgba(128,128,128,.2); box-shadow: -12px 0 32px rgba(0,0,0,.18);
+    transform: translateX(100%); transition: transform .25s ease; overflow-y: auto; box-sizing: border-box;
+    padding: 20px 22px 40px;
+  }
+  .bylaws-preview-panel.open { transform: translateX(0); }
+  .bylaws-preview-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; position: sticky; top: 0; background: var(--bg); padding-bottom: 8px; }
+  .bylaws-preview-close {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3);
+    background: transparent; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .bylaws-preview-close:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
+
   .bylaws-preview-wrap { background: #faf8f3; border-radius: 10px; padding: 26px 24px; border: 1px solid rgba(128,128,128,.16); }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .bylaws-preview-wrap { background: #201e1a; }
@@ -278,10 +307,10 @@ const FORM_STYLE = `
   .bylaws-preview .bylaws-tag { color: #0e7490; font-weight: 600; }
   .bylaws-preview-empty { opacity: .5; font-size: .875rem; text-align: center; padding: 30px 0; }
 
-  @media (max-width: 900px) { .bylaws-split { grid-template-columns: 1fr; } }
   @media (max-width: 640px) {
     .bylaws-node-row { flex-wrap: wrap; }
     .bylaws-node-row textarea { flex: 1 1 100%; }
+    .bylaws-preview-panel { width: 100vw; }
   }
 
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -1108,6 +1137,28 @@ const BYLAWS_TREE_SCRIPT = `
     var initialEl = document.getElementById("bylaws-initial-blocks");
     var form = root.closest("form");
 
+    // 미리보기는 본문 트리와 나란히 두는 좁은 반쪽 컬럼 대신, 오른쪽에서
+    // 슬라이드로 열리는 오버레이 패널입니다 — 열려있지 않을 땐 본문 트리가
+    // 항상 관리자 탭 컨테이너 전체 너비를 씁니다.
+    var previewPanel = document.getElementById("bylaws-preview-panel");
+    var previewBackdrop = document.getElementById("bylaws-preview-backdrop");
+    var previewToggleBtn = document.getElementById("bylaws-preview-toggle");
+    var previewCloseBtn = document.getElementById("bylaws-preview-close");
+    function openPreview() {
+      if (previewPanel) previewPanel.classList.add("open");
+      if (previewBackdrop) previewBackdrop.classList.add("open");
+      if (previewPanel) previewPanel.setAttribute("aria-hidden", "false");
+      renderPreviewPane();
+    }
+    function closePreview() {
+      if (previewPanel) previewPanel.classList.remove("open");
+      if (previewBackdrop) previewBackdrop.classList.remove("open");
+      if (previewPanel) previewPanel.setAttribute("aria-hidden", "true");
+    }
+    if (previewToggleBtn) previewToggleBtn.addEventListener("click", openPreview);
+    if (previewCloseBtn) previewCloseBtn.addEventListener("click", closePreview);
+    if (previewBackdrop) previewBackdrop.addEventListener("click", closePreview);
+
     var TYPE_LABEL = {
       chapter: "장", article: "조", buchik: "부칙",
       clause: "항", item: "호", subitem: "목",
@@ -1117,6 +1168,9 @@ const BYLAWS_TREE_SCRIPT = `
       buchik: "부칙 표제 (예: 부칙)", clause: "항 내용", item: "호 내용", subitem: "목 내용",
     };
     var BODY_ELIGIBLE = { chapter: 1, buchik: 1, article: 1, clause: 1 };
+    // 번호(제N장/제N조)가 이미 타입 이름을 담고 있는 경우엔 badge가 중복이라 뺍니다 —
+    // 항(①②③...)/호(1.2.3...)/목(가.나.다...)은 번호만 봐서는 타입을 알 수 없어서 유지합니다.
+    var HIDE_BADGE = { chapter: 1, article: 1, clause: 1 };
     var CHILD_TYPES = {
       root: ["chapter", "buchik", "article"],
       chapter: ["article"],
@@ -1261,7 +1315,7 @@ const BYLAWS_TREE_SCRIPT = `
       var numHtml = n.label ? '<span class="bylaws-num">' + esc(n.label) + "</span>" : "";
 
       var tagSelect =
-        n.type === "clause"
+        n.type === "clause" || n.type === "item"
           ? '<select class="bylaws-tag-select" data-action="tag-insert" data-id="' + n.id + '" aria-label="개정 표시 삽입" title="개정/신설/삭제 표시 삽입">' +
             '<option value="">+ 태그</option><option value="개정">개정</option><option value="신설">신설</option>' +
             '<option value="삭제">삭제</option><option value="본조신설">본조신설</option></select>'
@@ -1271,7 +1325,7 @@ const BYLAWS_TREE_SCRIPT = `
       var bodyRow = "";
       if (BODY_ELIGIBLE[n.type]) {
         if (n.body === null || n.body === undefined) {
-          bodyChip = '<button type="button" class="bylaws-chip bylaws-chip-ghost bylaws-chip-inline" data-action="body-add" data-id="' + n.id + '">+ 본문</button>';
+          bodyChip = '<button type="button" class="bylaws-chip bylaws-chip-ghost bylaws-chip-inline" data-action="body-add" data-id="' + n.id + '" aria-label="본문 추가" title="본문 추가">+</button>';
         } else {
           bodyRow =
             '<div class="bylaws-body-row">' +
@@ -1286,7 +1340,7 @@ const BYLAWS_TREE_SCRIPT = `
         '<div class="bylaws-node-row">' +
         foldBtn +
         '<span class="bylaws-drag-handle" data-drag-handle draggable="true" aria-label="드래그해서 순서 변경" title="드래그해서 순서 변경">⠿</span>' +
-        '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>" +
+        (HIDE_BADGE[n.type] ? "" : '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>") +
         numHtml +
         '<textarea class="bs-autosize" rows="1" data-text-id="' + n.id + '" placeholder="' + esc(PLACEHOLDER[n.type] || "") + '">' + esc(n.text) + "</textarea>" +
         tagSelect +
@@ -1601,19 +1655,29 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
       </div>
 
       <div class="bs-card">
-        <p class="bs-card-title">본문</p>
+        <div class="bylaws-card-header">
+          <p class="bs-card-title">본문</p>
+          <button type="button" class="bylaws-preview-toggle" id="bylaws-preview-toggle">미리보기</button>
+        </div>
         <p class="bs-note" style="margin-bottom:12px">
           "+" 버튼으로 어디에 추가하는지가 곧 위계입니다 — 타입을 고르거나 순서를 옮길 필요 없이,
           이 조 아래에 항을 추가하면 그게 몇 번째 항인지도 자동으로 정해집니다. 순서를 바꾸려면
           ⠿ 손잡이를 드래그하세요. 본문(번호 없는 문단)은 장/부칙/조/항 자신에게 선택적으로 붙습니다.
         </p>
-        <div class="bylaws-split">
-          <div id="bylaws-tree"></div>
-          <div class="bylaws-preview-wrap"><div id="bylaws-preview"></div></div>
-        </div>
+        <div id="bylaws-tree"></div>
         <script type="application/json" id="bylaws-initial-blocks">${initialBlocksJson}</script>
         <input type="hidden" name="blocksJson" id="bylaws-blocks-json" />
       </div>
+
+      <div class="bylaws-preview-backdrop" id="bylaws-preview-backdrop"></div>
+      <aside class="bylaws-preview-panel" id="bylaws-preview-panel" aria-hidden="true">
+        <div class="bylaws-preview-panel-header">
+          <p class="bs-card-title" style="margin:0">미리보기</p>
+          <button type="button" class="bylaws-preview-close" id="bylaws-preview-close" aria-label="미리보기 닫기" title="닫기">×</button>
+        </div>
+        <div class="bylaws-preview-wrap"><div id="bylaws-preview"></div></div>
+      </aside>
+
       <script>${BS_ROWS_SCRIPT}</script>
       <script>${BYLAWS_TREE_SCRIPT}</script>
 
