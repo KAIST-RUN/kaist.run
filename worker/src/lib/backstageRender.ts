@@ -39,11 +39,11 @@ const FORM_STYLE = `
   .bs-drawer-logout-form { display: none; }
 
   /* 페이지 곳곳의 알약(pill) 버튼(로그아웃, 새 글 작성, 저장, 삭제, 파일 선택,
-     검색, + 추가, 복사)이 전부 같은 크기를 쓰도록 여기 한 곳에 모아둡니다. 색/테두리
+     검색, + 추가)이 전부 같은 크기를 쓰도록 여기 한 곳에 모아둡니다. 색/테두리
      같은 개별 스타일은 각자의 규칙에 그대로 남아있습니다. */
   .bs-nav-logout, .bs-new, .bs-submit, .bs-danger,
   .bs-upload input[type="file"]::file-selector-button,
-  .bs-cancel-btn, .bs-add-row, .bs-copy {
+  .bs-cancel-btn, .bs-add-row {
     font: inherit; font-weight: 700; font-size: 0.8125rem; padding: 8px 18px; border-radius: 999px; cursor: pointer;
     transition: opacity .15s, background .15s, border-color .15s, color .15s, transform .12s;
   }
@@ -74,25 +74,42 @@ const FORM_STYLE = `
       display: block; margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(128,128,128,.18);
     }
     .bs-drawer-logout-form .bs-nav-logout { display: block; width: 100%; text-align: center; }
+
+    /* 공지/아카이브 목록 행에서 제목과 날짜·슬러그가 좁은 화면에서 어중간하게
+       한 줄에 붙어버리지 않도록, 항상 개행해서 보여줍니다. */
+    .bs-list li { flex-direction: column; align-items: flex-start; gap: 4px; }
+
+    /* 텍스트 입력 옆 버튼(검색/업로드/연결 등)이 줄바꿈되지 않게 — 입력 필드가
+       먼저 줄어들고, 버튼(아래에서 아이콘 전용으로 바뀜)은 항상 고정 크기를
+       유지합니다. */
+    .bs-upload input[type="text"] { min-width: 0; flex: 1 1 80px; }
+    .bs-search { flex-wrap: nowrap; }
+    .bs-search input[type="text"] { min-width: 0; flex: 1 1 auto; max-width: none; }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
      prefers-reduced-motion에서 전부 뺍니다 (색/배경 전환은 자극이 적어 유지). */
   @media (prefers-reduced-motion: no-preference) {
+    /* body에는 opacity만 있는 애니메이션을 씁니다 — transform(translateY)이 있으면
+       애니메이션이 끝난 뒤에도 그 값(translateY(0))이 계속 적용된 채로 남는데,
+       그러면 body가 position:fixed 자손(모바일 서랍/backdrop)의 containing block이
+       되어버려서, 페이지 내용이 화면 끝까지 안 내려오는 짧은 페이지에서는 서랍이
+       뷰포트 전체가 아니라 body 높이에 맞춰 잘립니다. */
+    @keyframes bs-fade-in { from { opacity: 0; } to { opacity: 1; } }
     @keyframes bs-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes bs-row-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-    body { animation: bs-fade-up .4s cubic-bezier(0.16,1,0.3,1) both; }
+    body { animation: bs-fade-in .4s ease both; }
     .bs-card { animation: bs-fade-up .35s cubic-bezier(0.16,1,0.3,1) both; }
     .bs-row-enter { animation: bs-row-enter .25s ease both; }
 
     .bs-nav-logout:hover, .bs-new:hover, .bs-submit:hover, .bs-danger:hover,
     .bs-upload input[type="file"]::file-selector-button:hover,
-    .bs-cancel-btn:hover, .bs-add-row:hover, .bs-copy:hover, .bs-row-remove:hover {
+    .bs-cancel-btn:hover, .bs-add-row:hover, .bs-row-remove:hover {
       transform: translateY(-1px);
     }
     .bs-nav-logout:active, .bs-new:active, .bs-submit:active, .bs-danger:active,
     .bs-upload input[type="file"]::file-selector-button:active,
-    .bs-cancel-btn:active, .bs-add-row:active, .bs-copy:active, .bs-row-remove:active {
+    .bs-cancel-btn:active, .bs-add-row:active, .bs-row-remove:active {
       transform: scale(0.96);
     }
   }
@@ -154,6 +171,10 @@ const FORM_STYLE = `
   .bs-danger-zone { margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(220,38,38,.2); }
   .bs-danger { border: 1px solid rgba(220,38,38,.4); color: #f87171; background: rgba(220,38,38,.06); transition: background .15s; }
   .bs-danger:hover { background: rgba(220,38,38,.14); }
+  /* 검색/업로드/연결처럼 텍스트 입력 바로 옆에 붙는 버튼은 텍스트 대신 아이콘만
+     넣어서 좁은 화면에서도 줄바꿈 없이 한 줄에 붙어있게 합니다. */
+  .bs-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; flex-shrink: 0; }
+  .bs-icon-btn svg { height: 16px; width: 16px; }
   .bs-note { font-size: 0.8125rem; opacity: 0.55; }
   .bs-error { color: #f87171; background: rgba(220,38,38,.08); border: 1px solid rgba(220,38,38,.25); border-radius: 10px; padding: 10px 14px; font-size: 0.875rem; margin: 0 0 18px; }
   @media (prefers-reduced-motion: no-preference) { .bs-error { animation: bs-fade-up .3s ease both; } }
@@ -181,8 +202,6 @@ const FORM_STYLE = `
   .bs-upload-list .name { font-weight: 600; font-size: 0.875rem; word-break: break-all; }
   .bs-upload-list .meta { font-size: 0.75rem; opacity: 0.55; }
   .bs-upload-list .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; width: 220px; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex-shrink: 0; }
-  .bs-copy { flex-shrink: 0; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
-  .bs-copy:hover { background: rgba(128,128,128,.1); }
   .bs-upload-list .bs-danger { flex-shrink: 0; }
   @media (max-width: 720px) { .bs-upload-list li { flex-wrap: wrap; } .bs-upload-list .snippet { width: 100%; } }
 
@@ -232,6 +251,13 @@ const BS_MENU_SCRIPT = `
 
 // 메인 사이트 MobileNav(src/components/layout/MobileNav.tsx)와 같은 아이콘입니다.
 const MENU_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>`;
+
+// 텍스트 입력 옆 아이콘 전용 버튼(.bs-icon-btn)에 쓰는 아이콘들. 전부 currentColor를
+// 써서 버튼 색을 그대로 물려받습니다.
+const SEARCH_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5" /><path d="M17 17l-4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>`;
+const UPLOAD_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 13V3M10 3l-4 4M10 3l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M3.5 15v1a1 1 0 001 1h11a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>`;
+const LINK_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8.3 11.7l3.4-3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><path d="M9.5 6.5l1.2-1.2a2.7 2.7 0 013.9 3.9L13.4 10.4M10.5 13.5l-1.2 1.2a2.7 2.7 0 01-3.9-3.9l1.2-1.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
+const TRASH_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /><path d="M8 6V4.6a.9.9 0 01.9-.9h2.2a.9.9 0 01.9.9V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M5.5 6l.8 9.3a1 1 0 001 .9h5.4a1 1 0 001-.9l.8-9.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M8.5 8.7v4.6M11.5 8.7v4.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>`;
 
 function shell(title: string, active: string, bodyHtml: string): string {
   // 로고 옆(topbarNav)에 ☰ + nav 링크, 테마 토글 오른쪽(topbarEnd)에 로그아웃 —
@@ -723,7 +749,7 @@ export function renderMemberList(
 
     <form class="bs-search" method="get" action="/members">
       <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="이름 · 학번 · 이메일 · Discord 검색" />
-      <button type="submit" class="bs-cancel-btn">검색</button>
+      <button type="submit" class="bs-cancel-btn bs-icon-btn" aria-label="검색">${SEARCH_ICON_SVG}</button>
       ${meta.q ? `<a href="/members" class="bs-cancel">지우기</a>` : ""}
     </form>
     ${body}
@@ -941,13 +967,13 @@ export function renderApplyFormPage(config: ApplyFormConfig | null, options: App
             <a href="https://docs.google.com/forms/d/e/${escapeHtml(config.formId)}/viewform" target="_blank" rel="noopener">원본 보기</a></p>`
         : `<p class="bs-note">아직 연결된 폼이 없습니다.</p>`
     }
-    <form method="post" action="/apply/connect" style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+    <form method="post" action="/apply/connect" style="margin-top:12px;display:flex;gap:10px;flex-wrap:nowrap;">
       <input
         type="text" name="formUrl" required
         placeholder="구글 폼 링크 또는 ID (응답자용 .../forms/d/e/…/viewform)"
-        style="flex:1;min-width:240px;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
+        style="flex:1 1 auto;min-width:0;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
       />
-      <button type="submit" class="bs-submit">연결</button>
+      <button type="submit" class="bs-submit bs-icon-btn" aria-label="연결">${LINK_ICON_SVG}</button>
     </form>
     ${
       summary
@@ -1014,9 +1040,8 @@ function renderUploadRow(file: UploadedFile): string {
       </div>
     </a>
     <input class="snippet" type="text" readonly value="${escapeHtml(url)}" onclick="this.select()" />
-    <button type="button" class="bs-copy" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)">복사</button>
     <form method="post" action="/uploads/${encodeURIComponent(file.key)}/delete" onsubmit="return confirm('이 파일을 삭제할까요? 이미 글에 쓰인 곳이 있다면 깨질 수 있어요.')">
-      <button type="submit" class="bs-danger">삭제</button>
+      <button type="submit" class="bs-danger bs-icon-btn" aria-label="삭제">${TRASH_ICON_SVG}</button>
     </form>
   </li>`;
 }
@@ -1064,11 +1089,11 @@ export function renderUploadList(files: UploadedFile[], meta: UploadListPage, er
     <form class="bs-upload" method="post" action="/uploads" enctype="multipart/form-data">
       <input type="file" name="file" required />
       <input type="text" name="name" placeholder="파일 이름 (선택, 비우면 원본 이름 사용)" />
-      <button type="submit" class="bs-submit">업로드</button>
+      <button type="submit" class="bs-submit bs-icon-btn" aria-label="업로드">${UPLOAD_ICON_SVG}</button>
     </form>
     <form class="bs-search" method="get" action="/uploads">
       <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="파일명 검색" />
-      <button type="submit" class="bs-cancel-btn">검색</button>
+      <button type="submit" class="bs-cancel-btn bs-icon-btn" aria-label="검색">${SEARCH_ICON_SVG}</button>
       ${meta.q ? `<a href="/uploads" class="bs-cancel">지우기</a>` : ""}
     </form>
     ${body}
