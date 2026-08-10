@@ -3,9 +3,10 @@
 // (package.json의 prebuild)에 미리 구워서 public/bylaws/{slug}.pdf로 둡니다 —
 // next build가 public/를 그대로 out/에 복사하므로 그 결과물이 그대로 배포됩니다.
 //
-// 번호 매기기(제N장/제N조/①②③/1.2.3/가.나.다)와 <개정 N>/[본조신설 N] 치환 로직은
-// src/lib/bylaws.ts의 renderBylawsDocument와 반드시 같은 규칙을 따라야 해서, 여기서도
-// 그대로 다시 구현합니다(순수 .mjs 스크립트라 TS 파일을 직접 import할 수 없어서요).
+// 번호 매기기(제N장/제N조/①②③/1.2.3/가.나.다)와 tags[] 메타데이터(개정/신설/본조신설)
+// 렌더링 로직은 src/lib/bylaws.ts의 renderBylawsDocument와 반드시 같은 규칙을 따라야
+// 해서, 여기서도 그대로 다시 구현합니다(순수 .mjs 스크립트라 TS 파일을 직접 import할
+// 수 없어서요).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -43,37 +44,19 @@ const SUBITEM = ["가", "나", "다", "라", "마", "바", "사", "아", "자", 
 // "본문"은 별도 블록 타입이 아니라 장/부칙/조/항 자신에게 선택적으로 붙는 문단(body 필드)입니다.
 const BODY_ELIGIBLE = new Set(["chapter", "buchik", "article", "clause"]);
 
-const RE_INLINE_TAG_SPLIT = /(<[^>]+>|\[[^\]]+])/;
-const RE_INLINE_TAG_FULL = /^(<[^>]+>|\[[^\]]+])$/;
-
-// src/lib/bylaws.ts의 substituteTagDates와 동일합니다.
-function substituteTagDates(text, revisionHistory) {
-  const tagDate = (numStr) => {
-    if (revisionHistory.length === 0) return null;
-    if (numStr) {
-      const idx = Number(numStr) - 1;
-      return idx >= 0 && idx < revisionHistory.length ? revisionHistory[idx].date : null;
-    }
-    return revisionHistory[revisionHistory.length - 1].date;
-  };
-
-  return text
-    .replace(/<(개정|신설|삭제)(?:\s+(\d+))?>/g, (m, kind, num) => {
-      const d = tagDate(num);
-      return d ? `<${kind} ${d}>` : m;
-    })
-    .replace(/\[(본조신설)(?:\s+(\d+))?]/g, (m, kind, num) => {
-      const d = tagDate(num);
-      return d ? `[${kind} ${d}]` : m;
-    });
-}
-
-// <개정 ...>/[본조신설 ...] 부분만 색을 다르게 칠하기 위해 구간을 나눕니다.
-function splitColorRuns(text) {
-  return text
-    .split(RE_INLINE_TAG_SPLIT)
-    .filter(Boolean)
-    .map((part) => ({ text: part, tag: RE_INLINE_TAG_FULL.test(part) }));
+// src/lib/bylaws.ts의 renderTags와 동일합니다 — 개정/신설/본조신설 표시는 텍스트 안에
+// 박힌 게 아니라 그 블록의 tags[] 메타데이터입니다(num = revisionHistory 1-based 인덱스).
+// 각 태그를 색이 다른 별도 run으로 만들어서 본문 run 뒤에 이어붙입니다.
+function tagRuns(tags, revisionHistory) {
+  if (!tags || tags.length === 0) return [];
+  const out = [];
+  for (const t of tags) {
+    const date = revisionHistory[t.num - 1];
+    if (!date) continue;
+    const text = t.kind === "본조신설" ? `[${t.kind} ${date}]` : `<${t.kind} ${date}>`;
+    out.push({ text, tag: true });
+  }
+  return out;
 }
 
 function tokenize(runs) {
@@ -187,9 +170,10 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
   w.paragraph({ align: "center", runs: [{ text: title, tag: false }], font: boldFont, size: 19, color: BLACK, spacingAfter: 10 });
 
   if (revisionHistory.length > 0) {
-    for (const r of revisionHistory) {
-      w.paragraph({ align: "right", runs: [{ text: `${r.date} ${r.label}`, tag: false }], font: regularFont, size: 9, color: GRAY, lineHeight: 13 });
-    }
+    revisionHistory.forEach((date, i) => {
+      const label = i === 0 ? "제정" : "일부개정";
+      w.paragraph({ align: "right", runs: [{ text: `${date} ${label}`, tag: false }], font: regularFont, size: 9, color: GRAY, lineHeight: 13 });
+    });
     w.gap(18);
   } else {
     w.gap(10);
@@ -198,46 +182,47 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
   const counters = [0, 0, 0, 0, 0];
 
   for (const block of blocks) {
-    const text = substituteTagDates(block.text, revisionHistory);
+    const mainRun = { text: block.text, tag: false };
+    const tRuns = tagRuns(block.tags, revisionHistory);
 
     switch (block.type) {
       case "chapter": {
         counters[0] += 1;
         resetBelow(counters, 0);
         w.gap(10);
-        w.paragraph({ align: "center", runs: [{ text: `제${counters[0]}장 ${text}`, tag: false }], font: boldFont, size: 14.5, color: BLACK, spacingAfter: 4 });
+        w.paragraph({ align: "center", runs: [{ text: `제${counters[0]}장 ${block.text}`, tag: false }, ...tRuns], font: boldFont, size: 14.5, color: BLACK, spacingAfter: 4 });
         break;
       }
       case "buchik": {
         counters[1] = 0;
         resetBelow(counters, 1);
         w.gap(10);
-        w.paragraph({ align: "center", runs: splitColorRuns(text), font: boldFont, size: 14.5, color: BLACK, spacingAfter: 4 });
+        w.paragraph({ align: "center", runs: [mainRun, ...tRuns], font: boldFont, size: 14.5, color: BLACK, spacingAfter: 4 });
         break;
       }
       case "article": {
         counters[1] += 1;
         resetBelow(counters, 1);
-        w.paragraph({ align: "left", runs: splitColorRuns(`제${counters[1]}조(${text})`), font: boldFont, size: 11.5, color: BLACK, spacingAfter: 1 });
+        w.paragraph({ align: "left", runs: [{ text: `제${counters[1]}조(${block.text})`, tag: false }, ...tRuns], font: boldFont, size: 11.5, color: BLACK, spacingAfter: 1 });
         break;
       }
       case "clause": {
         counters[2] += 1;
         resetBelow(counters, 2);
         const marker = counters[2] - 1 < CIRCLED.length ? CIRCLED[counters[2] - 1] : `(${counters[2]})`;
-        w.paragraph({ align: "left", runs: splitColorRuns(text), font: regularFont, size: 11, color: BLACK, indent: 14, marker, markerFont: regularFont, markerSize: 11 });
+        w.paragraph({ align: "left", runs: [mainRun, ...tRuns], font: regularFont, size: 11, color: BLACK, indent: 14, marker, markerFont: regularFont, markerSize: 11 });
         break;
       }
       case "item": {
         counters[3] += 1;
         resetBelow(counters, 3);
-        w.paragraph({ align: "left", runs: splitColorRuns(text), font: regularFont, size: 11, color: BLACK, indent: 28, marker: `${counters[3]}.`, markerFont: regularFont, markerSize: 11 });
+        w.paragraph({ align: "left", runs: [mainRun, ...tRuns], font: regularFont, size: 11, color: BLACK, indent: 28, marker: `${counters[3]}.`, markerFont: regularFont, markerSize: 11 });
         break;
       }
       case "subitem": {
         counters[4] += 1;
         const marker = counters[4] - 1 < SUBITEM.length ? `${SUBITEM[counters[4] - 1]}.` : `${counters[4]})`;
-        w.paragraph({ align: "left", runs: splitColorRuns(text), font: regularFont, size: 11, color: BLACK, indent: 42, marker, markerFont: regularFont, markerSize: 11 });
+        w.paragraph({ align: "left", runs: [mainRun], font: regularFont, size: 11, color: BLACK, indent: 42, marker, markerFont: regularFont, markerSize: 11 });
         break;
       }
     }
@@ -247,8 +232,7 @@ async function renderDocumentToPdf(bylawsDoc, fonts) {
     // (예전엔 "body" 타입 블록이 별도로 존재했지만 지금은 blocks[]에 그런 항목이 없어서, 이 처리가
     // 없으면 저장된 본문 문단이 PDF에서 통째로 누락됩니다.)
     if (BODY_ELIGIBLE.has(block.type) && block.body) {
-      const bodyText = substituteTagDates(block.body, revisionHistory);
-      w.paragraph({ align: "left", runs: splitColorRuns(bodyText), font: regularFont, size: 11, color: BLACK, indent: 14 });
+      w.paragraph({ align: "left", runs: [{ text: block.body, tag: false }], font: regularFont, size: 11, color: BLACK, indent: 14 });
     }
   }
 

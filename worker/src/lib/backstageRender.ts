@@ -10,7 +10,7 @@ import type {
   Season,
   BylawsVersionSummary,
   BylawsBlock,
-  BylawsRevision,
+  BylawsRevisionHistory,
 } from "./content";
 import type { UploadedFile } from "./uploads";
 import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
@@ -175,6 +175,11 @@ const FORM_STYLE = `
     background: rgba(128,128,128,.04); color: inherit;
   }
   .bs-row-item input[readonly] { opacity: 0.6; }
+  /* 회칙 개정이력 행 전용 — 라벨을 직접 입력받지 않고, 몇 번째 행인지로 자동
+     계산합니다(첫 행 = 제정, 그 다음부터는 전부 일부개정). */
+  .bs-rev-badge { flex: 0 0 auto; font-size: .75rem; font-weight: 600; opacity: .5; padding: 0 2px; white-space: nowrap; }
+  .bs-rev-badge::before { content: "일부개정"; }
+  .bs-row-item:first-child .bs-rev-badge::before { content: "제정"; }
   .bs-row-remove { flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; font-size: 1rem; line-height: 1; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
   .bs-row-remove:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
   .bs-add-row { align-self: flex-start; margin-top: 6px; border: 1px dashed rgba(128,128,128,.4); background: transparent; color: inherit; transition: background .15s, border-color .15s, color .15s; }
@@ -200,6 +205,11 @@ const FORM_STYLE = `
   .bylaws-node-row.drop-before { box-shadow: inset 0 2px 0 var(--logo-primary); }
   .bylaws-node-row.drop-after { box-shadow: inset 0 -2px 0 var(--logo-primary); }
   .bylaws-node.dragging { opacity: .4; }
+
+  /* 태그/본문 줄 맨 앞의 "안 보이는" 접기버튼+드래그손잡이+뱃지+번호 묶음 — 위
+     텍스트 칸과 같은 내용을 그대로 한 번 더 찍어서, 라벨 길이가 뭐든 그 칸의
+     실제 시작 위치에 항상 정확히 맞춰줍니다. */
+  .bylaws-row-gutter { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 7px; visibility: hidden; pointer-events: none; }
 
   .bylaws-drag-handle { flex: 0 0 auto; width: 18px; padding-top: 6px; text-align: center; letter-spacing: -1px; font-size: .8125rem; color: rgba(128,128,128,.8); cursor: grab; user-select: none; }
   .bylaws-drag-handle:active { cursor: grabbing; }
@@ -232,24 +242,64 @@ const FORM_STYLE = `
   .bylaws-node-actions button:active { transform: scale(.9); }
 
   .bylaws-add-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
+  /* 노드 행의 × 삭제 버튼(28px 높이)과 항상 맞춰서, 칩/태그버튼이 행마다 들쭉날쭉해
+     보이지 않게 합니다. */
   .bylaws-chip {
-    flex: 0 0 auto; font: inherit; font-size: .75rem; font-weight: 600; color: var(--logo-primary);
-    background: transparent; border: 1px dashed var(--logo-primary); border-radius: 999px; padding: 4px 11px;
+    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; height: 28px; box-sizing: border-box;
+    font: inherit; font-size: .75rem; font-weight: 600; color: var(--logo-primary); white-space: nowrap;
+    background: transparent; border: 1px dashed var(--logo-primary); border-radius: 999px; padding: 0 12px;
     cursor: pointer; transition: background .15s, border-style .15s, transform .1s ease;
   }
   .bylaws-chip:hover { background: rgba(128,128,128,.08); border-style: solid; }
   .bylaws-chip:active { transform: scale(.94); }
   .bylaws-chip-ghost { color: inherit; opacity: .65; border-color: rgba(128,128,128,.35); }
   .bylaws-chip-ghost:hover { opacity: 1; color: var(--logo-primary); border-color: var(--logo-primary); }
-  .bylaws-chip-inline { align-self: center; }
 
-  .bylaws-tag-select {
-    flex: 0 0 auto; align-self: center; font: inherit; font-size: .75rem; font-weight: 600; color: var(--logo-primary);
-    background: transparent; border: 1px dashed var(--logo-primary); border-radius: 999px; padding: 4px 8px; cursor: pointer;
+  /* 개정/신설 태그 삽입 — 네이티브 <select>는 브라우저마다 못생기게 나와서 대신
+     버튼 + 직접 그리는 드롭다운 메뉴로 만듭니다. */
+  /* 본문(body)처럼 카드 행 아래 별도 줄 — 텍스트 입력칸과 한 줄에 같이 두면
+     칩/뱃지가 늘어날 때마다 줄바꿈이 지저분해져서 뺐습니다. 왼쪽은 .bylaws-row-gutter가
+     맞춰주므로 여기 자체엔 왼쪽 들여쓰기를 따로 안 둡니다. */
+  .bylaws-tag-row { display: flex; align-items: flex-start; gap: 7px; padding: 0 8px 8px; }
+  .bylaws-tag-row-content { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .bylaws-tag-menu { position: relative; flex: 0 0 auto; }
+  .bylaws-tag-dropdown {
+    display: none; flex-direction: column; gap: 1px; position: absolute; top: calc(100% + 6px); left: 0; z-index: 5;
+    min-width: 176px; background: var(--bg); border: 1px solid rgba(128,128,128,.25); border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0,0,0,.18); padding: 4px;
   }
+  .bylaws-tag-menu.open .bylaws-tag-dropdown { display: flex; }
+  .bylaws-tag-option {
+    font: inherit; font-size: .8125rem; font-weight: 600; text-align: left; padding: 6px 10px; white-space: nowrap;
+    border: none; border-radius: 6px; background: transparent; color: inherit; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .bylaws-tag-option:hover { background: rgba(128,128,128,.1); color: var(--logo-primary); }
+  .bylaws-tag-empty { margin: 0; padding: 8px 10px; font-size: .75rem; opacity: .6; white-space: nowrap; }
 
-  .bylaws-body-row { display: flex; align-items: flex-start; gap: 6px; padding: 0 8px 8px 45px; animation: bylaws-node-in .16s ease; }
-  .bylaws-body-row textarea { background: rgba(128,128,128,.02); }
+  /* 이미 붙어있는 태그 — 실제 공개 페이지의 .bylaws-tag와 같은 색(teal)을 씁니다. */
+  .bylaws-tag-badge {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; height: 28px; box-sizing: border-box;
+    font-size: .75rem; font-weight: 700; white-space: nowrap; border-radius: 999px; padding: 0 4px 0 10px;
+    color: #0e7490; background: rgba(14,116,144,.1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .bylaws-tag-badge { color: #67e8f9; background: rgba(103,230,249,.12); }
+  }
+  :root[data-theme="dark"] .bylaws-tag-badge { color: #67e8f9; background: rgba(103,230,249,.12); }
+  .bylaws-tag-badge button {
+    all: unset; box-sizing: border-box; width: 18px; height: 18px; display: inline-flex; align-items: center;
+    justify-content: center; border-radius: 999px; cursor: pointer; font-size: .7rem; line-height: 1; opacity: .75;
+    transition: background .15s, color .15s, opacity .15s;
+  }
+  .bylaws-tag-badge button:hover { opacity: 1; background: rgba(220,38,38,.18); color: #f87171; }
+
+  .bylaws-body-row { display: flex; align-items: flex-start; gap: 7px; padding: 0 8px 8px; animation: bylaws-node-in .16s ease; }
+  .bylaws-body-row textarea {
+    flex: 1 1 auto; min-width: 0; font: inherit; font-size: .875rem; line-height: 1.5; padding: 7px 9px;
+    border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.02);
+    color: inherit; resize: none; overflow: hidden; box-sizing: border-box;
+  }
   .bylaws-body-row textarea::placeholder { font-style: italic; }
   .bylaws-body-remove {
     flex: 0 0 auto; width: 22px; height: 26px; border: none; border-radius: 6px; background: transparent;
@@ -1475,10 +1525,12 @@ export function renderBylawsList(versions: BylawsVersionSummary[]): string {
   );
 }
 
-function bylawsRevisionRow(dateVal: string, labelVal: string): string {
+// 라벨(제정/일부개정)은 입력받지 않습니다 — 항상 첫 행은 제정, 나머지는 일부개정이라
+// .bs-rev-badge가 CSS :first-child로 알아서 표시합니다(FORM_STYLE 참고).
+function bylawsRevisionRow(dateVal: string): string {
   return `<div class="bs-row-item">
     <input type="text" name="revDate[]" value="${escapeHtml(dateVal)}" placeholder="예: 2017. 03. 18." />
-    <input type="text" name="revLabel[]" value="${escapeHtml(labelVal)}" placeholder="제정 / 일부개정" />
+    <span class="bs-rev-badge"></span>
     <button type="button" class="bs-row-remove" aria-label="삭제" onclick="this.closest('.bs-row-item').remove()">×</button>
   </div>`;
 }
@@ -1543,16 +1595,16 @@ const BYLAWS_TREE_SCRIPT = `
       subitem: [],
     };
     var RANK = { chapter: 0, buchik: 0, article: 1, clause: 2, item: 3, subitem: 4 };
-    var TAG_SYNTAX = { 개정: "<개정>", 신설: "<신설>", 삭제: "<삭제>", 본조신설: "[본조신설]" };
+    // 삭제 표시는 실제로 쓰인 적이 없어서 뺐습니다. 본조신설(조 전체가 새로 생겼다는
+    // 표시)은 항이 아니라 조 자신에게 붙는 거라 조에서만 고를 수 있게 합니다.
+    var TAG_OPTIONS = { article: ["개정", "본조신설"], clause: ["개정", "신설"], item: ["개정", "신설"] };
     var CIRCLED = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
     var SUBITEM_M = ["가","나","다","라","마","바","사","아","자","차","카","타","파","하"];
-    var RE_SPLIT = /(<[^>]+>|\\[[^\\]]+])/;
-    var RE_FULL = /^(<[^>]+>|\\[[^\\]]+])$/;
 
     var uid = 0;
     function nid() { uid += 1; return "bn" + uid; }
-    function makeNode(type, text, body) {
-      return { id: nid(), type: type, text: text || "", children: [], body: body == null ? null : body, collapsed: false, label: "" };
+    function makeNode(type, text, body, tags) {
+      return { id: nid(), type: type, text: text || "", children: [], body: body == null ? null : body, tags: tags || [], collapsed: false, label: "" };
     }
 
     // 문서 순서대로 평평한 blocks[]를 rank(장/부칙=0, 조=1, 항=2, 호=3, 목=4)로
@@ -1561,7 +1613,7 @@ const BYLAWS_TREE_SCRIPT = `
       var out = [];
       var stack = [];
       blocks.forEach(function (b) {
-        var n = makeNode(b.type, b.text, b.body);
+        var n = makeNode(b.type, b.text, b.body, b.tags);
         var rank = RANK[b.type];
         if (rank === undefined) return;
         if (rank === 0) {
@@ -1582,6 +1634,7 @@ const BYLAWS_TREE_SCRIPT = `
       nodes.forEach(function (n) {
         var block = { type: n.type, text: n.text };
         if (BODY_ELIGIBLE[n.type] && n.body) block.body = n.body;
+        if (n.tags && n.tags.length > 0) block.tags = n.tags;
         out.push(block);
         flatten(n.children, out);
       });
@@ -1648,12 +1701,39 @@ const BYLAWS_TREE_SCRIPT = `
     function esc(s) {
       return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
-    function colorize(text) {
-      if (!text) return "";
-      var parts = text.split(RE_SPLIT).filter(Boolean);
-      return parts.map(function (p) {
-        return RE_FULL.test(p) ? '<span class="bylaws-tag">' + esc(p) + "</span>" : esc(p);
-      }).join("");
+
+    // <개정 N>처럼 태그가 몇 번째 개정을 가리키는지 명시하지 않으면(예전처럼 그냥
+    // <개정>) 나중에 새 개정이 추가될 때마다 이미 써둔 모든 <개정> 태그가 전부
+    // 최신 날짜로 슬쩍 바뀌어버립니다 — 그래서 삽입 시점에 "개정이력" 카드에
+    // 실제로 입력된 날짜 중 하나를 직접 골라서 번호를 박아 넣습니다. 첫 행(제정)은
+    // 개정/신설의 대상이 될 수 없어서 목록에서 뺍니다.
+    function getAmendmentDates() {
+      var inputs = document.querySelectorAll('#bylaws-revisions input[name="revDate[]"]');
+      var out = [];
+      for (var i = 0; i < inputs.length; i += 1) {
+        if (i === 0) continue;
+        var v = inputs[i].value.trim();
+        if (v) out.push({ num: i + 1, date: v });
+      }
+      return out;
+    }
+    function renderTagMenuItems(nodeId, kinds, existingTags) {
+      var amendments = getAmendmentDates();
+      if (amendments.length === 0) {
+        return '<p class="bylaws-tag-empty">먼저 위 "개정이력"에 개정일을 추가하세요</p>';
+      }
+      var used = {};
+      (existingTags || []).forEach(function (t) { used[t.kind + ":" + t.num] = true; });
+      var html = "";
+      kinds.forEach(function (kind) {
+        amendments.forEach(function (a) {
+          if (used[kind + ":" + a.num]) return;
+          html +=
+            '<button type="button" class="bylaws-tag-option" role="menuitem" data-action="tag-add" data-id="' + nodeId + '" data-kind="' + kind + '" data-num="' + a.num + '">' +
+            kind + " · " + esc(a.date) + "</button>";
+        });
+      });
+      return html || '<p class="bylaws-tag-empty">이미 다 추가됐어요</p>';
     }
 
     function renderAddRow(parentId, type) {
@@ -1676,21 +1756,56 @@ const BYLAWS_TREE_SCRIPT = `
 
       var numHtml = n.label ? '<span class="bylaws-num">' + esc(n.label) + "</span>" : "";
 
-      var tagSelect =
-        n.type === "clause" || n.type === "item"
-          ? '<select class="bylaws-tag-select" data-action="tag-insert" data-id="' + n.id + '" aria-label="개정 표시 삽입" title="개정/신설/삭제 표시 삽입">' +
-            '<option value="">+ 태그</option><option value="개정">개정</option><option value="신설">신설</option>' +
-            '<option value="삭제">삭제</option><option value="본조신설">본조신설</option></select>'
-          : "";
+      // 접기버튼/드래그손잡이/타입뱃지/번호 — 텍스트 칸 왼쪽에 오는, 노드마다 폭이
+      // 들쭉날쭉한 부분(번호가 "①"냐 "제12조"냐에 따라 폭이 다름)입니다. 아래
+      // 태그/본문 줄을 이 텍스트 칸 시작 위치에 맞추려고, 이 묶음을 그대로 한 번
+      // 더(안 보이게) 찍어서 자리만 차지하게 합니다 — 라벨 길이가 얼마든 항상
+      // 정확히 맞습니다(고정 픽셀값으로 대충 맞추는 대신).
+      var gutterHtml =
+        foldBtn +
+        '<span class="bylaws-drag-handle" data-drag-handle draggable="true" aria-label="드래그해서 순서 변경" title="드래그해서 순서 변경">⠿</span>' +
+        (HIDE_BADGE[n.type] ? "" : '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>") +
+        numHtml;
+      var gutterSpacer = '<div class="bylaws-row-gutter" aria-hidden="true">' + gutterHtml + "</div>";
 
-      var bodyChip = "";
+      // 태그는 텍스트 안에 글자로 박히는 게 아니라 이 노드에 딸린 메타데이터라,
+      // 본문(body)처럼 카드 행 아래 별도 줄에 둡니다 — 텍스트 입력칸이 있는 줄에
+      // 같이 끼워두면 줄바꿈이 지저분해집니다. 이미 붙은 태그는 뱃지로 보여주고
+      // (각자 × 로 제거), "+ 태그"로 새로 추가합니다. 드롭다운 안(태그 · 날짜
+      // 목록)은 열 때마다 개정이력 카드의 최신 입력값을 다시 읽어서 채웁니다
+      // (renderTagMenuItems) — 여기서는 빈 채로 둡니다.
+      var tagOptions = TAG_OPTIONS[n.type];
+      var tagRow = "";
+      if (tagOptions) {
+        var tagBadgesHtml = (n.tags || [])
+          .map(function (t, idx) {
+            var date = dateForNum(t.num);
+            var label = t.kind + (date ? " · " + date : "");
+            return (
+              '<span class="bylaws-tag-badge">' + esc(label) +
+              '<button type="button" data-action="tag-remove" data-id="' + n.id + '" data-index="' + idx + '" aria-label="태그 제거" title="태그 제거">×</button></span>'
+            );
+          })
+          .join("");
+        var tagMenu =
+          '<div class="bylaws-tag-menu">' +
+          '<button type="button" class="bylaws-chip bylaws-tag-btn" data-action="tag-toggle" data-id="' + n.id + '" data-type="' + n.type + '" aria-haspopup="true" aria-expanded="false" title="개정/신설 표시 추가">+ 태그</button>' +
+          '<div class="bylaws-tag-dropdown" role="menu"></div></div>';
+        tagRow = '<div class="bylaws-tag-row">' + gutterSpacer + '<div class="bylaws-tag-row-content">' + tagBadgesHtml + tagMenu + "</div></div>";
+      }
+
+      // "+ 본문"도 텍스트 칸 옆이 아니라 이 줄에 둡니다 — 본문이 이미 있으면
+      // 같은 자리에 그 본문 textarea가 대신 나옵니다.
       var bodyRow = "";
       if (BODY_ELIGIBLE[n.type]) {
         if (n.body === null || n.body === undefined) {
-          bodyChip = '<button type="button" class="bylaws-chip bylaws-chip-ghost bylaws-chip-inline" data-action="body-add" data-id="' + n.id + '" aria-label="본문 추가" title="본문 추가">+</button>';
+          bodyRow =
+            '<div class="bylaws-body-row">' + gutterSpacer +
+            '<button type="button" class="bylaws-chip bylaws-chip-ghost" data-action="body-add" data-id="' + n.id + '" aria-label="본문 추가" title="본문 추가">+ 본문</button>' +
+            "</div>";
         } else {
           bodyRow =
-            '<div class="bylaws-body-row">' +
+            '<div class="bylaws-body-row">' + gutterSpacer +
             '<textarea class="bs-autosize" rows="1" data-body-id="' + n.id + '" placeholder="번호 없는 문단 (선택)">' + esc(n.body) + "</textarea>" +
             '<button type="button" class="bylaws-body-remove" data-action="body-remove" data-id="' + n.id + '" aria-label="본문 제거" title="본문 제거">×</button>' +
             "</div>";
@@ -1700,15 +1815,11 @@ const BYLAWS_TREE_SCRIPT = `
       var cardHtml =
         '<div class="bylaws-node-card">' +
         '<div class="bylaws-node-row">' +
-        foldBtn +
-        '<span class="bylaws-drag-handle" data-drag-handle draggable="true" aria-label="드래그해서 순서 변경" title="드래그해서 순서 변경">⠿</span>' +
-        (HIDE_BADGE[n.type] ? "" : '<span class="bylaws-badge">' + TYPE_LABEL[n.type] + "</span>") +
-        numHtml +
+        gutterHtml +
         '<textarea class="bs-autosize" rows="1" data-text-id="' + n.id + '" placeholder="' + esc(PLACEHOLDER[n.type] || "") + '">' + esc(n.text) + "</textarea>" +
-        tagSelect +
-        bodyChip +
         '<span class="bylaws-node-actions"><button type="button" data-action="remove" data-id="' + n.id + '" aria-label="삭제" title="삭제">×</button></span>' +
         "</div>" +
+        tagRow +
         bodyRow +
         "</div>";
 
@@ -1728,31 +1839,50 @@ const BYLAWS_TREE_SCRIPT = `
 
     function bodyPreviewHtml(n) {
       if (!BODY_ELIGIBLE[n.type] || !n.body) return "";
-      return '<div class="bylaws-body"><span class="bylaws-ptext">' + colorize(n.body) + "</span></div>";
+      return '<div class="bylaws-body"><span class="bylaws-ptext">' + esc(n.body) + "</span></div>";
+    }
+
+    // 개정이력 카드에 실제로 입력된 값 기준으로, num(1-based)번째 날짜를 읽어옵니다.
+    function dateForNum(num) {
+      var inputs = document.querySelectorAll('#bylaws-revisions input[name="revDate[]"]');
+      var input = inputs[num - 1];
+      return input ? input.value.trim() : "";
+    }
+    function tagsPreviewHtml(n) {
+      if (!n.tags || n.tags.length === 0) return "";
+      var out = "";
+      n.tags.forEach(function (t) {
+        var date = dateForNum(t.num);
+        if (!date) return;
+        var text = t.kind === "본조신설" ? "[" + t.kind + " " + date + "]" : "<" + t.kind + " " + date + ">";
+        out += ' <span class="bylaws-tag">' + esc(text) + "</span>";
+      });
+      return out;
     }
 
     function renderPreviewNode(n) {
       var html = "";
+      var tagsHtml = tagsPreviewHtml(n);
       switch (n.type) {
         case "chapter":
-          html = '<div class="bylaws-chapter">' + esc(n.label + " " + (n.text || "(제목 없음)")) + "</div>";
+          html = '<div class="bylaws-chapter">' + esc(n.label + " " + (n.text || "(제목 없음)")) + tagsHtml + "</div>";
           break;
         case "buchik":
-          html = '<div class="bylaws-buchik">' + colorize(n.text || "부칙") + "</div>";
+          html = '<div class="bylaws-buchik">' + esc(n.text || "부칙") + tagsHtml + "</div>";
           break;
         case "article":
           html = n.text
-            ? '<div class="bylaws-article">' + colorize(n.label + "(" + n.text + ")") + "</div>"
-            : '<div class="bylaws-article placeholder">' + esc(n.label + "(제목 없음)") + "</div>";
+            ? '<div class="bylaws-article">' + esc(n.label + "(" + n.text + ")") + tagsHtml + "</div>"
+            : '<div class="bylaws-article placeholder">' + esc(n.label + "(제목 없음)") + tagsHtml + "</div>";
           break;
         case "clause":
-          html = '<div class="bylaws-clause"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? colorize(n.text) : "내용 없음") + "</span></div>";
+          html = '<div class="bylaws-clause"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? esc(n.text) : "내용 없음") + tagsHtml + "</span></div>";
           break;
         case "item":
-          html = '<div class="bylaws-item"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? colorize(n.text) : "내용 없음") + "</span></div>";
+          html = '<div class="bylaws-item"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? esc(n.text) : "내용 없음") + tagsHtml + "</span></div>";
           break;
         case "subitem":
-          html = '<div class="bylaws-subitem"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? colorize(n.text) : "내용 없음") + "</span></div>";
+          html = '<div class="bylaws-subitem"><span class="bylaws-marker">' + esc(n.label) + '</span><span class="bylaws-ptext' + (n.text ? "" : " placeholder") + '">' + (n.text ? esc(n.text) : "내용 없음") + "</span></div>";
           break;
       }
       return html + bodyPreviewHtml(n) + n.children.map(renderPreviewNode).join("");
@@ -1789,18 +1919,6 @@ const BYLAWS_TREE_SCRIPT = `
     function clearDropIndicators() {
       var els = root.querySelectorAll(".drop-before, .drop-after");
       for (var i = 0; i < els.length; i += 1) els[i].classList.remove("drop-before", "drop-after");
-    }
-
-    function insertAtCursor(textarea, insertText) {
-      var start = textarea.selectionStart == null ? textarea.value.length : textarea.selectionStart;
-      var end = textarea.selectionEnd == null ? textarea.value.length : textarea.selectionEnd;
-      var val = textarea.value;
-      var before = val.slice(0, start);
-      var needsSpace = before.length > 0 && !/\\s$/.test(before);
-      var insert = (needsSpace ? " " : "") + insertText;
-      textarea.value = before + insert + val.slice(end);
-      var newPos = start + insert.length;
-      textarea.selectionStart = textarea.selectionEnd = newPos;
     }
 
     root.addEventListener("click", function (e) {
@@ -1850,21 +1968,44 @@ const BYLAWS_TREE_SCRIPT = `
         var locBR = locate(rootNodes, btn.dataset.id);
         if (locBR) locBR.node.body = null;
         fullRender();
+      } else if (action === "tag-toggle") {
+        var menu = btn.closest(".bylaws-tag-menu");
+        if (!menu) return;
+        var wasOpen = menu.classList.contains("open");
+        root.querySelectorAll(".bylaws-tag-menu.open").forEach(function (m) {
+          m.classList.remove("open");
+          var toggleBtn = m.querySelector('[data-action="tag-toggle"]');
+          if (toggleBtn) toggleBtn.setAttribute("aria-expanded", "false");
+        });
+        if (!wasOpen) {
+          var locG = locate(rootNodes, btn.dataset.id);
+          var dropdown = menu.querySelector(".bylaws-tag-dropdown");
+          if (dropdown) dropdown.innerHTML = renderTagMenuItems(btn.dataset.id, TAG_OPTIONS[btn.dataset.type] || [], locG ? locG.node.tags : []);
+          menu.classList.add("open");
+          btn.setAttribute("aria-expanded", "true");
+        }
+      } else if (action === "tag-add") {
+        var locTA = locate(rootNodes, btn.dataset.id);
+        if (locTA) {
+          locTA.node.tags = locTA.node.tags || [];
+          locTA.node.tags.push({ kind: btn.dataset.kind, num: Number(btn.dataset.num) });
+        }
+        fullRender();
+      } else if (action === "tag-remove") {
+        var locTR = locate(rootNodes, btn.dataset.id);
+        if (locTR && locTR.node.tags) locTR.node.tags.splice(Number(btn.dataset.index), 1);
+        fullRender();
       }
     });
 
-    root.addEventListener("change", function (e) {
-      var sel = e.target.closest("select.bylaws-tag-select");
-      if (!sel) return;
-      var kind = sel.value;
-      if (!kind) return;
-      var ta = root.querySelector('textarea[data-text-id="' + sel.dataset.id + '"]');
-      if (ta) {
-        insertAtCursor(ta, TAG_SYNTAX[kind]);
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        ta.focus();
-      }
-      sel.value = "";
+    // 태그 메뉴 바깥을 클릭하면 열려있는 메뉴를 닫습니다.
+    document.addEventListener("click", function (e) {
+      if (e.target.closest(".bylaws-tag-menu")) return;
+      root.querySelectorAll(".bylaws-tag-menu.open").forEach(function (m) {
+        m.classList.remove("open");
+        var toggleBtn = m.querySelector('[data-action="tag-toggle"]');
+        if (toggleBtn) toggleBtn.setAttribute("aria-expanded", "false");
+      });
     });
 
     root.addEventListener("input", function (e) {
@@ -1964,15 +2105,13 @@ export type BylawsVersionFormData = {
   title: string;
   versionLabel: string;
   effectiveDate: string;
-  revisionHistory: BylawsRevision[];
+  revisionHistory: BylawsRevisionHistory;
   blocks: BylawsBlock[];
 };
 
 export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersionFormData, error?: string): string {
   const action = mode === "new" ? "/bylaws/new" : `/bylaws/${escapeHtml(data.slug)}/edit`;
-  const revisionRows = (data.revisionHistory.length > 0 ? data.revisionHistory : [{ date: "", label: "" }])
-    .map((r) => bylawsRevisionRow(r.date, r.label))
-    .join("");
+  const revisionRows = (data.revisionHistory.length > 0 ? data.revisionHistory : [""]).map((date) => bylawsRevisionRow(date)).join("");
   // <script type="application/json">에 안전하게 심기 위해 "<"를 전부 이스케이프합니다
   // (JSON 문자열 안에 우연히 "</script>"가 들어가도 태그가 조기 종료되지 않게).
   const initialBlocksJson = JSON.stringify(data.blocks).replace(/</g, "\\u003c");
@@ -1983,6 +2122,7 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
     `
     <p class="bs-eyebrow">Backstage · 회칙</p>
     <h1>${mode === "new" ? "새 회칙 버전 추가" : "회칙 버전 수정"}</h1>
+    <p class="bs-note">⚠️ 이 탭은 수정이 필요함</p>
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
     <form class="bs-form" method="post" action="${action}">
       <div class="bs-card">
@@ -2011,9 +2151,11 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
         <p class="bs-card-title">개정이력 (문서 상단에 우측 정렬로 표시)</p>
         <div class="bs-rows" id="bylaws-revisions">${revisionRows}</div>
         <button type="button" class="bs-add-row" data-rows="bylaws-revisions" data-template="bylaws-revision-template">+ 추가</button>
-        <template id="bylaws-revision-template">${bylawsRevisionRow("", "")}</template>
-        <p class="bs-note" style="margin-top:8px">항의 "+ 태그" 드롭다운에서 개정/신설/삭제/본조신설을 고르면 <code>&lt;개정&gt;</code>처럼
-        끼워지고, 저장된 문서에선 여기 최신 날짜로 자동 치환됩니다.</p>
+        <template id="bylaws-revision-template">${bylawsRevisionRow("")}</template>
+        <p class="bs-note" style="margin-top:8px">날짜만 입력하면 됩니다 — 첫 번째는 항상 "제정", 그 다음부터는 항상
+        "일부개정"이라 자동으로 표시돼요. 여기 추가한 날짜는 아래 본문의 조/항 "+ 태그"에서 골라 쓸 수 있고,
+        고르면 그 조/항에 "개정 · 2026. 08. 07."처럼 뱃지로 따로 붙습니다(본문 텍스트에 글자로 섞여 들어가지
+        않아요) — 몇 번째 개정인지가 뱃지에 박혀서 나중에 개정이 하나 더 늘어도 날짜가 안 바뀝니다.</p>
       </div>
 
       <div class="bs-card">

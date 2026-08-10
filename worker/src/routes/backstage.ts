@@ -22,6 +22,7 @@ import {
   type Season,
   type BylawsBlockType,
   type BylawsBlock,
+  type BylawsTagKind,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
 import {
@@ -800,6 +801,7 @@ backstage.post("/contact", async (c) => {
 // 가장 최신인 버전이 kaist.run/bylaws에 뜹니다(별도 "현재 버전" 플래그 없음).
 
 const BYLAWS_BLOCK_TYPES = new Set<BylawsBlockType>(["chapter", "article", "buchik", "clause", "item", "subitem"]);
+const BYLAWS_TAG_KINDS = new Set<BylawsTagKind>(["개정", "신설", "본조신설"]);
 
 // worker/src/lib/backstageRender.ts의 트리 에디터가 제출 직전 트리를 문서 순서대로
 // 평평하게 펼쳐서(flatten) blocksJson 히든 인풋 하나에 담아 보냅니다 — 예전처럼
@@ -818,20 +820,42 @@ function readBylawsBlocks(body: Record<string, unknown>): BylawsBlock[] {
   const blocks: BylawsBlock[] = [];
   for (const item of parsed) {
     if (!item || typeof item !== "object") continue;
-    const { type, text, body: paragraphBody } = item as { type?: unknown; text?: unknown; body?: unknown };
+    const { type, text, body: paragraphBody, tags: rawTags } = item as {
+      type?: unknown;
+      text?: unknown;
+      body?: unknown;
+      tags?: unknown;
+    };
     if (typeof type !== "string" || !BYLAWS_BLOCK_TYPES.has(type as BylawsBlockType)) continue;
     const trimmedText = typeof text === "string" ? text.trim() : "";
     const trimmedBody = typeof paragraphBody === "string" ? paragraphBody.trim() : "";
     if (!trimmedText && !trimmedBody) continue; // 내용 없이 빈 채로 남겨둔 노드는 저장 안 함
     const block: BylawsBlock = { type: type as BylawsBlockType, text: trimmedText };
     if (trimmedBody) block.body = trimmedBody;
+    if (Array.isArray(rawTags)) {
+      const tags = rawTags
+        .filter(
+          (t): t is { kind: BylawsTagKind; num: number } =>
+            !!t &&
+            typeof t === "object" &&
+            BYLAWS_TAG_KINDS.has((t as { kind?: unknown }).kind as BylawsTagKind) &&
+            Number.isInteger((t as { num?: unknown }).num) &&
+            ((t as { num: number }).num as number) > 0,
+        )
+        .map((t) => ({ kind: t.kind, num: t.num }));
+      if (tags.length > 0) block.tags = tags;
+    }
     blocks.push(block);
   }
   return blocks;
 }
 
-function readBylawsRevisionHistory(body: Record<string, unknown>) {
-  return zipRows(getFormArray(body, "revDate[]"), getFormArray(body, "revLabel[]")).map((r) => ({ date: r.name, label: r.link }));
+// 개정이력은 날짜만 받습니다 — 첫 항목은 항상 제정, 나머지는 항상 일부개정이라
+// 렌더링할 때 순서로 라벨을 계산합니다(worker/src/lib/backstageRender.ts, src/lib/bylaws.ts).
+function readBylawsRevisionHistory(body: Record<string, unknown>): string[] {
+  return getFormArray(body, "revDate[]")
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0);
 }
 
 backstage.get("/bylaws", async (c) => {

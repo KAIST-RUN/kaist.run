@@ -48,8 +48,15 @@ export type ContactRow = {
 // 번호 없는 문단이고, 독립된 타입이 아닙니다. "절"/"강조문구"는 실제로 쓰인 적이
 // 없어서 뺐습니다.
 export type BylawsBlockType = "chapter" | "article" | "buchik" | "clause" | "item" | "subitem";
-export type BylawsBlock = { type: BylawsBlockType; text: string; body?: string };
-export type BylawsRevision = { date: string; label: string };
+// 개정/신설/본조신설 표시는 본문 텍스트 안에 <개정 2>처럼 글자로 박아넣는 대신,
+// 그 조/항 자신에게 딸린 메타데이터입니다 — num은 revisionHistory의 1-based
+// 인덱스(어느 개정을 가리키는지)입니다.
+export type BylawsTagKind = "개정" | "신설" | "본조신설";
+export type BylawsTag = { kind: BylawsTagKind; num: number };
+export type BylawsBlock = { type: BylawsBlockType; text: string; body?: string; tags?: BylawsTag[] };
+// 개정이력은 날짜만 저장합니다 — 첫 번째 항목은 항상 "제정", 그 뒤로는 항상
+// "일부개정"이라 라벨을 따로 입력받을 필요가 없고, 표시할 때 순서로 계산합니다.
+export type BylawsRevisionHistory = string[];
 
 // 번역이 없는 한국어 문서라 locale 구분이 없습니다. "역대 회칙"이라 slug로 여러
 // 버전(2017년 제정, 2026년 개정 ...)을 두고, effective_date가 가장 최신인 게
@@ -59,7 +66,7 @@ export type BylawsVersionRow = {
   title: string;
   versionLabel: string;
   effectiveDate: string;
-  revisionHistory: BylawsRevision[];
+  revisionHistory: BylawsRevisionHistory;
   blocks: BylawsBlock[];
   updated_at: string;
 };
@@ -274,7 +281,7 @@ export type BylawsVersionInput = {
   title: string;
   versionLabel: string;
   effectiveDate: string;
-  revisionHistory: BylawsRevision[];
+  revisionHistory: BylawsRevisionHistory;
   blocks: BylawsBlock[];
 };
 
