@@ -13,6 +13,7 @@ const MOCK_MEMBER: CurrentUser = {
   studentId: "20250123",
   status: "member",
   role: "member",
+  isHonoraryMember: false,
   semesters: [
     { year: 2026, season: "fall", status: "approved" },
     { year: 2026, season: "spring", status: "approved" },
@@ -43,6 +44,17 @@ const MOCK_ALUMNI: CurrentUser = {
   semesters: [{ year: 2022, season: "spring", status: "approved" }],
 };
 
+// 명예회원 — 이번 학기 소속 여부와 무관하게 상태 배지가 항상 "명예회원"으로 뜨는지
+// 확인용(UserProfileCard.tsx의 memberStatusLabel이 이걸 최우선으로 봄).
+const MOCK_HONORARY: CurrentUser = {
+  ...MOCK_ALUMNI,
+  discordId: "555555555555555555",
+  discordUsername: "run_honorary",
+  discordDisplayName: "명예로운",
+  name: "명예로운",
+  isHonoraryMember: true,
+};
+
 // 필드가 대부분 비어 있는 케이스(가입 신청 직후 등) — 화면이 깨지지 않는지 확인용.
 const MOCK_APPLICANT_WITH_NULLS: CurrentUser = {
   discordId: "444444444444444444",
@@ -54,6 +66,7 @@ const MOCK_APPLICANT_WITH_NULLS: CurrentUser = {
   studentId: null,
   status: "applicant",
   role: "member",
+  isHonoraryMember: false,
   semesters: [{ year: 2026, season: "fall", status: "pending" }],
   solvedAc: null,
   codeforces: null,
@@ -67,6 +80,7 @@ export const MOCK_STATES: Record<string, CurrentUserState | Promise<CurrentUserS
   "signed-in-member": { status: "signed-in", user: MOCK_MEMBER },
   "signed-in-admin": { status: "signed-in", user: MOCK_ADMIN },
   "signed-in-alumni": { status: "signed-in", user: MOCK_ALUMNI },
+  "signed-in-honorary": { status: "signed-in", user: MOCK_HONORARY },
   "signed-in-applicant-nulls": { status: "signed-in", user: MOCK_APPLICANT_WITH_NULLS },
   "signed-out": { status: "signed-out" },
   forbidden: { status: "forbidden" },

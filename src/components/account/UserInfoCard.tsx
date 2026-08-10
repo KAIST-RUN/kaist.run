@@ -124,7 +124,7 @@ function HandlesRow({ user }: { user: CurrentUser }) {
       {filled.length === 0 ? (
         <span className="text-sm sm:text-base">{t("empty")}</span>
       ) : (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm sm:text-base">
+        <div className="flex flex-col gap-1 text-sm sm:text-base">
           {filled.map((p) => (
             <span key={p.key}>
               <span className="opacity-60">{p.label}</span> {user[p.key]}

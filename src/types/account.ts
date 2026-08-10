@@ -16,6 +16,9 @@ export type CurrentUser = {
   // 실제 관리자 권한이 필요한 API(예: 추후 메일 아카이브)는 이 값을 신뢰하지 말고
   // 서버(Worker)에서 세션을 기준으로 별도로 재검증해야 합니다.
   role: "member" | "admin";
+  // 회칙상 정회원과 별개인 자격 — backstage에서만 지정/해제하지만, UserProfileCard의
+  // 상태 배지가 참고합니다(명예회원 > 활동회원 > 휴회원 순).
+  isHonoraryMember: boolean;
   // 승인됨/대기중 둘 다 포함, 최신순 — "가입 연도" 대신 이제 이걸로 소속을 보여줍니다.
   semesters: { year: number; season: "spring" | "fall"; status: "pending" | "approved" }[];
 

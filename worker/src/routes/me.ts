@@ -28,6 +28,7 @@ me.get("/", async (c) => {
     studentId: member.studentId,
     status: member.status,
     role: member.role,
+    isHonoraryMember: member.isHonoraryMember,
     semesters,
     solvedAc: member.solvedAc,
     codeforces: member.codeforces,

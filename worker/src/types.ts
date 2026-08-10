@@ -59,6 +59,9 @@ export type CurrentUser = {
 
   status: "applicant" | "member" | "alumni";
   role: "member" | "admin";
+  // 회칙상 정회원과 별개인 자격 — backstage에서만 지정/해제하지만(worker/src/lib/
+  // members.ts의 honorary_members), 마이페이지 상태 배지가 참고해야 해서 내려줍니다.
+  isHonoraryMember: boolean;
   // 승인됨/대기중 둘 다 포함, 최신순. "가입 연도" 대신 이제 이걸로 소속을 보여줍니다.
   semesters: { year: number; season: "spring" | "fall"; status: "pending" | "approved" }[];
 

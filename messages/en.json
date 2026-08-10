@@ -191,9 +191,9 @@
       "retry": "Try again"
     },
     "status": {
-      "applicant": "Application pending",
-      "member": "Current member",
-      "alumni": "Alumni"
+      "honorary": "Honorary member",
+      "active": "Active member",
+      "inactive": "Inactive member"
     },
     "adminBadge": "Admin",
     "memberInfo": {

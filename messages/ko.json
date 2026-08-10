@@ -191,9 +191,9 @@
       "retry": "다시 시도"
     },
     "status": {
-      "applicant": "가입 신청 중",
-      "member": "재학생 회원",
-      "alumni": "졸업 회원"
+      "honorary": "명예회원",
+      "active": "활동회원",
+      "inactive": "휴회원"
     },
     "adminBadge": "관리자",
     "memberInfo": {
