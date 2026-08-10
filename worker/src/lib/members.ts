@@ -23,6 +23,7 @@ type RawUserRow = {
   created_at: string;
   updated_at: string;
   is_admin: number;
+  is_honorary: number;
   is_current_member: number;
   has_ever_approved: number;
 };
@@ -38,19 +39,25 @@ export type UserRecord = {
   codeforces: string | null;
   atcoder: string | null;
   avatarUrl: string | null;
-  // 둘 다 저장 컬럼이 아니라 조회 시점에 admins/semester_membership을 보고 계산합니다
-  // (별도 컬럼으로 두면 그 테이블들과 값이 어긋날 수 있어서) — 아래 USER_SELECT 참고.
+  // 셋 다 저장 컬럼이 아니라 조회 시점에 admins/honorary_members/semester_membership을
+  // 보고 계산합니다(별도 컬럼으로 두면 그 테이블들과 값이 어긋날 수 있어서) — 아래
+  // USER_SELECT 참고. role/status와 달리 isHonoraryMember는 admins처럼 독립된
+  // boolean입니다 — 명예회원이면서 동시에 관리자이거나, 아직 재학 중인 학기 소속
+  // 회원이 명예회원으로 지정되는 것도 전부 가능해야 해서(회칙상 명예회원 지정은
+  // 학기 소속 승인과 무관한 별개 절차) role/status 계산에 안 섞습니다.
   role: "member" | "admin";
   status: "applicant" | "member" | "alumni";
+  isHonoraryMember: boolean;
   createdAt: string;
 };
 
 // is_current_member: "현재 학기"에 approved된 학기 소속이 있는지.
 // has_ever_approved: 학기를 막론하고 approved된 적이 한 번이라도 있는지.
-// role은 admins 테이블에 존재하는지로 판정합니다.
+// role은 admins 테이블에, isHonoraryMember는 honorary_members 테이블에 존재하는지로 판정합니다.
 const USER_SELECT = `
   SELECT u.*,
     EXISTS(SELECT 1 FROM admins a WHERE a.uid = u.uid) AS is_admin,
+    EXISTS(SELECT 1 FROM honorary_members h WHERE h.uid = u.uid) AS is_honorary,
     EXISTS(
       SELECT 1 FROM semester_membership sm
       JOIN semesters s ON s.year = sm.year AND s.season = sm.season AND s.is_current = 1
@@ -74,6 +81,7 @@ function toUserRecord(row: RawUserRow): UserRecord {
     avatarUrl: row.avatar_url,
     role: row.is_admin ? "admin" : "member",
     status: row.is_current_member ? "member" : row.has_ever_approved ? "alumni" : "applicant",
+    isHonoraryMember: !!row.is_honorary,
     createdAt: row.created_at,
   };
 }
@@ -240,6 +248,7 @@ export async function deleteUser(env: Env, uid: string): Promise<void> {
   await env.CONTENT_DB.batch([
     env.CONTENT_DB.prepare("DELETE FROM semester_membership WHERE uid = ?1").bind(uid),
     env.CONTENT_DB.prepare("DELETE FROM admins WHERE uid = ?1").bind(uid),
+    env.CONTENT_DB.prepare("DELETE FROM honorary_members WHERE uid = ?1").bind(uid),
     env.CONTENT_DB.prepare("DELETE FROM users WHERE uid = ?1").bind(uid),
   ]);
 }
@@ -262,6 +271,29 @@ export async function listAdmins(env: Env): Promise<UserRecord[]> {
   // JOIN엔 헷갈리지 않게 다른 별칭(am)을 씁니다(서로 다른 스코프라 실제로 충돌하진
   // 않지만, 굳이 헷갈릴 이유가 없음).
   const { results } = await env.CONTENT_DB.prepare(`${USER_SELECT} JOIN admins am ON am.uid = u.uid ORDER BY am.granted_at ASC`).all<RawUserRow>();
+  return results.map(toUserRecord);
+}
+
+// admins와 정확히 같은 모양 — 명예회원 지정/해제/목록. 지정은 backstage 유저 수정
+// 페이지의 체크박스에서, 해제는 명예회원 탭 목록에서 합니다.
+export async function grantHonoraryMember(env: Env, uid: string, grantedByUid: string | null, grantedByName: string | null): Promise<void> {
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO honorary_members (uid, granted_by_uid, granted_by_name) VALUES (?1, ?2, ?3)
+     ON CONFLICT (uid) DO NOTHING`,
+  )
+    .bind(uid, grantedByUid, grantedByName)
+    .run();
+}
+
+export async function revokeHonoraryMember(env: Env, uid: string): Promise<void> {
+  await env.CONTENT_DB.prepare("DELETE FROM honorary_members WHERE uid = ?1").bind(uid).run();
+}
+
+export async function listHonoraryMembers(env: Env): Promise<UserRecord[]> {
+  // listAdmins와 같은 이유로 바깥 JOIN 별칭을 hm으로 따로 씁니다.
+  const { results } = await env.CONTENT_DB.prepare(
+    `${USER_SELECT} JOIN honorary_members hm ON hm.uid = u.uid ORDER BY hm.granted_at ASC`,
+  ).all<RawUserRow>();
   return results.map(toUserRecord);
 }
 

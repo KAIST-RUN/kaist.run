@@ -33,6 +33,9 @@ import {
   grantAdmin,
   revokeAdmin,
   listAdmins,
+  grantHonoraryMember,
+  revokeHonoraryMember,
+  listHonoraryMembers,
   UserValidationError,
 } from "../lib/members";
 import {
@@ -68,6 +71,7 @@ import {
   renderSemesterPicker,
   renderSemesterRoster,
   renderAdminList,
+  renderHonoraryMemberList,
   renderContactForm,
   contactRowsToFormData,
   renderBylawsList,
@@ -417,8 +421,22 @@ backstage.get("/members/export.csv", async (c) => {
 
   const users = await listUsers(c.env);
   const csv = toCsvDocument(
-    ["UID", "이름", "학번", "이메일", "전화번호", "Discord ID", "solved.ac", "Codeforces", "AtCoder", "상태", "권한", "생성일"],
-    users.map((u) => [u.uid, u.name, u.studentId, u.email, u.phone, u.discordId, u.solvedAc, u.codeforces, u.atcoder, u.status, u.role, u.createdAt]),
+    ["UID", "이름", "학번", "이메일", "전화번호", "Discord ID", "solved.ac", "Codeforces", "AtCoder", "상태", "권한", "명예회원", "생성일"],
+    users.map((u) => [
+      u.uid,
+      u.name,
+      u.studentId,
+      u.email,
+      u.phone,
+      u.discordId,
+      u.solvedAc,
+      u.codeforces,
+      u.atcoder,
+      u.status,
+      u.role,
+      u.isHonoraryMember ? "Y" : "N",
+      u.createdAt,
+    ]),
   );
   const filename = "members.csv";
   return new Response(csv, {
@@ -444,6 +462,7 @@ backstage.get("/members/new", async (c) => {
     codeforces: "",
     atcoder: "",
     isAdmin: false,
+    isHonoraryMember: false,
   };
   return c.html(renderUserForm("new", empty, null));
 });
@@ -459,6 +478,7 @@ function readUserForm(get: (key: string) => string): Omit<UserFormData, "uid"> {
     codeforces: get("codeforces").trim(),
     atcoder: get("atcoder").trim(),
     isAdmin: get("isAdmin") === "1",
+    isHonoraryMember: get("isHonoraryMember") === "1",
   };
 }
 
@@ -481,6 +501,7 @@ backstage.post("/members/new", async (c) => {
       atcoder: input.atcoder || null,
     });
     if (input.isAdmin) await grantAdmin(c.env, created.uid, gate.member.uid, gate.member.name);
+    if (input.isHonoraryMember) await grantHonoraryMember(c.env, created.uid, gate.member.uid, gate.member.name);
     return c.redirect(`/members/${encodeURIComponent(created.uid)}/edit`);
   } catch (err) {
     const message = err instanceof UserValidationError ? err.message : "저장하지 못했습니다.";
@@ -521,6 +542,8 @@ backstage.post("/members/:uid/edit", async (c) => {
     });
     if (input.isAdmin) await grantAdmin(c.env, uid, gate.member.uid, gate.member.name);
     else await revokeAdmin(c.env, uid);
+    if (input.isHonoraryMember) await grantHonoraryMember(c.env, uid, gate.member.uid, gate.member.name);
+    else await revokeHonoraryMember(c.env, uid);
     return c.redirect(`/members/${encodeURIComponent(uid)}/edit`);
   } catch (err) {
     const message = err instanceof UserValidationError ? err.message : "저장하지 못했습니다.";
@@ -685,6 +708,25 @@ backstage.post("/members/admins/revoke", async (c) => {
   const { get } = await readForm(c);
   await revokeAdmin(c.env, get("uid"));
   return c.redirect("/members/admins");
+});
+
+// ---------- members: 명예회원 ----------
+
+backstage.get("/members/honorary", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const members = await listHonoraryMembers(c.env);
+  return c.html(renderHonoraryMemberList(members));
+});
+
+backstage.post("/members/honorary/revoke", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  await revokeHonoraryMember(c.env, get("uid"));
+  return c.redirect("/members/honorary");
 });
 
 // ---------- contact ----------

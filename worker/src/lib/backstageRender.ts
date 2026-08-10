@@ -385,6 +385,8 @@ const FORM_STYLE = `
   .bs-member-main .name { font-weight: 600; font-size: 0.9375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs-member-list .meta { font-size: 0.8rem; opacity: 0.55; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs-badge { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
+  /* 관리자 배지(.bs-badge)와 동시에 붙어도 구분되게, 명예회원 배지는 다른 색으로. */
+  .bs-badge-alt { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-accent); color: var(--bg); }
   /* 신청중/재학/졸업처럼 "관리자" 배지만큼 강조할 필요는 없는 상태 표시용 — 테두리만. */
   .bs-badge-outline { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); opacity: .75; }
 `;
@@ -854,11 +856,12 @@ function semesterLabel(year: number, season: "spring" | "fall"): string {
   return `${year}년 ${SEASON_LABEL[season]}`;
 }
 
-function memberSubnav(active: "list" | "semesters" | "admins"): string {
+function memberSubnav(active: "list" | "semesters" | "admins" | "honorary"): string {
   return `<div class="bs-subnav">
     <a href="/members"${active === "list" ? ' class="active"' : ""}>전체 명단</a>
     <a href="/members/semesters"${active === "semesters" ? ' class="active"' : ""}>학기별 명단</a>
     <a href="/members/admins"${active === "admins" ? ' class="active"' : ""}>관리자</a>
+    <a href="/members/honorary"${active === "honorary" ? ' class="active"' : ""}>명예회원</a>
   </div>`;
 }
 
@@ -895,6 +898,7 @@ function renderMemberRow(user: UserRecord): string {
           <span class="name">${escapeHtml(user.name || "(이름 없음)")}</span>
           <span class="bs-badge-outline">${STATUS_LABEL[user.status]}</span>
           ${user.role === "admin" ? '<span class="bs-badge">관리자</span>' : ""}
+          ${user.isHonoraryMember ? '<span class="bs-badge-alt">명예회원</span>' : ""}
         </div>
         <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
       </div>
@@ -955,6 +959,7 @@ export type UserFormData = {
   codeforces: string;
   atcoder: string;
   isAdmin: boolean;
+  isHonoraryMember: boolean;
 };
 
 export function userRowToFormData(user: UserRecord): UserFormData {
@@ -969,6 +974,7 @@ export function userRowToFormData(user: UserRecord): UserFormData {
     codeforces: user.codeforces ?? "",
     atcoder: user.atcoder ?? "",
     isAdmin: user.role === "admin",
+    isHonoraryMember: user.isHonoraryMember,
   };
 }
 
@@ -1028,10 +1034,14 @@ export function renderUserForm(mode: "new" | "edit", data: UserFormData, semeste
       </div>
 
       <div class="bs-card">
-        <p class="bs-card-title">권한</p>
+        <p class="bs-card-title">권한 · 자격</p>
         <div class="bs-field bs-check" style="flex-direction:row;">
           <input type="checkbox" id="isAdmin" name="isAdmin" value="1" ${data.isAdmin ? "checked" : ""} />
           <label for="isAdmin" style="margin:0;">관리자 권한 부여</label>
+        </div>
+        <div class="bs-field bs-check" style="flex-direction:row;margin-top:10px;">
+          <input type="checkbox" id="isHonoraryMember" name="isHonoraryMember" value="1" ${data.isHonoraryMember ? "checked" : ""} />
+          <label for="isHonoraryMember" style="margin:0;">명예회원 지정</label>
         </div>
       </div>
 
@@ -1266,6 +1276,43 @@ export function renderAdminList(admins: UserRecord[]): string {
     <h1>회원 명단</h1>
     ${memberSubnav("admins")}
     <p class="bs-note" style="margin-bottom:16px">관리자를 새로 추가하려면 전체 명단에서 그 유저를 찾아 수정 페이지의 "관리자 권한 부여" 체크박스를 쓰세요.</p>
+    ${body}
+  `,
+  );
+}
+
+// ---------- members: 명예회원 ----------
+
+export function renderHonoraryMemberList(members: UserRecord[]): string {
+  const body =
+    members.length === 0
+      ? `<p class="empty">등록된 명예회원이 없습니다.</p>`
+      : `<ul class="bs-member-list">
+          ${members
+            .map(
+              (m) => `<li>
+                ${memberAvatarHtml(m.avatarUrl)}
+                <div class="bs-member-body">
+                  <div class="bs-member-main"><span class="name">${escapeHtml(m.name || "(이름 없음)")}</span></div>
+                  <div class="meta">${escapeHtml(`Discord ${m.discordId}`)}</div>
+                </div>
+                <form method="post" action="/members/honorary/revoke" onsubmit="return confirm('${escapeHtml(m.name || m.discordId)}님의 명예회원 지정을 해제할까요?')">
+                  <input type="hidden" name="uid" value="${escapeHtml(m.uid)}" />
+                  <button type="submit" class="bs-danger">지정 해제</button>
+                </form>
+              </li>`,
+            )
+            .join("\n")}
+        </ul>`;
+
+  return shell(
+    "명예회원",
+    "members",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>회원 명단</h1>
+    ${memberSubnav("honorary")}
+    <p class="bs-note" style="margin-bottom:16px">명예회원을 새로 지정하려면 전체 명단에서 그 유저를 찾아 수정 페이지의 "명예회원 지정" 체크박스를 쓰세요.</p>
     ${body}
   `,
   );
