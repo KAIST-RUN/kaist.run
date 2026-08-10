@@ -42,6 +42,7 @@ import {
 import {
   listSemesters,
   openSemester,
+  deleteSemester,
   listSemesterMembers,
   approveSemesterMembership,
   rejectSemesterMembership,
@@ -664,6 +665,29 @@ backstage.post("/members/semesters/:year/:season/revoke", async (c) => {
   const { get } = await readForm(c);
   await revokeSemesterMembership(c.env, get("uid"), target.year, target.season);
   return c.redirect(`/members/semesters/${target.year}/${target.season}`);
+});
+
+// openSemester는 "없으면 열고, makeCurrent면 현재 학기로 지정"이 한 함수라 —
+// 이미 있는 학기를 대상으로 불러도 INSERT는 그냥 무시되고 현재 학기 지정만
+// 일어나서, 여기서 새 함수 없이 그대로 재사용합니다.
+backstage.post("/members/semesters/:year/:season/set-current", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const target = await requireOpenSemester(c, c.env);
+  if (!target) return c.notFound();
+
+  await openSemester(c.env, target.year, target.season, true);
+  return c.redirect(`/members/semesters/${target.year}/${target.season}`);
+});
+
+backstage.post("/members/semesters/:year/:season/delete", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const target = await requireOpenSemester(c, c.env);
+  if (!target) return c.notFound();
+
+  await deleteSemester(c.env, target.year, target.season);
+  return c.redirect("/members/semesters");
 });
 
 // 관리자가 봇을 거치지 않고 기존 유저를 이름/Discord ID로 찾아 바로 그 학기에

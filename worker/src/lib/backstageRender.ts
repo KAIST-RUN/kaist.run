@@ -1273,8 +1273,15 @@ export function renderSemesterRoster(
     </p>
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
 
-    <div style="margin-bottom:16px;">
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       <a class="bs-new bs-new-outline" href="${base}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+      ${
+        isCurrent
+          ? ""
+          : `<form method="post" action="${base}/set-current" style="margin:0;">
+              <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0;">현재 학기로 지정</button>
+            </form>`
+      }
     </div>
 
     <div class="bs-card">
@@ -1295,6 +1302,12 @@ export function renderSemesterRoster(
 
     <p class="bs-card-title" style="margin-top:24px">승인됨 (${approved.length})</p>
     ${approvedHtml}
+
+    <div class="bs-danger-zone">
+      <form method="post" action="${base}/delete" onsubmit="return confirm('정말 ${escapeHtml(semesterLabel(year, season))} 학기를 삭제할까요? 이 학기의 승인·대기 기록이 모두 함께 삭제됩니다.')">
+        <button type="submit" class="bs-danger">이 학기 삭제</button>
+      </form>
+    </div>
   `,
   );
 }

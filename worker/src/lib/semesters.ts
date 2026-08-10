@@ -46,6 +46,19 @@ export async function openSemester(env: Env, year: number, season: Season, makeC
   await env.CONTENT_DB.batch(statements);
 }
 
+// 학기를 통째로 지웁니다 — 그 학기의 소속/승인 기록(semester_membership)도 함께
+// 지웁니다. 안 지우면 나중에 같은 (year, season)을 다시 열었을 때 예전 기록이
+// 그대로 되살아나 버립니다. is_current였던 학기를 지워도(=아무도 현재 학기가
+// 아니게 됨) 별문제 없습니다 — users.status 계산은 "현재 학기에 approved됐는지"를
+// EXISTS로 보는 거라, is_current인 행이 아예 없으면 그냥 전원 그 조건이 거짓이 될
+// 뿐입니다(members.ts의 USER_SELECT 참고).
+export async function deleteSemester(env: Env, year: number, season: Season): Promise<void> {
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("DELETE FROM semester_membership WHERE year = ?1 AND season = ?2").bind(year, season),
+    env.CONTENT_DB.prepare("DELETE FROM semesters WHERE year = ?1 AND season = ?2").bind(year, season),
+  ]);
+}
+
 export type SemesterMembershipResult = { status: "pending" | "already_pending" | "already_approved" };
 
 // 디스코드 봇의 "학기별 활동회원 등록". year/season을 생략하면 현재 학기로 등록합니다
