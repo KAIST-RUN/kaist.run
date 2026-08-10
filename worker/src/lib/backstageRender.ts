@@ -435,9 +435,7 @@ const FORM_STYLE = `
   .bs-member-main .name { font-weight: 600; font-size: 0.9375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs-member-list .meta { font-size: 0.8rem; opacity: 0.55; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs-badge { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
-  /* 관리자 배지(.bs-badge)와 동시에 붙어도 구분되게, 명예회원 배지는 다른 색으로. */
-  .bs-badge-alt { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-accent); color: var(--bg); }
-  /* 신청중/재학/졸업처럼 "관리자" 배지만큼 강조할 필요는 없는 상태 표시용 — 테두리만. */
+  /* 명예회원/활동회원/휴회원처럼 "관리자" 배지만큼 강조할 필요는 없는 상태 표시용 — 테두리만. */
   .bs-badge-outline { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); opacity: .75; }
 `;
 
@@ -899,7 +897,15 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 // 직접 만들고(+새 유저) 고치고(수정) 지울 수 있습니다. 세 하위 탭으로 나뉩니다:
 // 전체 명단(/members), 학기별 명단(/members/semesters/...), 관리자(/members/admins).
 
-const STATUS_LABEL: Record<UserRecord["status"], string> = { applicant: "신청중", member: "재학", alumni: "졸업" };
+// 명예회원 지정이 최우선(학기 소속 승인과 무관한 별개 자격), 그다음 이번 학기 소속
+// 여부(status==="member" — 현재 학기에 approved됐는지)로 활동/휴회원을 가릅니다.
+// 마이페이지(src/components/account/UserProfileCard.tsx의 memberStatusLabel)와
+// 정확히 같은 규칙 — status==="applicant"(한 번도 승인된 적 없음)도 휴회원과 묶습니다.
+function memberStatusLabel(user: UserRecord): string {
+  if (user.isHonoraryMember) return "명예회원";
+  if (user.status === "member") return "활동회원";
+  return "휴회원";
+}
 const SEASON_LABEL: Record<"spring" | "fall", string> = { spring: "봄", fall: "가을" };
 
 function semesterLabel(year: number, season: "spring" | "fall"): string {
@@ -910,8 +916,8 @@ function memberSubnav(active: "list" | "semesters" | "admins" | "honorary"): str
   return `<div class="bs-subnav">
     <a href="/members"${active === "list" ? ' class="active"' : ""}>전체 명단</a>
     <a href="/members/semesters"${active === "semesters" ? ' class="active"' : ""}>학기별 명단</a>
-    <a href="/members/admins"${active === "admins" ? ' class="active"' : ""}>관리자</a>
     <a href="/members/honorary"${active === "honorary" ? ' class="active"' : ""}>명예회원</a>
+    <a href="/members/admins"${active === "admins" ? ' class="active"' : ""}>관리자</a>
   </div>`;
 }
 
@@ -946,9 +952,8 @@ function renderMemberRow(user: UserRecord): string {
       <div class="bs-member-body">
         <div class="bs-member-main">
           <span class="name">${escapeHtml(user.name || "(이름 없음)")}</span>
-          <span class="bs-badge-outline">${STATUS_LABEL[user.status]}</span>
+          <span class="bs-badge-outline">${memberStatusLabel(user)}</span>
           ${user.role === "admin" ? '<span class="bs-badge">관리자</span>' : ""}
-          ${user.isHonoraryMember ? '<span class="bs-badge-alt">명예회원</span>' : ""}
         </div>
         <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
       </div>
@@ -1179,7 +1184,7 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
           <label for="makeCurrent" style="margin:0;">현재 학기로 설정</label>
         </div>
         <div style="grid-column:1/-1;">
-          <button type="submit" class="bs-submit">학기 열기</button>
+          <button type="submit" class="bs-submit">새로운 학기 생성</button>
         </div>
       </form>
     </div>
