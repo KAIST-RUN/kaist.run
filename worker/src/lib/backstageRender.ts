@@ -3,6 +3,7 @@ import type { UserRecord } from "./members";
 import type { SemesterInfo, SemesterMemberRow, UserSemesterEntry } from "./semesters";
 import type {
   NoticeRow,
+  BoardPostRow,
   ArchiveRow,
   ContactRow,
   ContactInfoRow,
@@ -514,6 +515,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
     <div class="bs-nav-links" id="bs-nav">
       ${navLink("/", "홈", active === "home")}
       ${navLink("/notices", "공지사항", active === "notices")}
+      ${navLink("/board", "게시판", active === "board")}
       ${navLink("/archive", "대회 아카이브", active === "archive")}
       ${navLink("/members", "회원 명단", active === "members")}
       ${navLink("/contact", "연락처", active === "contact")}
@@ -679,6 +681,128 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
         ? `<div class="bs-danger-zone">
             <form method="post" action="/notices/${escapeHtml(data.slug)}/delete" onsubmit="return confirm('정말 삭제할까요?')">
               <button type="submit" class="bs-danger">이 공지 삭제</button>
+            </form>
+          </div>`
+        : ""
+    }
+  `,
+  );
+}
+
+// ---------- board ----------
+// 공지사항 관리 UI와 완전히 같은 구조입니다.
+
+export function renderBoardList(posts: BoardPostRow[]): string {
+  const items =
+    posts.length === 0
+      ? `<p class="empty">등록된 게시글이 없습니다.</p>`
+      : `<ul class="bs-list">
+        ${posts
+          .map(
+            (p) => `<li>
+              <span>
+                ${p.pinned ? '<span class="pin">📌</span>' : ""}
+                <a class="title" href="/board/${escapeHtml(p.slug)}/edit">${escapeHtml(p.title)}</a>
+              </span>
+              <span class="meta">${escapeHtml(p.date)} · ${escapeHtml(p.slug)}</span>
+            </li>`,
+          )
+          .join("\n")}
+      </ul>`;
+
+  return shell(
+    "게시판 관리",
+    "board",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>게시판</h1>
+    <a class="bs-new" href="/board/new">+ 새 글 작성</a>
+    ${items}
+  `,
+  );
+}
+
+export type BoardFormData = {
+  slug: string;
+  date: string;
+  pinned: boolean;
+  titleKo: string;
+  titleEn: string;
+  contentKo: string;
+  contentEn: string;
+};
+
+export function renderBoardForm(mode: "new" | "edit", data: BoardFormData, error?: string): string {
+  const action = mode === "new" ? "/board/new" : `/board/${escapeHtml(data.slug)}/edit`;
+  return shell(
+    mode === "new" ? "새 글 작성" : `게시글 수정 — ${data.slug}`,
+    "board",
+    `
+    <p class="bs-eyebrow">Backstage · 게시판</p>
+    <h1>${mode === "new" ? "새 글 작성" : "게시글 수정"}</h1>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    <form class="bs-form" method="post" action="${action}">
+      <div class="bs-card">
+        <p class="bs-card-title">기본 정보</p>
+        <div class="bs-field">
+          <label>슬러그 (URL에 쓰임, 영문/숫자/하이픈)</label>
+          <input type="text" name="slug" value="${escapeHtml(data.slug)}" pattern="[a-z0-9-]+" required ${mode === "edit" ? "readonly" : ""} />
+        </div>
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>날짜</label>
+            <input type="date" name="date" value="${escapeHtml(data.date)}" required />
+          </div>
+          <div class="bs-field bs-check" style="align-self:end;flex-direction:row;">
+            <input type="checkbox" id="pinned" name="pinned" ${data.pinned ? "checked" : ""} />
+            <label for="pinned" style="margin:0;">상단 고정</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="bs-card">
+        <p class="bs-card-title">제목</p>
+        <div class="bs-row2">
+          <div class="bs-field">
+            <label>한국어</label>
+            <input type="text" name="titleKo" value="${escapeHtml(data.titleKo)}" required />
+          </div>
+          <div class="bs-field">
+            <label>영어</label>
+            <input type="text" name="titleEn" value="${escapeHtml(data.titleEn)}" required />
+          </div>
+        </div>
+      </div>
+
+      <div class="bs-card">
+        <p class="bs-card-title">본문 (마크다운)</p>
+        <div class="bs-row2">
+          <div class="bs-field">
+            <label>한국어</label>
+            <textarea name="contentKo" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentKo)}</textarea>
+          </div>
+          <div class="bs-field">
+            <label>영어</label>
+            <textarea name="contentEn" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentEn)}</textarea>
+          </div>
+        </div>
+      </div>
+      <script>
+        document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
+          el.style.height = el.scrollHeight + "px";
+        });
+      </script>
+
+      <div class="bs-actions">
+        <button type="submit" class="bs-submit">저장</button>
+        ${mode === "edit" ? `<a href="/board" class="bs-cancel">취소</a>` : ""}
+      </div>
+    </form>
+    ${
+      mode === "edit"
+        ? `<div class="bs-danger-zone">
+            <form method="post" action="/board/${escapeHtml(data.slug)}/delete" onsubmit="return confirm('정말 삭제할까요?')">
+              <button type="submit" class="bs-danger">이 글 삭제</button>
             </form>
           </div>`
         : ""

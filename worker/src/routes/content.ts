@@ -3,6 +3,8 @@ import type { Env } from "../types";
 import {
   listNotices,
   getNotice,
+  listBoardPosts,
+  getBoardPost,
   listArchiveEntries,
   getArchiveEntry,
   getContact,
@@ -40,6 +42,20 @@ content.get("/notices/:locale/:slug", async (c) => {
   const notice = await getNotice(c.env, locale, c.req.param("slug"));
   if (!notice) return c.notFound();
   return c.json(notice);
+});
+
+content.get("/board/:locale", async (c) => {
+  const locale = c.req.param("locale");
+  if (!isLocale(locale)) return c.json({ error: "invalid locale" }, 400);
+  return c.json(await listBoardPosts(c.env, locale));
+});
+
+content.get("/board/:locale/:slug", async (c) => {
+  const locale = c.req.param("locale");
+  if (!isLocale(locale)) return c.json({ error: "invalid locale" }, 400);
+  const post = await getBoardPost(c.env, locale, c.req.param("slug"));
+  if (!post) return c.notFound();
+  return c.json(post);
 });
 
 content.get("/archive/:season/:locale", async (c) => {

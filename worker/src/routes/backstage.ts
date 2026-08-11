@@ -8,6 +8,10 @@ import {
   getNotice,
   upsertNotice,
   deleteNotice,
+  listBoardPosts,
+  getBoardPost,
+  upsertBoardPost,
+  deleteBoardPost,
   listArchiveEntries,
   getArchiveEntry,
   upsertArchiveEntry,
@@ -63,6 +67,8 @@ import {
   renderBackstageHome,
   renderNoticeList,
   renderNoticeForm,
+  renderBoardList,
+  renderBoardForm,
   renderArchiveList,
   renderArchiveForm,
   archiveRowsToFormData,
@@ -82,6 +88,7 @@ import {
   renderUploadList,
   renderApplyFormPage,
   type NoticeFormData,
+  type BoardFormData,
 } from "../lib/backstageRender";
 import { renderErrorPage } from "../lib/emailRender";
 
@@ -260,6 +267,107 @@ backstage.post("/notices/:slug/delete", async (c) => {
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/notices");
+});
+
+// ---------- board ----------
+// 공지사항과 완전히 같은 구조입니다 — 관리자만 작성하고, 정적 빌드 시점에 그대로
+// 구워집니다(실제 로그인 여부로 접근을 막지는 않습니다).
+
+backstage.get("/board", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const posts = await listBoardPosts(c.env, "ko");
+  return c.html(renderBoardList(posts));
+});
+
+backstage.get("/board/new", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+  const empty: BoardFormData = { slug: "", date: "", pinned: false, titleKo: "", titleEn: "", contentKo: "", contentEn: "" };
+  return c.html(renderBoardForm("new", empty));
+});
+
+backstage.post("/board/new", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  const data: BoardFormData = {
+    slug: get("slug").trim(),
+    date: get("date"),
+    pinned: get("pinned") === "on",
+    titleKo: get("titleKo"),
+    titleEn: get("titleEn"),
+    contentKo: get("contentKo"),
+    contentEn: get("contentEn"),
+  };
+
+  if (!/^[a-z0-9-]+$/.test(data.slug)) {
+    return c.html(renderBoardForm("new", data, "슬러그는 영문 소문자/숫자/하이픈만 가능합니다."), 400);
+  }
+  if (await getBoardPost(c.env, "ko", data.slug)) {
+    return c.html(renderBoardForm("new", data, "이미 존재하는 슬러그입니다."), 400);
+  }
+
+  await upsertBoardPost(c.env, data.slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, content: data.contentKo });
+  await upsertBoardPost(c.env, data.slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, content: data.contentEn });
+  c.executionCtx.waitUntil(triggerRebuild(c.env));
+
+  return c.redirect("/board");
+});
+
+backstage.get("/board/:slug/edit", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const slug = c.req.param("slug");
+  const [ko, en] = await Promise.all([getBoardPost(c.env, "ko", slug), getBoardPost(c.env, "en", slug)]);
+  if (!ko && !en) return c.html(renderErrorPage("찾을 수 없습니다", "존재하지 않는 게시글입니다."), 404);
+
+  const base = ko ?? en!;
+  const data: BoardFormData = {
+    slug,
+    date: base.date,
+    pinned: base.pinned,
+    titleKo: ko?.title ?? "",
+    titleEn: en?.title ?? "",
+    contentKo: ko?.content ?? "",
+    contentEn: en?.content ?? "",
+  };
+  return c.html(renderBoardForm("edit", data));
+});
+
+backstage.post("/board/:slug/edit", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const slug = c.req.param("slug");
+  const { get } = await readForm(c);
+  const data: BoardFormData = {
+    slug,
+    date: get("date"),
+    pinned: get("pinned") === "on",
+    titleKo: get("titleKo"),
+    titleEn: get("titleEn"),
+    contentKo: get("contentKo"),
+    contentEn: get("contentEn"),
+  };
+
+  await upsertBoardPost(c.env, slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, content: data.contentKo });
+  await upsertBoardPost(c.env, slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, content: data.contentEn });
+  c.executionCtx.waitUntil(triggerRebuild(c.env));
+
+  return c.redirect("/board");
+});
+
+backstage.post("/board/:slug/delete", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  await deleteBoardPost(c.env, c.req.param("slug"));
+  c.executionCtx.waitUntil(triggerRebuild(c.env));
+
+  return c.redirect("/board");
 });
 
 // ---------- archive ----------

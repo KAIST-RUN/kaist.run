@@ -6,6 +6,7 @@
   "nav": {
     "about": "소개",
     "notices": "공지",
+    "board": "게시판",
     "archive": "대회 아카이브",
     "bylaws": "회칙",
     "contact": "연락처",
@@ -116,6 +117,11 @@
     "empty": "등록된 공지사항이 없습니다.",
     "back": "목록으로",
     "readMore": "자세히 보기"
+  },
+  "board": {
+    "title": "게시판",
+    "empty": "등록된 게시글이 없습니다.",
+    "back": "목록으로"
   },
   "archive": {
     "title": "대회 아카이브",
