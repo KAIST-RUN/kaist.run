@@ -315,6 +315,8 @@ const FORM_STYLE = `
   body.bylaws-wide { max-width: 1680px; }
   .bylaws-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   .bylaws-card-header .bs-card-title { margin: 0; }
+  .bylaws-card-header-actions { display: flex; align-items: center; gap: 10px; }
+  .bylaws-card-header-actions .bs-submit { padding: 6px 16px; font-size: .8125rem; }
   .bylaws-preview-toggle {
     flex-shrink: 0; font: inherit; font-size: .8125rem; font-weight: 700; color: var(--logo-primary);
     background: transparent; border: 1px solid var(--logo-primary); border-radius: 999px; padding: 6px 14px;
@@ -326,12 +328,16 @@ const FORM_STYLE = `
   .bylaws-editor-col { width: 100%; min-width: 0; transition: width .25s ease; }
   .bylaws-editor-row.preview-open .bylaws-editor-col { width: calc(50% - 12px); }
 
+  /* position: sticky + 자체 overflow-y로 뷰포트 높이만큼만 차지하고 그 안에서
+     스크롤되게 합니다 — 안 그러면 미리보기가 본문 트리보다 훨씬 길 때 행(row)
+     전체가 그 길이에 맞춰 늘어나서 "저장" 버튼이 한참 아래로 밀려버립니다. */
   .bylaws-preview-col {
     width: 0; flex-shrink: 0; overflow: hidden; opacity: 0; margin-left: 0;
+    position: sticky; top: 20px; max-height: calc(100vh - 40px);
     transition: width .25s ease, opacity .2s ease, margin-left .25s ease;
   }
-  .bylaws-editor-row.preview-open .bylaws-preview-col { width: calc(50% - 12px); opacity: 1; margin-left: 24px; }
-  .bylaws-preview-card { height: 100%; box-sizing: border-box; }
+  .bylaws-editor-row.preview-open .bylaws-preview-col { width: calc(50% - 12px); opacity: 1; margin-left: 24px; overflow-y: auto; }
+  .bylaws-preview-card { box-sizing: border-box; }
   .bylaws-preview-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; position: sticky; top: 0; background: var(--bg); padding-bottom: 8px; }
   .bylaws-preview-close {
     flex-shrink: 0; font: inherit; font-size: .8125rem; font-weight: 600; border-radius: 999px; padding: 6px 14px;
@@ -2208,7 +2214,10 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
         <div class="bs-card bylaws-editor-col">
           <div class="bylaws-card-header">
             <p class="bs-card-title">본문</p>
-            <button type="button" class="bylaws-preview-toggle" id="bylaws-preview-toggle" aria-expanded="false">미리보기 ▶</button>
+            <span class="bylaws-card-header-actions">
+              <button type="button" class="bylaws-preview-toggle" id="bylaws-preview-toggle" aria-expanded="false">미리보기 ▶</button>
+              <button type="submit" class="bs-submit">저장</button>
+            </span>
           </div>
           <p class="bs-note" style="margin-bottom:12px">
             "+" 버튼으로 어디에 추가하는지가 곧 위계입니다 — 타입을 고르거나 순서를 옮길 필요 없이,
