@@ -121,7 +121,10 @@
   "board": {
     "title": "Board",
     "empty": "No posts yet.",
-    "back": "Back to list"
+    "back": "Back to list",
+    "loading": "Loading posts...",
+    "loadError": "Couldn't load posts.",
+    "notFound": "Post not found."
   },
   "archive": {
     "title": "Contest Archive",
@@ -180,7 +183,7 @@
     },
     "signInRequired": {
       "title": "Sign in required",
-      "body": "Please sign in with Discord to access your page.",
+      "body": "Please sign in with Discord to access this page.",
       "cta": "Sign in with Discord"
     },
     "notMember": {

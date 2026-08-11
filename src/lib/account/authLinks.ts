@@ -27,6 +27,16 @@ export function getUpdateHandlesEndpoint(): string {
   return `${getApiBase()}/api/me/handles`;
 }
 
+// 회원 전용 게시판 — /api/content/*(공개, 빌드 시점 fetch)와 달리 로그인 세션이
+// 있어야만 응답합니다. src/lib/board/api.ts가 credentials:"include"로 호출합니다.
+export function getBoardListEndpoint(locale: Locale): string {
+  return `${getApiBase()}/api/board/${locale}`;
+}
+
+export function getBoardPostEndpoint(locale: Locale, slug: string): string {
+  return `${getApiBase()}/api/board/${locale}/${encodeURIComponent(slug)}`;
+}
+
 export function getDiscordLoginHref(locale: Locale): string {
   const returnToPath = withBasePath(`/${locale}/my/`);
   // 절대 URL로 보냅니다 — Worker가 다른 origin(로컬에서는 다른 포트)에 있어도

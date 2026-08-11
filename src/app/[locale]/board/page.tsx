@@ -1,8 +1,9 @@
-import { getTranslations, setRequestLocale } from "next-intl/server";
-import { Link } from "@/i18n/navigation";
+import { setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
-import { getAllBoardPosts } from "@/lib/content/board";
+import BoardListContent from "@/components/board/BoardListContent";
 
+// 회원 전용이라 목록 자체를 빌드 시점(next build)에 구울 수 없습니다 — 실제 fetch는
+// BoardListContent(클라이언트 컴포넌트)가 로그인 확인 후 런타임에 합니다.
 export default async function BoardPage({
   params,
 }: {
@@ -10,39 +11,5 @@ export default async function BoardPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale as Locale);
-  const t = await getTranslations("board");
-  const posts = await getAllBoardPosts(locale as Locale);
-
-  return (
-    <main className="mx-auto max-w-2xl px-6 py-12 sm:px-10 sm:py-16 lg:max-w-3xl lg:px-12">
-      <h1 className="animate-fade-in-up text-3xl font-bold sm:text-4xl">{t("title")}</h1>
-
-      {posts.length === 0 ? (
-        <p className="mt-8 opacity-60">{t("empty")}</p>
-      ) : (
-        <ul className="mt-8 flex flex-col divide-y divide-black/10 dark:divide-white/10">
-          {posts.map((post, i) => (
-            <li
-              key={post.slug}
-              className="animate-fade-in-up"
-              style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
-            >
-              <Link
-                href={`/board/${post.slug}`}
-                className={`-mx-4 flex flex-col gap-1 rounded-lg px-4 py-4 transition-colors duration-200 hover:bg-black/[.05] sm:flex-row sm:items-baseline sm:justify-between sm:py-5 dark:hover:bg-white/[.07] ${
-                  post.pinned ? "bg-black/[.03] dark:bg-white/[.05]" : ""
-                }`}
-              >
-                <span className={`text-base sm:text-lg ${post.pinned ? "font-bold" : "font-medium"}`}>
-                  {post.pinned && "📌 "}
-                  {post.title}
-                </span>
-                <span className="text-xs opacity-60 sm:text-sm">{post.date}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
-  );
+  return <BoardListContent />;
 }
