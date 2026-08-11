@@ -59,13 +59,15 @@ export type BylawsBlock = { type: BylawsBlockType; text: string; body?: string; 
 export type BylawsRevisionHistory = string[];
 
 // 번역이 없는 한국어 문서라 locale 구분이 없습니다. "역대 회칙"이라 slug로 여러
-// 버전(2017년 제정, 2026년 개정 ...)을 두고, effective_date가 가장 최신인 게
-// "현재 버전"입니다(별도 플래그 없음 — 새 버전을 추가하기만 하면 자동으로 넘어감).
+// 버전(2017년 제정, 2026년 개정 ...)을 두고, 게시된(isPublished) 것들 중
+// effective_date가 가장 최신인 게 "현재 버전"입니다. 편집 중인 버전은 게시 전까지
+// 공개 API에 안 나갑니다(backstage에서는 초안도 계속 보이고 편집 가능).
 export type BylawsVersionRow = {
   slug: string;
   title: string;
   versionLabel: string;
   effectiveDate: string;
+  isPublished: boolean;
   revisionHistory: BylawsRevisionHistory;
   blocks: BylawsBlock[];
   updated_at: string;
@@ -230,6 +232,7 @@ type RawBylawsVersionRow = {
   title: string;
   version_label: string;
   effective_date: string;
+  is_published: number;
   revision_history: string;
   blocks: string;
   updated_at: string;
@@ -242,6 +245,7 @@ function fromRawBylawsVersion(row: RawBylawsVersionRow): BylawsVersionRow {
     title: row.title,
     versionLabel: row.version_label,
     effectiveDate: row.effective_date,
+    isPublished: row.is_published === 1,
     revisionHistory: JSON.parse(row.revision_history),
     blocks: JSON.parse(row.blocks),
     updated_at: row.updated_at,
@@ -254,14 +258,17 @@ function fromRawBylawsVersionSummary(row: RawBylawsVersionSummaryRow): BylawsVer
     title: row.title,
     versionLabel: row.version_label,
     effectiveDate: row.effective_date,
+    isPublished: row.is_published === 1,
     updated_at: row.updated_at,
   };
 }
 
-// 최신순(effective_date DESC) — 목록 화면과 "현재 버전 = 첫 번째" 판단 둘 다 이 순서를 씁니다.
+// 최신순(effective_date DESC) — backstage 목록용입니다. 게시 여부와 상관없이 초안도
+// 다 보여줘야 admin이 찾아서 편집할 수 있으므로 여기서는 필터링 안 합니다
+// (공개 API 쪽 필터링은 routes/content.ts에서 isPublished로 따로 합니다).
 export async function listBylawsVersions(env: Env): Promise<BylawsVersionSummary[]> {
   const { results } = await env.CONTENT_DB.prepare(
-    "SELECT slug, title, version_label, effective_date, updated_at FROM bylaws_version ORDER BY effective_date DESC",
+    "SELECT slug, title, version_label, effective_date, is_published, updated_at FROM bylaws_version ORDER BY effective_date DESC",
   ).all<RawBylawsVersionSummaryRow>();
   return results.map(fromRawBylawsVersionSummary);
 }
@@ -271,9 +278,12 @@ export async function getBylawsVersion(env: Env, slug: string): Promise<BylawsVe
   return row ? fromRawBylawsVersion(row) : null;
 }
 
-// 별도 "현재 버전" 플래그가 없으므로, effective_date가 가장 최신인 행을 그대로 씁니다.
+// 게시된(is_published = 1) 것들 중 effective_date가 가장 최신인 행 — 아직 편집 중인
+// (게시 안 한) 버전은 아무리 effective_date가 최신이어도 "현재 버전"으로 안 뜹니다.
 export async function getCurrentBylawsVersion(env: Env): Promise<BylawsVersionRow | null> {
-  const row = await env.CONTENT_DB.prepare("SELECT * FROM bylaws_version ORDER BY effective_date DESC LIMIT 1").first<RawBylawsVersionRow>();
+  const row = await env.CONTENT_DB.prepare(
+    "SELECT * FROM bylaws_version WHERE is_published = 1 ORDER BY effective_date DESC LIMIT 1",
+  ).first<RawBylawsVersionRow>();
   return row ? fromRawBylawsVersion(row) : null;
 }
 
@@ -281,19 +291,29 @@ export type BylawsVersionInput = {
   title: string;
   versionLabel: string;
   effectiveDate: string;
+  isPublished: boolean;
   revisionHistory: BylawsRevisionHistory;
   blocks: BylawsBlock[];
 };
 
 export async function upsertBylawsVersion(env: Env, slug: string, input: BylawsVersionInput): Promise<void> {
   await env.CONTENT_DB.prepare(
-    `INSERT INTO bylaws_version (slug, title, version_label, effective_date, revision_history, blocks, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+    `INSERT INTO bylaws_version (slug, title, version_label, effective_date, is_published, revision_history, blocks, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
      ON CONFLICT (slug) DO UPDATE SET
        title = excluded.title, version_label = excluded.version_label, effective_date = excluded.effective_date,
-       revision_history = excluded.revision_history, blocks = excluded.blocks, updated_at = datetime('now')`,
+       is_published = excluded.is_published, revision_history = excluded.revision_history, blocks = excluded.blocks,
+       updated_at = datetime('now')`,
   )
-    .bind(slug, input.title, input.versionLabel, input.effectiveDate, JSON.stringify(input.revisionHistory), JSON.stringify(input.blocks))
+    .bind(
+      slug,
+      input.title,
+      input.versionLabel,
+      input.effectiveDate,
+      input.isPublished ? 1 : 0,
+      JSON.stringify(input.revisionHistory),
+      JSON.stringify(input.blocks),
+    )
     .run();
 }
 

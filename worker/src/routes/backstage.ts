@@ -902,6 +902,7 @@ backstage.get("/bylaws/new", async (c) => {
     title: current?.title ?? "RUN 회칙",
     versionLabel: "",
     effectiveDate: "",
+    isPublished: false,
     revisionHistory: current?.revisionHistory ?? [],
     blocks: current?.blocks ?? [],
   };
@@ -919,6 +920,7 @@ backstage.post("/bylaws/new", async (c) => {
     title: get("title"),
     versionLabel: get("versionLabel"),
     effectiveDate: get("effectiveDate"),
+    isPublished: get("isPublished") === "on",
     revisionHistory: readBylawsRevisionHistory(body),
     blocks: readBylawsBlocks(body),
   };
@@ -960,6 +962,7 @@ backstage.post("/bylaws/:slug/edit", async (c) => {
     title: get("title"),
     versionLabel: get("versionLabel"),
     effectiveDate: get("effectiveDate"),
+    isPublished: get("isPublished") === "on",
     revisionHistory: readBylawsRevisionHistory(body),
     blocks: readBylawsBlocks(body),
   };

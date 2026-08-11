@@ -308,10 +308,11 @@ const FORM_STYLE = `
   .bylaws-body-remove:hover { background: rgba(220,38,38,.12); color: #f87171; }
   .bylaws-body-remove:active { transform: scale(.9); }
 
-  /* 미리보기 — 항상 보이는 좁은 반쪽 컬럼 대신, 필요할 때만 오른쪽에서 슬라이드로
-     열리는 오버레이 패널입니다. 그레서 본문 트리(#bylaws-tree)는 미리보기가 열려있든
-     아니든 항상 관리자 탭 컨테이너(960px) 전체 너비를 씁니다. 클래스/규칙 자체는
-     kaist.run/bylaws와 완전히 같습니다(src/app/[locale]/bylaws/bylaws.css). */
+  /* 미리보기 — 본문 편집 카드 옆에 나란히 붙는 비모달 사이드 패널입니다. 닫혀있을
+     땐 폭 0으로 접혀서 안 보이고, 열면 본문 편집 칸과 정확히 반반(같은 너비)으로
+     나뉩니다. 카드 컨테이너 자체(body max-width)도 이때만 넓혀서(.bylaws-wide)
+     둘 다 너무 좁아지지 않게 합니다. */
+  body.bylaws-wide { max-width: 1680px; }
   .bylaws-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   .bylaws-card-header .bs-card-title { margin: 0; }
   .bylaws-preview-toggle {
@@ -321,21 +322,21 @@ const FORM_STYLE = `
   }
   .bylaws-preview-toggle:hover { background: var(--logo-primary); color: var(--bg); }
 
-  .bylaws-preview-backdrop { display: none; }
-  .bylaws-preview-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 70; }
+  .bylaws-editor-row { display: flex; align-items: flex-start; }
+  .bylaws-editor-col { width: 100%; min-width: 0; transition: width .25s ease; }
+  .bylaws-editor-row.preview-open .bylaws-editor-col { width: calc(50% - 12px); }
 
-  .bylaws-preview-panel {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 92vw); z-index: 71;
-    background: var(--bg); border-left: 1px solid rgba(128,128,128,.2); box-shadow: -12px 0 32px rgba(0,0,0,.18);
-    transform: translateX(100%); transition: transform .25s ease; overflow-y: auto; box-sizing: border-box;
-    padding: 20px 22px 40px;
+  .bylaws-preview-col {
+    width: 0; flex-shrink: 0; overflow: hidden; opacity: 0; margin-left: 0;
+    transition: width .25s ease, opacity .2s ease, margin-left .25s ease;
   }
-  .bylaws-preview-panel.open { transform: translateX(0); }
+  .bylaws-editor-row.preview-open .bylaws-preview-col { width: calc(50% - 12px); opacity: 1; margin-left: 24px; }
+  .bylaws-preview-card { height: 100%; box-sizing: border-box; }
   .bylaws-preview-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; position: sticky; top: 0; background: var(--bg); padding-bottom: 8px; }
   .bylaws-preview-close {
-    flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3);
-    background: transparent; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1;
-    transition: background .15s, border-color .15s, color .15s;
+    flex-shrink: 0; font: inherit; font-size: .8125rem; font-weight: 600; border-radius: 999px; padding: 6px 14px;
+    border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
   }
   .bylaws-preview-close:hover { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.4); color: #f87171; }
 
@@ -365,7 +366,16 @@ const FORM_STYLE = `
   @media (max-width: 640px) {
     .bylaws-node-row { flex-wrap: wrap; }
     .bylaws-node-row textarea { flex: 1 1 100%; }
-    .bylaws-preview-panel { width: 100vw; }
+    /* 좁은 화면에서는 반반으로 나누면 둘 다 못 써서, PC와 달리 예전처럼 화면
+       전체를 덮는 오버레이로 엽니다(옆에 나란히 X). */
+    body.bylaws-wide { max-width: none; }
+    .bylaws-editor-row.preview-open .bylaws-editor-col { width: 100%; }
+    .bylaws-preview-col {
+      position: fixed; inset: 0; z-index: 71; margin: 0; width: 0; height: 0;
+      background: rgba(0,0,0,.4); padding: 16px; box-sizing: border-box;
+    }
+    .bylaws-editor-row.preview-open .bylaws-preview-col { width: 100vw; height: 100vh; opacity: 1; }
+    .bylaws-preview-card { max-height: 100%; overflow-y: auto; }
   }
 
   .bs-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -1510,16 +1520,20 @@ export function renderContactForm(data: ContactFormData, error?: string): string
 // 새로 계산하므로, backstage에서는 dash 문법 없이 행을 추가/삭제/이동만 하면 됩니다.
 
 export function renderBylawsList(versions: BylawsVersionSummary[]): string {
+  // versions는 effective_date 최신순인데, "현재 버전"은 그중 게시된(isPublished)
+  // 것만 후보라 그냥 0번째가 아니라 게시된 것 중 첫 번째를 찾아야 ⭐가 맞습니다.
+  const currentSlug = versions.find((v) => v.isPublished)?.slug;
   const items =
     versions.length === 0
       ? `<p class="empty">등록된 회칙이 없습니다.</p>`
       : `<ul class="bs-list">
         ${versions
           .map(
-            (v, i) => `<li>
+            (v) => `<li>
               <span>
-                ${i === 0 ? '<span class="pin">⭐</span>' : ""}
+                ${v.slug === currentSlug ? '<span class="pin">⭐</span>' : ""}
                 <a class="title" href="/bylaws/${encodeURIComponent(v.slug)}/edit">${escapeHtml(v.title)} — ${escapeHtml(v.versionLabel)}</a>
+                ${!v.isPublished ? '<span class="bs-badge" style="background:rgba(128,128,128,.35);color:inherit;margin-left:8px;">초안</span>' : ""}
               </span>
               <span class="meta">${escapeHtml(v.effectiveDate)} · ${escapeHtml(v.slug)}</span>
             </li>`,
@@ -1534,8 +1548,8 @@ export function renderBylawsList(versions: BylawsVersionSummary[]): string {
     <p class="bs-eyebrow">Backstage</p>
     <h1>역대 회칙</h1>
     <p class="bs-note" style="margin-bottom:16px">
-      시행일(⭐표시)이 가장 최신인 버전이 <a href="https://kaist.run/bylaws" target="_blank" rel="noopener">kaist.run/bylaws</a>에 뜹니다.
-      나머지는 그 페이지의 "역대 회칙" 목록에서 링크로 연결됩니다.
+      게시된 버전들 중 시행일(⭐표시)이 가장 최신인 버전이 <a href="https://kaist.run/bylaws" target="_blank" rel="noopener">kaist.run/bylaws</a>에 뜹니다.
+      "초안"은 게시 체크를 끈 상태라 kaist.run에 전혀 안 보입니다. 나머지 게시된 버전은 그 페이지의 "역대 회칙" 목록에서 링크로 연결됩니다.
     </p>
     <a class="bs-new" href="/bylaws/new">+ 새 버전 추가</a>
     ${items}
@@ -1569,27 +1583,33 @@ const BYLAWS_TREE_SCRIPT = `
     var initialEl = document.getElementById("bylaws-initial-blocks");
     var form = root.closest("form");
 
-    // 미리보기는 본문 트리와 나란히 두는 좁은 반쪽 컬럼 대신, 오른쪽에서
-    // 슬라이드로 열리는 오버레이 패널입니다 — 열려있지 않을 땐 본문 트리가
-    // 항상 관리자 탭 컨테이너 전체 너비를 씁니다.
+    // 미리보기는 본문 트리 옆에 나란히 붙는 비모달 사이드 패널입니다 — 열리면
+    // 본문 편집 칸과 정확히 반반으로 나뉘고(.bylaws-editor-row.preview-open),
+    // 컨테이너 자체도 그때만 넓어집니다(body.bylaws-wide). 좁은 화면에서는
+    // CSS 미디어쿼리가 대신 전체화면 오버레이로 바꿔줍니다.
+    var editorRow = document.getElementById("bylaws-editor-row");
     var previewPanel = document.getElementById("bylaws-preview-panel");
-    var previewBackdrop = document.getElementById("bylaws-preview-backdrop");
     var previewToggleBtn = document.getElementById("bylaws-preview-toggle");
     var previewCloseBtn = document.getElementById("bylaws-preview-close");
     function openPreview() {
-      if (previewPanel) previewPanel.classList.add("open");
-      if (previewBackdrop) previewBackdrop.classList.add("open");
+      if (editorRow) editorRow.classList.add("preview-open");
+      document.body.classList.add("bylaws-wide");
       if (previewPanel) previewPanel.setAttribute("aria-hidden", "false");
+      if (previewToggleBtn) { previewToggleBtn.setAttribute("aria-expanded", "true"); previewToggleBtn.textContent = "닫기 ◀"; }
       renderPreviewPane();
     }
     function closePreview() {
-      if (previewPanel) previewPanel.classList.remove("open");
-      if (previewBackdrop) previewBackdrop.classList.remove("open");
+      if (editorRow) editorRow.classList.remove("preview-open");
+      document.body.classList.remove("bylaws-wide");
       if (previewPanel) previewPanel.setAttribute("aria-hidden", "true");
+      if (previewToggleBtn) { previewToggleBtn.setAttribute("aria-expanded", "false"); previewToggleBtn.textContent = "미리보기 ▶"; }
     }
-    if (previewToggleBtn) previewToggleBtn.addEventListener("click", openPreview);
+    function togglePreview() {
+      if (editorRow && editorRow.classList.contains("preview-open")) closePreview();
+      else openPreview();
+    }
+    if (previewToggleBtn) previewToggleBtn.addEventListener("click", togglePreview);
     if (previewCloseBtn) previewCloseBtn.addEventListener("click", closePreview);
-    if (previewBackdrop) previewBackdrop.addEventListener("click", closePreview);
 
     var TYPE_LABEL = {
       chapter: "장", article: "조", buchik: "부칙",
@@ -1837,8 +1857,8 @@ const BYLAWS_TREE_SCRIPT = `
         '<textarea class="bs-autosize" rows="1" data-text-id="' + n.id + '" placeholder="' + esc(PLACEHOLDER[n.type] || "") + '">' + esc(n.text) + "</textarea>" +
         '<span class="bylaws-node-actions"><button type="button" data-action="remove" data-id="' + n.id + '" aria-label="삭제" title="삭제">×</button></span>' +
         "</div>" +
-        tagRow +
         bodyRow +
+        tagRow +
         "</div>";
 
       var childrenHtml = "";
@@ -2123,6 +2143,7 @@ export type BylawsVersionFormData = {
   title: string;
   versionLabel: string;
   effectiveDate: string;
+  isPublished: boolean;
   revisionHistory: BylawsRevisionHistory;
   blocks: BylawsBlock[];
 };
@@ -2159,10 +2180,17 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
             <input type="text" name="versionLabel" value="${escapeHtml(data.versionLabel)}" required />
           </div>
         </div>
-        <div class="bs-field" style="margin-top:18px">
-          <label>시행일 — 가장 최신인 버전이 kaist.run/bylaws에 표시됩니다</label>
-          <input type="date" name="effectiveDate" value="${escapeHtml(data.effectiveDate)}" required />
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>시행일</label>
+            <input type="date" name="effectiveDate" value="${escapeHtml(data.effectiveDate)}" required />
+          </div>
+          <div class="bs-field bs-check" style="align-self:end;flex-direction:row;">
+            <input type="checkbox" id="isPublished" name="isPublished" ${data.isPublished ? "checked" : ""} />
+            <label for="isPublished" style="margin:0;">게시 (체크 해제 시 초안으로 저장, kaist.run에 안 보임)</label>
+          </div>
         </div>
+        <p class="bs-note" style="margin-top:8px">게시된 버전들 중 시행일이 가장 최신인 게 kaist.run/bylaws에 표시됩니다.</p>
       </div>
 
       <div class="bs-card">
@@ -2176,29 +2204,32 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
         않아요) — 몇 번째 개정인지가 뱃지에 박혀서 나중에 개정이 하나 더 늘어도 날짜가 안 바뀝니다.</p>
       </div>
 
-      <div class="bs-card">
-        <div class="bylaws-card-header">
-          <p class="bs-card-title">본문</p>
-          <button type="button" class="bylaws-preview-toggle" id="bylaws-preview-toggle">미리보기</button>
+      <div class="bylaws-editor-row" id="bylaws-editor-row">
+        <div class="bs-card bylaws-editor-col">
+          <div class="bylaws-card-header">
+            <p class="bs-card-title">본문</p>
+            <button type="button" class="bylaws-preview-toggle" id="bylaws-preview-toggle" aria-expanded="false">미리보기 ▶</button>
+          </div>
+          <p class="bs-note" style="margin-bottom:12px">
+            "+" 버튼으로 어디에 추가하는지가 곧 위계입니다 — 타입을 고르거나 순서를 옮길 필요 없이,
+            이 조 아래에 항을 추가하면 그게 몇 번째 항인지도 자동으로 정해집니다. 순서를 바꾸려면
+            ⠿ 손잡이를 드래그하세요. 본문(번호 없는 문단)은 장/부칙/조/항 자신에게 선택적으로 붙습니다.
+          </p>
+          <div id="bylaws-tree"></div>
+          <script type="application/json" id="bylaws-initial-blocks">${initialBlocksJson}</script>
+          <input type="hidden" name="blocksJson" id="bylaws-blocks-json" />
         </div>
-        <p class="bs-note" style="margin-bottom:12px">
-          "+" 버튼으로 어디에 추가하는지가 곧 위계입니다 — 타입을 고르거나 순서를 옮길 필요 없이,
-          이 조 아래에 항을 추가하면 그게 몇 번째 항인지도 자동으로 정해집니다. 순서를 바꾸려면
-          ⠿ 손잡이를 드래그하세요. 본문(번호 없는 문단)은 장/부칙/조/항 자신에게 선택적으로 붙습니다.
-        </p>
-        <div id="bylaws-tree"></div>
-        <script type="application/json" id="bylaws-initial-blocks">${initialBlocksJson}</script>
-        <input type="hidden" name="blocksJson" id="bylaws-blocks-json" />
-      </div>
 
-      <div class="bylaws-preview-backdrop" id="bylaws-preview-backdrop"></div>
-      <aside class="bylaws-preview-panel" id="bylaws-preview-panel" aria-hidden="true">
-        <div class="bylaws-preview-panel-header">
-          <p class="bs-card-title" style="margin:0">미리보기</p>
-          <button type="button" class="bylaws-preview-close" id="bylaws-preview-close" aria-label="미리보기 닫기" title="닫기">×</button>
-        </div>
-        <div class="bylaws-preview-wrap"><div id="bylaws-preview"></div></div>
-      </aside>
+        <aside class="bylaws-preview-col" id="bylaws-preview-panel" aria-hidden="true">
+          <div class="bs-card bylaws-preview-card">
+            <div class="bylaws-preview-panel-header">
+              <p class="bs-card-title" style="margin:0">미리보기</p>
+              <button type="button" class="bylaws-preview-close" id="bylaws-preview-close" aria-label="미리보기 닫기" title="닫기">◀ 닫기</button>
+            </div>
+            <div class="bylaws-preview-wrap"><div id="bylaws-preview"></div></div>
+          </div>
+        </aside>
+      </div>
 
       <script>${BS_ROWS_SCRIPT}</script>
       <script>${BYLAWS_TREE_SCRIPT}</script>

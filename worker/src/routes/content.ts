@@ -76,13 +76,17 @@ content.get("/bylaws", async (c) => {
   return c.json(bylaws);
 });
 
+// listBylawsVersions/getBylawsVersion 자체는 backstage 초안 편집용으로 게시
+// 여부와 무관하게 다 돌려주므로, 공개 API에서는 여기서 isPublished로 한 번 더
+// 걸러냅니다 — 아직 편집 중인 버전은 목록에도, 직접 링크로도 안 보여야 합니다.
 content.get("/bylaws-versions", async (c) => {
-  return c.json(await listBylawsVersions(c.env));
+  const versions = await listBylawsVersions(c.env);
+  return c.json(versions.filter((v) => v.isPublished));
 });
 
 content.get("/bylaws/:slug", async (c) => {
   const bylaws = await getBylawsVersion(c.env, c.req.param("slug"));
-  if (!bylaws) return c.notFound();
+  if (!bylaws || !bylaws.isPublished) return c.notFound();
   return c.json(bylaws);
 });
 
