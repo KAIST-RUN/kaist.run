@@ -229,17 +229,15 @@
         "cancel": "Cancel",
         "saving": "Saving...",
         "saveError": "Couldn't save. Please try again."
-      },
-      "runforce": {
-        "label": "RUNFORCE",
-        "empty": "No contests counted for RUNFORCE yet.",
-        "total": "{score}",
-        "showBreakdown": "Show contest breakdown",
-        "hideBreakdown": "Hide contest breakdown",
-        "rankOf": "Rank {rank} of {total}",
-        "pointsSuffix": " pts",
-        "unratedNote": "(unrated participation)"
       }
+    },
+    "runforce": {
+      "label": "RUNFORCE",
+      "title": "RUNFORCE",
+      "empty": "No contests counted for RUNFORCE yet.",
+      "showBreakdown": "Show contest breakdown",
+      "hideBreakdown": "Hide contest breakdown",
+      "unratedLabel": "Unrated"
     },
     "menu": {
       "language": "Language",

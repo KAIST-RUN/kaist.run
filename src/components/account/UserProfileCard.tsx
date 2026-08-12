@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import type { CurrentUser } from "@/types/account";
+import { splitRunforceDisplay } from "@/lib/account/runforce";
 
 function Avatar({ user }: { user: CurrentUser }) {
   const initial = (user.name ?? user.discordDisplayName ?? user.discordUsername)
@@ -40,6 +41,30 @@ function memberStatusLabel(user: CurrentUser, t: (key: string) => string): strin
   return t("status.inactive");
 }
 
+// 프로필 카드 오른쪽(모바일에선 아래)에 붙는 RUNFORCE 총점 블록 — 초록색 라벨 + 짧은
+// 초록색 구분선 + 기본 텍스트 색 수치. 수치는 정수부만 크게 키우고 소수부는 기본 크기로
+// 둡니다(자릿수가 늘어나도 한 줄에 안정적으로 들어가고, 눈이 정수부에 먼저 가도록).
+// 대회별 내역은 여기 말고 회원 정보 카드(UserInfoCard의 RunforceRow)에 그대로 있습니다.
+function RunforceStat({ user }: { user: CurrentUser }) {
+  const t = useTranslations("account.runforce");
+  const { integerPart, fractionPart } = splitRunforceDisplay(user.runforceTotal);
+
+  // 블록 자체는 오른쪽 끝(sm:ml-auto)에 붙지만 안쪽 요소들은 항상 가운데 정렬입니다.
+  // 구분선은 w-full이라 블록 폭 전체를 차지하고, 라벨에 px-3을 줘서 블록 폭이 라벨 글자
+  // 폭보다 항상 넓어지게 만듭니다 — 덕분에 수치가 짧든(0.000) 길든 구분선이 "RUNFORCE"
+  // 글자보다 확실히 깁니다.
+  return (
+    <div className="flex flex-col items-center gap-1.5 sm:ml-auto">
+      <span className="px-3 text-sm font-bold tracking-wide text-[var(--accent)]">{t("label")}</span>
+      <span aria-hidden="true" className="h-0.5 w-full rounded-full bg-[var(--accent)]" />
+      <span className="font-bold tabular-nums">
+        <span className="text-2xl sm:text-3xl">{integerPart}</span>
+        <span className="text-base">{fractionPart}</span>
+      </span>
+    </div>
+  );
+}
+
 export default function UserProfileCard({ user }: { user: CurrentUser }) {
   const t = useTranslations("account");
 
@@ -67,6 +92,7 @@ export default function UserProfileCard({ user }: { user: CurrentUser }) {
           )}
         </div>
       </div>
+      <RunforceStat user={user} />
     </div>
   );
 }

@@ -144,63 +144,9 @@ function HandlesRow({ user }: { user: CurrentUser }) {
   );
 }
 
-const PLATFORM_LABEL: Record<"codeforces" | "atcoder", string> = { codeforces: "Codeforces", atcoder: "AtCoder" };
-
-// 화면에 RUNFORCE 점수를 보여줄 때 공통으로 쓰는 표시 변환 — worker/src/lib/runforce.ts의
-// formatRunforceDisplay와 정확히 같은 규칙(원시 저장값은 대회별로 내림한 정수 그대로,
-// 화면에는 1000으로 나눈 실수로 축약). 정수를 1000으로 나누면 소수점 이하 최대 3자리라
-// toFixed(3)이 항상 정확히 떨어집니다. 프런트/워커가 별도 패키지라 이 한 줄을 공유할
-// 방법이 없어 그대로 복제합니다.
-function formatRunforceDisplay(rawScore: number): string {
-  return (rawScore / 1000).toFixed(3);
-}
-
-// RUNFORCE 총점 + 대회별 내역(접었다 폈다). 읽기 전용 — HandlesRow와 달리 본인이
-// 고칠 수 있는 값이 아니라 별도 fetch 없이 이미 /api/me 페이로드에 실려 온 값을
-// 그대로 보여주기만 합니다.
-function RunforceRow({ user }: { user: CurrentUser }) {
-  const t = useTranslations("account.memberInfo.runforce");
-  const [expanded, setExpanded] = useState(false);
-
-  // 집계된 대회가 하나도 없어도 총점(0.000)과 펼치기 버튼은 그대로 보여줍니다 — 점수가
-  // 0인 것과 기능이 없는 것을 구분해서, 펼쳤을 때 "대상 대회가 아직 없다"는 안내를 봅니다.
-  const breakdown = [...user.runforceBreakdown].sort((a, b) => b.startTimeMs - a.startTimeMs);
-
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-bold sm:text-base">{t("total", { score: formatRunforceDisplay(user.runforceTotal) })}</span>
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-fit text-xs underline opacity-60 transition-opacity hover:opacity-100"
-      >
-        {expanded ? t("hideBreakdown") : t("showBreakdown")}
-      </button>
-      {expanded &&
-        (breakdown.length === 0 ? (
-          <p className="text-xs opacity-70 sm:text-sm">{t("empty")}</p>
-        ) : (
-          <ul className="flex flex-col gap-1.5 text-xs sm:text-sm">
-            {breakdown.map((b) => (
-              <li key={b.contestId} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                <span>
-                  <span className="opacity-60">[{PLATFORM_LABEL[b.platform]}]</span> {b.contestName}
-                </span>
-                <span className="whitespace-nowrap opacity-70">
-                  {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })}
-                  {b.isUnratedParticipant ? ` ${t("unratedNote")}` : ""} · {formatRunforceDisplay(b.score)}
-                  {t("pointsSuffix")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ))}
-    </div>
-  );
-}
-
 // 회원 정보를 보여주는 카드입니다. 대부분 읽기 전용이지만, 핸들 행만은 본인이
-// 직접 고칠 수 있습니다(위 HandlesRow).
+// 직접 고칠 수 있습니다(위 HandlesRow). RUNFORCE는 여기 하위 정보가 아니라 이 카드
+// 아래의 독립 카드(RunforceCard)로 빠져 있습니다.
 // 보안: discordId(내부 식별자) 원문은 여기서도 절대 노출하지 않습니다.
 export default function UserInfoCard({ user }: { user: CurrentUser }) {
   const t = useTranslations("account.memberInfo");
@@ -235,7 +181,6 @@ export default function UserInfoCard({ user }: { user: CurrentUser }) {
         ),
     },
     { label: t("handles.label"), content: <HandlesRow user={user} /> },
-    { label: t("runforce.label"), content: <RunforceRow user={user} /> },
     { label: t("discordAccount"), content: discordAccount },
   ];
 

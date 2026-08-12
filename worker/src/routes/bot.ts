@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import {
   getUserByDiscordId,
+  getUserByUid,
   upsertUserByDiscordId,
+  grantAdmin,
+  revokeAdmin,
   UserValidationError,
   listAllTimeHandles,
   listCurrentSemesterHandles,
@@ -31,14 +34,28 @@ bot.use("*", async (c, next) => {
   await next();
 });
 
+// 봇이 준 관리자 권한의 감사기록용 이름 — backstage 관리자 목록에서 "누가 줬는지"를
+// 구분할 수 있게, 사람이 준 것(관리자 이름이 찍힘)과 다른 값을 남깁니다.
+const BOT_GRANTED_BY_NAME = "디스코드 봇 (서버 관리자 권한)";
+
 // 신규 회원가입 — discordId 기준 upsert라 봇이 같은 사람을 여러 번 호출해도 안전합니다
 // (이름/이메일 등 재전송된 필드만 갱신, 나머지는 기존 값 유지).
+//
+// isAdmin(선택): 디스코드 서버 관리 권한이 있는 사람을 가입과 동시에 사이트 관리자로
+// 만들 때 씁니다. 나머지 필드와 같은 규칙을 따릅니다 — 안 보내면(undefined) 기존 권한을
+// 그대로 두고, true면 부여, false면 회수합니다.
+// ⚠️ 봇이 매번 isAdmin: false를 보내면 backstage에서 수동으로 준 관리자 권한까지 같이
+// 회수됩니다(사이트 관리자와 디스코드 서버 관리자가 항상 같은 집합은 아님). 그런
+// 동기화를 원하는 게 아니라면, 서버 관리자가 아닌 사람에겐 isAdmin을 아예 빼고 보내세요.
 bot.post("/users", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body !== "object" || typeof (body as Record<string, unknown>).discordId !== "string") {
     return c.json({ error: "discordId가 필요합니다." }, 400);
   }
   const b = body as Record<string, unknown>;
+  if (b.isAdmin !== undefined && typeof b.isAdmin !== "boolean") {
+    return c.json({ error: "isAdmin은 boolean이어야 합니다." }, 400);
+  }
   const str = (v: unknown): string | null | undefined => (v === undefined ? undefined : typeof v === "string" ? v : null);
 
   try {
@@ -51,7 +68,15 @@ bot.post("/users", async (c) => {
       codeforces: str(b.codeforces),
       atcoder: str(b.atcoder),
     });
-    return c.json(result);
+
+    // grantAdmin/revokeAdmin 둘 다 멱등이라(ON CONFLICT DO NOTHING / DELETE) 봇이 같은
+    // 호출을 반복해도 안전합니다. grantedByUid는 사람이 아니므로 null.
+    if (b.isAdmin === true) await grantAdmin(c.env, result.uid, null, BOT_GRANTED_BY_NAME);
+    else if (b.isAdmin === false) await revokeAdmin(c.env, result.uid);
+
+    // 봇이 "실제로 관리자로 들어갔는지" 바로 확인할 수 있게 최종 상태를 같이 돌려줍니다.
+    const saved = await getUserByUid(c.env, result.uid);
+    return c.json({ ...result, role: saved?.role ?? "member" });
   } catch (err) {
     if (err instanceof UserValidationError) return c.json({ error: err.message }, 400);
     throw err;

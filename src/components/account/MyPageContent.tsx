@@ -8,6 +8,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getDiscordLoginHref } from "@/lib/account/authLinks";
 import UserProfileCard from "./UserProfileCard";
 import UserInfoCard from "./UserInfoCard";
+import RunforceCard from "./RunforceCard";
 import AccountMenu from "./AccountMenu";
 
 const PRIMARY_BUTTON_CLASS =
@@ -50,6 +51,7 @@ export default function MyPageContent() {
           <span className="sr-only">{t("loading")}</span>
           <SkeletonBlock className="h-28 sm:h-24" />
           <SkeletonBlock className="h-40" />
+          <SkeletonBlock className="h-24" />
           <SkeletonBlock className="h-24" />
         </div>
       )}
@@ -113,6 +115,9 @@ export default function MyPageContent() {
             <UserInfoCard user={state.user} />
           </div>
           <div className="animate-fade-in-up" style={{ animationDelay: "180ms" }}>
+            <RunforceCard user={state.user} />
+          </div>
+          <div className="animate-fade-in-up" style={{ animationDelay: "240ms" }}>
             <AccountMenu user={state.user} />
           </div>
         </div>
