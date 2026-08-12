@@ -15,7 +15,16 @@ import type {
 } from "./content";
 import type { UploadedFile } from "./uploads";
 import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
-import { formatRunforceDisplay, type RunforceConfig, type RunforceContestDetail, type RunforceContestSummary, type RunforceLeaderboardEntry, type RunforcePlatform } from "./runforce";
+import {
+  formatRunforceDisplay,
+  groupContests,
+  type ContestGroup,
+  type RunforceConfig,
+  type RunforceContestDetail,
+  type RunforceContestSummary,
+  type RunforceLeaderboardEntry,
+  type RunforcePlatform,
+} from "./runforce";
 
 const FORM_STYLE = `
   html { scrollbar-gutter: stable; }
@@ -473,6 +482,12 @@ const FORM_STYLE = `
   .bs-upload-list .snippet { font: inherit; font-family: ui-monospace, monospace; font-size: 0.75rem; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex: 0 1 160px; min-width: 36px; }
   .bs-upload-list li form { flex-shrink: 0; }
   .bs-upload-list .bs-danger { flex-shrink: 0; }
+
+  /* RUNFORCE에서 Div1/Div2로 짝지어진 대회 한 쌍을 <li> 하나 안에 나란히 묶어서 보여줄
+     때 씁니다 — 위 .bs-upload-list li의 가로 flex 규칙 대신 세로로 쌓습니다. */
+  .bs-runforce-pair { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 6px; }
+  .bs-runforce-pair-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.75rem; }
+  .bs-runforce-pair-row { display: flex; align-items: center; gap: 10px; padding-left: 14px; border-left: 2px solid rgba(128,128,128,.2); }
 
   .bs-member-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
   .bs-member-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 12px; padding: 10px 6px; transition: background .15s; }
@@ -2689,30 +2704,47 @@ function runforceSubnav(active: "targets" | "leaderboard"): string {
   </div>`;
 }
 
-function runforceContestRow(contest: RunforceContestSummary): string {
-  // 짝지어진 Div1/Div2 대회는 배지로 표시 — 목록만 봐도 "이 둘은 한 라운드로 합산됨"을
-  // 알 수 있게 합니다(자세한 설명은 상세 페이지에).
-  const pairBadge = contest.pairedContestId
-    ? `<span class="bs-badge-outline">${contest.division === "div1" ? "Div1" : "Div2"} 짝 있음</span>`
-    : "";
-  return `<li>
+function runforceContestSubRow(contest: RunforceContestSummary, label?: string): string {
+  return `<div class="bs-runforce-pair-row">
     <a class="bs-upload-open" href="/runforce/${encodeURIComponent(contest.id)}">
       <div class="info">
-        <div class="name">[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)} ${pairBadge}</div>
-        <div class="meta">${escapeHtml(contest.contestId)} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명</div>
+        <div class="name">${label ? `[${label}] ` : ""}[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</div>
+        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명</div>
       </div>
     </a>
     <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('이 대회를 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
       <button type="submit" class="bs-danger bs-icon-btn" aria-label="삭제">${TRASH_ICON_SVG}</button>
     </form>
+  </div>`;
+}
+
+function runforceContestRow(contest: RunforceContestSummary): string {
+  return `<li>${runforceContestSubRow(contest)}</li>`;
+}
+
+// Div1/Div2로 짝지어진 대회는 한 라운드를 반으로 쪼갠 것뿐이라, 목록에서도 별개의 두 행
+// 대신 하나의 <li> 안에 나란히 묶어서 보여줍니다 — 삭제는 각자 따로 여전히 가능합니다.
+function runforceContestPairRow(div1: RunforceContestSummary, div2: RunforceContestSummary): string {
+  return `<li class="bs-runforce-pair">
+    <div class="bs-runforce-pair-head">
+      <span class="bs-badge-outline">Div1 + Div2 짝</span>
+      <span class="meta">${escapeHtml(formatKstDateTime(div1.startTimeMs))}</span>
+    </div>
+    ${runforceContestSubRow(div1, "Div1")}
+    ${runforceContestSubRow(div2, "Div2")}
   </li>`;
 }
 
+function renderRunforceContestGroup(group: ContestGroup): string {
+  return "single" in group ? runforceContestRow(group.single) : runforceContestPairRow(group.div1, group.div2);
+}
+
 export function renderRunforceSettings(config: RunforceConfig, contests: RunforceContestSummary[], error?: string): string {
+  const groups = groupContests(contests);
   const list =
-    contests.length === 0
+    groups.length === 0
       ? `<p class="empty">등록된 대회가 없습니다. 아래에서 수동으로 추가하거나, 자동 탐색을 켜주세요.</p>`
-      : `<ul class="bs-upload-list">${contests.map(runforceContestRow).join("\n")}</ul>`;
+      : `<ul class="bs-upload-list">${groups.map(renderRunforceContestGroup).join("\n")}</ul>`;
 
   return shell(
     "RUNFORCE",

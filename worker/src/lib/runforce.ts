@@ -631,11 +631,11 @@ function toBreakdownRow(contest: RunforceContestSummary, row: StoredResultRow): 
   };
 }
 
-type ContestGroup = { div1: RunforceContestSummary; div2: RunforceContestSummary } | { single: RunforceContestSummary };
+export type ContestGroup = { div1: RunforceContestSummary; div2: RunforceContestSummary } | { single: RunforceContestSummary };
 
 // 대상 대회 목록을 "짝지어진 쌍"과 "단독 대회"로 나눕니다. 배열 순서와 무관하게(Div1이
 // 먼저 나오든 Div2가 먼저 나오든) 항상 같은 결과가 나오도록 각 대회를 한 번씩만 방문합니다.
-function groupContests(contests: RunforceContestSummary[]): ContestGroup[] {
+export function groupContests(contests: RunforceContestSummary[]): ContestGroup[] {
   const byId = new Map(contests.map((c) => [c.id, c]));
   const visited = new Set<string>();
   const groups: ContestGroup[] = [];
