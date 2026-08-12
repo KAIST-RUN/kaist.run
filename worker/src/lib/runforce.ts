@@ -34,6 +34,19 @@ function detectCodeforcesDivision(contestName: string): RunforceDivision | null 
   return null;
 }
 
+// "레이팅 상한이 있는" 라운드인지 — 상한을 넘는 사람은 실시간 참가해도 unrated
+// (OUT_OF_COMPETITION) 처리되고, 그 경우 별도 점수 규칙을 적용합니다(computeContestRanking).
+// 실측(2026-08, contest.ratingChanges의 최고 oldRating): Div.2=2171, Div.3=1599, Div.4=1406으로
+// 셋 다 상한이 있습니다. 반대로 제외하는 경우:
+//  - Div.1 단독: 상한이 아니라 하한이 있는 구조라, 여기 out-of-competition으로 참가한 회원은
+//    "너무 강해서"가 아니라 "아직 약해서"입니다 — rated 참가자 중앙값을 주면 과한 보상이 됩니다.
+//  - "Div. 1 + Div. 2" 합본: 상한 없이 사실상 전원 rated라 애초에 이 현상이 없습니다.
+// Educational 라운드("Rated for Div. 2")는 div2 패턴에 걸려서 정상적으로 포함됩니다.
+function isCodeforcesRatingCappedRound(contestName: string): boolean {
+  if (/\bdiv\.?\s*1\b/i.test(contestName)) return false;
+  return /\bdiv\.?\s*[234]\b/i.test(contestName);
+}
+
 // ---------- 설정 (싱글턴) ----------
 
 export type RunforceConfig = {
@@ -193,9 +206,10 @@ export type RunforceRankedRow = {
   finalRank: number; // 0-indexed, 동점 무작위 처리 확정 후
   x: number;
   score: number;
-  // 단독 Div.2 라운드에서 레이팅 상한 초과로 실시간 참가했지만 unrated(OUT_OF_COMPETITION)
-  // 처리된 회원 — score는 일반 공식이 아니라 별도 규칙(아래 computeContestRanking 참고)으로
-  // 직접 계산됩니다. 이 필드가 없으면(false) score는 언제나 x로부터 공식으로 유도된 값입니다.
+  // 레이팅 상한이 있는 라운드(Div.2/Div.3/Div.4)에서 상한 초과로 실시간 참가했지만
+  // unrated(OUT_OF_COMPETITION) 처리된 회원 — score는 일반 공식이 아니라 별도 규칙(아래
+  // computeContestRanking 참고)으로 직접 계산됩니다. 이 필드가 없으면(false) score는
+  // 언제나 x로부터 공식으로 유도된 값입니다.
   isUnratedParticipant: boolean;
 };
 
@@ -343,12 +357,15 @@ export async function addTargetContest(
 
   const members = await listActiveMembersWithHandle(env, platform);
 
-  // 단독 Div.2 라운드(=division이 'div2'이고, 같은 시작 시각의 미페어링 Div1이 없음)에서
-  // 레이팅 상한 초과로 unrated 처리된 채로 실시간 참가한 회원을 찾습니다. rated 참가자로
-  // 이미 잡힌(=platformRanks에 핸들이 있는) 회원은 애초에 확인할 필요가 없습니다.
+  // 레이팅 상한이 있는 라운드(Div.2/Div.3/Div.4 — isCodeforcesRatingCappedRound 참고)에서
+  // 상한 초과로 unrated 처리된 채로 실시간 참가한 회원을 찾습니다. rated 참가자로 이미
+  // 잡힌(=platformRanks에 핸들이 있는) 회원은 애초에 확인할 필요가 없습니다.
+  // 단, Div.2는 같은 시작 시각에 짝지어질 Div.1이 있으면 건너뜁니다 — 그런 분리 라운드에선
+  // 상한을 넘는 회원이 Div.1 쪽에서 rated로 잡히고, 합산도 페어링 규칙이 처리하니까요.
+  // Div.3/Div.4는 애초에 짝 개념이 없어서 항상 검사합니다.
   let unratedParticipantUids: Set<string> | undefined;
-  if (platform === "codeforces" && division === "div2") {
-    const div1Partner = await findUnpairedCodeforcesPartner(env, "div1", meta.startTimeMs, rowId);
+  if (platform === "codeforces" && isCodeforcesRatingCappedRound(meta.name)) {
+    const div1Partner = division === "div2" ? await findUnpairedCodeforcesPartner(env, "div1", meta.startTimeMs, rowId) : null;
     if (!div1Partner) {
       const candidates = members.filter((m) => m.handle && !platformRanks.has(m.handle.trim().toLowerCase()));
       if (candidates.length > 0) {

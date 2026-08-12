@@ -1,5 +1,6 @@
--- 단독 Div.2 라운드에서, 레이팅이 상한(예: 2100) 이상이라 unrated 처리된 채로 실시간
--- 참가한 회원을 위한 플래그입니다. Codeforces contest.standings API는 익명 요청으로는
+-- 레이팅 상한이 있는 라운드(Div.2/Div.3/Div.4 — 실측 상한이 각각 약 2100/1600/1400)에서,
+-- 그 상한 이상이라 unrated 처리된 채로 실시간 참가한 회원을 위한 플래그입니다.
+-- Codeforces contest.standings API는 익명 요청으로는
 -- unofficial 참가자를 안 보여줘서(showUnofficial 파라미터가 비인증 요청엔 막혀있음),
 -- 대신 각 회원의 user.status 제출 기록에서 이 대회 제출의 author.participantType이
 -- OUT_OF_COMPETITION인지로 판정합니다(worker/src/lib/codeforces.ts::

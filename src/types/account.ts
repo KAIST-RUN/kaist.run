@@ -38,7 +38,7 @@ export type CurrentUser = {
     finalRank: number; // 0-indexed — 화면에는 +1해서 보여줌
     participantCount: number;
     score: number;
-    // 단독 Div.2 라운드에서 레이팅 상한 초과로 실시간 참가했지만 unrated 처리된 경우 —
+    // 레이팅 상한이 있는 라운드(Div.2/Div.3/Div.4)에서 상한 초과로 실시간 참가했지만 unrated 처리된 경우 —
     // score가 일반 순위 공식이 아니라 별도 규칙(rated 참가자 없으면 1등 점수, 있으면
     // rated 참가자 점수의 중앙값)으로 계산됐다는 뜻.
     isUnratedParticipant: boolean;
