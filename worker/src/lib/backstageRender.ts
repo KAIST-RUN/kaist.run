@@ -192,8 +192,12 @@ const FORM_STYLE = `
   /* select 태그 자체는 color-scheme로 다크 대응이 되지만, 펼쳤을 때 나오는
      옵션 목록은 브라우저 네이티브 팝업이라 일부 브라우저에서 이게 안 먹혀서
      밝은 배경에 글자가 거의 안 보이는 상태로 나왔습니다. option에 직접
-     배경/글자색을 지정해서 팝업도 테마를 따라가게 합니다. */
-  .bs-field select option { background-color: var(--bg); color: var(--fg); }
+     배경/글자색을 지정해서 팝업도 테마를 따라가게 합니다.
+     예전엔 .bs-field 안쪽 select만 대상이었는데, .bs-field 밖에서 인라인 스타일로
+     만든 select(RUNFORCE 대회 수동 추가의 플랫폼 선택)가 이 규칙에서 빠지는 바람에
+     일부 환경에서 배경/글자가 모두 흰색으로 겹쳐 안 보였습니다 — backstage의 모든
+     select에 적용되도록 범위를 넓혔습니다. */
+  select option { background-color: var(--bg); color: var(--fg); }
   .bs-field input[readonly] { opacity: 0.6; }
   .bs-field textarea { resize: vertical; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem; line-height: 1.6; }
   .bs-field textarea.bs-autosize { resize: none; overflow: hidden; }
@@ -2738,7 +2742,11 @@ export function renderRunforceSettings(config: RunforceConfig, contests: Runforc
           <button type="submit" class="bs-submit">저장</button>
         </div>
       </form>
-      <p class="bs-note" style="margin-top:8px">이미 등록된 대회는 다시 계산되지 않습니다 — 새로 열린 rated 대회만 추가됩니다.</p>
+      <p class="bs-note" style="margin-top:8px">
+        저장하면 매시 정각 갱신을 기다리지 않고 바로 한 번 수집합니다(수집은 백그라운드로 돌아가니,
+        잠시 뒤 새로고침하면 아래 목록에 반영됩니다). 이미 등록된 대회는 다시 계산되지 않고 —
+        새로 열린 rated 대회만 추가됩니다. 기간은 최대 6개월까지 설정할 수 있습니다.
+      </p>
     </div>
 
     <div class="bs-card">

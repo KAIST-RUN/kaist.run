@@ -72,12 +72,36 @@ export async function getRunforceConfig(env: Env): Promise<RunforceConfig> {
   };
 }
 
+// 자동 탐색 기간 상한 — 실수로 몇 년짜리 범위를 넣으면 그 안의 모든 rated 대회가 산정
+// 대상으로 쓸려 들어오고(한 틱에 5개씩이라 되돌리기도 번거로움), 외부 API 호출도 그만큼
+// 불어납니다. 집중훈련 이벤트가 보통 몇 주 단위라 6개월이면 충분히 넉넉한 안전선입니다.
+const MAX_RANGE_MONTHS = 6;
+
+// 'YYYY-MM-DD'에 개월을 더한 시각(UTC). Date.UTC가 월 넘침을 알아서 처리합니다
+// (예: 8/31 + 6개월 → 2/31 → 3/3) — 경계에서 아주 살짝 관대해지는 정도라 괜찮습니다.
+function addMonthsUtc(dateStr: string, months: number): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return Date.UTC(y, m - 1 + months, d);
+}
+
 export async function setRunforceConfig(
   env: Env,
   input: { autoDiscoveryEnabled: boolean; rangeStartDate: string | null; rangeEndDate: string | null },
 ): Promise<void> {
   if (input.autoDiscoveryEnabled && (!input.rangeStartDate || !input.rangeEndDate)) {
     throw new RunforceError("자동 탐색을 켜려면 시작일과 종료일을 모두 입력해야 합니다.");
+  }
+
+  // 두 날짜가 다 들어왔으면 자동 탐색 on/off와 무관하게 검사합니다 — 꺼둔 상태로 잘못된
+  // 범위를 저장해두고 나중에 켜면서 놓치는 걸 막기 위해.
+  if (input.rangeStartDate && input.rangeEndDate) {
+    const start = Date.parse(`${input.rangeStartDate}T00:00:00Z`);
+    const end = Date.parse(`${input.rangeEndDate}T00:00:00Z`);
+    if (Number.isNaN(start) || Number.isNaN(end)) throw new RunforceError("날짜 형식이 올바르지 않습니다.");
+    if (end < start) throw new RunforceError("종료일이 시작일보다 빠를 수 없습니다.");
+    if (end > addMonthsUtc(input.rangeStartDate, MAX_RANGE_MONTHS)) {
+      throw new RunforceError(`자동 탐색 기간은 ${MAX_RANGE_MONTHS}개월을 넘을 수 없습니다.`);
+    }
   }
   await env.CONTENT_DB.prepare(
     `UPDATE runforce_config SET auto_discovery_enabled=?1, range_start_date=?2, range_end_date=?3, updated_at=datetime('now') WHERE id=1`,

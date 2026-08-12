@@ -66,6 +66,7 @@ import {
   formatRunforceDisplay,
   pairContests,
   unpairContest,
+  refreshAutoDiscoveredContests,
   RunforceError,
   type RunforcePlatform,
 } from "../lib/runforce";
@@ -904,6 +905,17 @@ backstage.post("/runforce/config", async (c) => {
       rangeStartDate: get("rangeStartDate") || null,
       rangeEndDate: get("rangeEndDate") || null,
     });
+
+    // 저장 즉시 한 번 갱신합니다 — 매시 정각 크론을 기다리지 않아도 되도록. 대회 수집은
+    // 외부 API를 여러 번 호출해서(대회 목록 + 대회별 순위표 + unrated 확인용 제출 조회)
+    // 오래 걸릴 수 있으므로, 응답을 붙잡아 두는 대신 waitUntil로 뒤에서 이어 돌립니다
+    // (triggerRebuild와 같은 관례). 설정이 꺼져 있으면 함수가 즉시 반환하므로 그냥 호출해도
+    // 안전하고, 크론과 겹쳐 돌아도 이미 등록된 대회는 건너뛰므로 중복 계산되지 않습니다.
+    c.executionCtx.waitUntil(
+      refreshAutoDiscoveredContests(c.env).catch((err) => {
+        console.error("RUNFORCE: 저장 직후 자동탐색 갱신 실패", err);
+      }),
+    );
     return c.redirect("/runforce");
   } catch (err) {
     const message = err instanceof RunforceError ? err.message : "설정을 저장하지 못했습니다.";
