@@ -64,6 +64,8 @@ import {
   getTargetContestDetail,
   getRunforceLeaderboard,
   formatRunforceDisplay,
+  pairContests,
+  unpairContest,
   RunforceError,
   type RunforcePlatform,
 } from "../lib/runforce";
@@ -982,6 +984,32 @@ backstage.get("/runforce/:contestId/export.csv", async (c) => {
       "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
   });
+});
+
+backstage.post("/runforce/:contestId/pair", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const contestId = c.req.param("contestId");
+  const { get } = await readForm(c);
+  try {
+    await pairContests(c.env, contestId, get("otherContestId"));
+  } catch {
+    // 실패해도(대회를 못 찾음/Division 판별 불가/같은 Division 등) 상세 페이지로 그냥
+    // 돌아갑니다 — 별도 에러 배너 자리를 안 만들어서, 이 상세 페이지는 renderRunforceSettings와
+    // 달리 error 파라미터가 없습니다. 페어링은 부가 기능이라 실패 원인은 admin이 다시
+    // 시도하며 유추 가능한 수준(대회 ID 오타 등)이라 간단하게 둡니다.
+  }
+  return c.redirect(`/runforce/${encodeURIComponent(contestId)}`);
+});
+
+backstage.post("/runforce/:contestId/unpair", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const contestId = c.req.param("contestId");
+  await unpairContest(c.env, contestId);
+  return c.redirect(`/runforce/${encodeURIComponent(contestId)}`);
 });
 
 backstage.post("/runforce/:contestId/delete", async (c) => {

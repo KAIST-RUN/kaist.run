@@ -17,6 +17,22 @@ export class RunforceError extends Error {}
 
 export type RunforcePlatform = "codeforces" | "atcoder";
 
+// Codeforces Div1/Div2 분리 라운드 페어링용 (아래 "---------- Div1/Div2 페어링 ----------" 참고).
+export type RunforceDivision = "div1" | "div2";
+
+// 대회 이름에서 Div1/Div2 여부를 판별합니다. "Div. 1 + Div. 2"처럼 합쳐진 라운드는
+// 애초에 별개 contest_id로 쪼개진 게 아니라서 페어링 대상이 아니므로 null을 반환합니다
+// (두 마커가 동시에 매치되면 합쳐진 라운드로 취급). AtCoder에는 이런 분리 패턴이 없어서
+// 호출부(addTargetContest)는 platform==="codeforces"일 때만 이 함수를 씁니다.
+function detectCodeforcesDivision(contestName: string): RunforceDivision | null {
+  const hasDiv1 = /\bdiv\.?\s*1\b/i.test(contestName);
+  const hasDiv2 = /\bdiv\.?\s*2\b/i.test(contestName);
+  if (hasDiv1 && hasDiv2) return null;
+  if (hasDiv1) return "div1";
+  if (hasDiv2) return "div2";
+  return null;
+}
+
 // ---------- 설정 (싱글턴) ----------
 
 export type RunforceConfig = {
@@ -68,6 +84,10 @@ export type RunforceContestSummary = {
   addedByName: string | null;
   addedAt: string;
   participantCount: number;
+  // Div1/Div2 분리 라운드 페어링용 (아래 "---------- Div1/Div2 페어링 ----------" 참고).
+  // AtCoder거나 판별 불가/합쳐진 라운드면 division은 항상 null.
+  division: RunforceDivision | null;
+  pairedContestId: string | null; // 짝지어진 다른 runforce_contests.id, 없으면 null
 };
 
 type RawContestRow = {
@@ -80,6 +100,8 @@ type RawContestRow = {
   added_by_name: string | null;
   added_at: string;
   participant_count_snapshot: number;
+  division: RunforceDivision | null;
+  paired_contest_id: string | null;
 };
 
 function toContestSummary(row: RawContestRow): RunforceContestSummary {
@@ -93,11 +115,13 @@ function toContestSummary(row: RawContestRow): RunforceContestSummary {
     addedByName: row.added_by_name,
     addedAt: row.added_at,
     participantCount: row.participant_count_snapshot,
+    division: row.division,
+    pairedContestId: row.paired_contest_id,
   };
 }
 
 const CONTEST_ROW_SELECT =
-  "SELECT id, platform, contest_id, contest_name, start_time_ms, source, added_by_name, added_at, participant_count_snapshot FROM runforce_contests";
+  "SELECT id, platform, contest_id, contest_name, start_time_ms, source, added_by_name, added_at, participant_count_snapshot, division, paired_contest_id FROM runforce_contests";
 
 export async function listTargetContests(env: Env): Promise<RunforceContestSummary[]> {
   const { results } = await env.CONTENT_DB.prepare(`${CONTEST_ROW_SELECT} ORDER BY start_time_ms DESC`).all<RawContestRow>();
@@ -275,13 +299,16 @@ export async function addTargetContest(
   const members = await listActiveMembersWithHandle(env, platform);
   const ranked = computeContestRanking(members, platformRanks);
 
+  // Div1/Div2 분리 라운드 감지 — AtCoder는 이 패턴이 없으므로 codeforces일 때만.
+  const division = platform === "codeforces" ? detectCodeforcesDivision(meta.name) : null;
+
   const rowId = crypto.randomUUID();
   const statements = [
     env.CONTENT_DB.prepare(
       `INSERT INTO runforce_contests
-         (id, platform, contest_id, contest_name, start_time_ms, source, added_by_uid, added_by_name, participant_count_snapshot)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
-    ).bind(rowId, platform, contestId, meta.name, meta.startTimeMs, source, addedBy.uid, addedBy.name, ranked.length),
+         (id, platform, contest_id, contest_name, start_time_ms, source, added_by_uid, added_by_name, participant_count_snapshot, division)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+    ).bind(rowId, platform, contestId, meta.name, meta.startTimeMs, source, addedBy.uid, addedBy.name, ranked.length, division),
     ...ranked.map((r) =>
       env.CONTENT_DB.prepare(
         `INSERT INTO runforce_results (contest_id, uid, handle_snapshot, platform_rank, final_rank, x, score)
@@ -291,24 +318,86 @@ export async function addTargetContest(
   ];
   await env.CONTENT_DB.batch(statements);
 
+  // 같은 시작 시각의 반대 division 대회가 이미 등록돼 있으면 자동으로 짝짓습니다(둘 다
+  // 아직 미페어링 상태일 때만 — 이미 다른 대회와 짝지어진 건 건드리지 않음). 순서 무관:
+  // Div1을 먼저 추가하고 나중에 Div2를 추가해도, 반대 순서여도 똑같이 동작합니다.
+  if (division) {
+    await tryAutoPairCodeforcesDivisions(env, rowId, division, meta.startTimeMs);
+  }
+
   const created = await getTargetContestById(env, rowId);
   if (!created) throw new Error("Failed to read back just-created RUNFORCE contest");
   return created;
 }
 
+// ---------- Div1/Div2 페어링 ----------
+
+async function tryAutoPairCodeforcesDivisions(env: Env, newContestId: string, division: RunforceDivision, startTimeMs: number): Promise<void> {
+  const wantedDivision: RunforceDivision = division === "div1" ? "div2" : "div1";
+  const candidate = await env.CONTENT_DB.prepare(
+    `SELECT id FROM runforce_contests
+     WHERE platform='codeforces' AND division=?1 AND start_time_ms=?2 AND paired_contest_id IS NULL AND id != ?3
+     LIMIT 1`,
+  )
+    .bind(wantedDivision, startTimeMs, newContestId)
+    .first<{ id: string }>();
+  if (!candidate) return;
+
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(candidate.id, newContestId),
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(newContestId, candidate.id),
+  ]);
+}
+
+// backstage에서 자동 페어링이 실패한(예: 대회 이름이 애매해서, 또는 시작 시각이 API마다
+// 미묘하게 달라서) 경우를 위한 수동 안전장치입니다. 두 대회 모두 division이 있어야 하고
+// (이름에서 Div1/Div2 판별 가능해야 함) 서로 달라야 합니다 — 그래야 "실제 참가한 쪽" 규칙을
+// 적용할 때 어느 쪽이 Div1인지 헷갈리지 않습니다.
+export async function pairContests(env: Env, contestId: string, otherContestId: string): Promise<void> {
+  if (contestId === otherContestId) throw new RunforceError("같은 대회는 짝지을 수 없습니다.");
+  const [a, b] = await Promise.all([getTargetContestById(env, contestId), getTargetContestById(env, otherContestId)]);
+  if (!a || !b) throw new RunforceError("대회를 찾을 수 없습니다.");
+  if (!a.division || !b.division) throw new RunforceError("두 대회 모두 이름에서 Div1/Div2를 판별할 수 있어야 짝지을 수 있습니다.");
+  if (a.division === b.division) throw new RunforceError("같은 Division끼리는 짝지을 수 없습니다.");
+
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(b.id, a.id),
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(a.id, b.id),
+  ]);
+}
+
+export async function unpairContest(env: Env, contestId: string): Promise<void> {
+  const contest = await getTargetContestById(env, contestId);
+  if (!contest?.pairedContestId) return;
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=NULL WHERE id=?1").bind(contest.id),
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=NULL WHERE id=?1").bind(contest.pairedContestId),
+  ]);
+}
+
 // runforce_results → runforce_contests 순서로 지웁니다(같은 batch). 이게 그 대회의 무작위
 // 동점 처리를 "다시 섞을 수 있는" 유일한 방법입니다 — 지운 뒤 addTargetContest로 같은
-// (platform, contestId)를 다시 추가하면 새 UUID로 완전히 새로 계산됩니다.
+// (platform, contestId)를 다시 추가하면 새 UUID로 완전히 새로 계산됩니다. 짝지어진
+// 대회였다면(Div1/Div2), 남은 짝의 paired_contest_id도 같이 풀어줍니다 — 안 그러면
+// 존재하지 않는 대회 id를 계속 참조하게 됩니다.
 export async function removeTargetContest(env: Env, contestRowId: string): Promise<void> {
-  await env.CONTENT_DB.batch([
+  const contest = await getTargetContestById(env, contestRowId);
+  const statements = [
     env.CONTENT_DB.prepare("DELETE FROM runforce_results WHERE contest_id = ?1").bind(contestRowId),
     env.CONTENT_DB.prepare("DELETE FROM runforce_contests WHERE id = ?1").bind(contestRowId),
-  ]);
+  ];
+  if (contest?.pairedContestId) {
+    statements.push(env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=NULL WHERE id=?1").bind(contest.pairedContestId));
+  }
+  await env.CONTENT_DB.batch(statements);
 }
 
 // ---------- 조회 API (backstage 상세/리더보드, /api/me) ----------
 
-export type RunforceContestDetail = RunforceContestSummary & { rows: RunforceRankedRow[] };
+// pairedContest: 짝지어진 대회가 있으면 그 요약(렌더링에서 링크/이름 표시용). backstage
+// 상세 페이지가 이걸 보여줘야 관리자가 "왜 이 대회의 합계가 리더보드 총점과 안 맞는지"
+// (Div1/Div2 페어링 때문)를 바로 이해할 수 있습니다.
+export type RunforceContestDetail = RunforceContestSummary & { rows: RunforceRankedRow[]; pairedContest: RunforceContestSummary | null };
 
 // live 회원 정보(이름/아바타)를 조인해서 보여줍니다 — handle_snapshot/final_rank/score는
 // 저장된 스냅샷 그대로, 삭제된 유저는 users 테이블에 없어 LEFT JOIN 결과 이름/아바타가
@@ -348,33 +437,9 @@ export async function getTargetContestDetail(env: Env, contestRowId: string): Pr
     score: r.score,
   }));
 
-  return { ...contest, rows };
-}
+  const pairedContest = contest.pairedContestId ? await getTargetContestById(env, contest.pairedContestId) : null;
 
-export type RunforceLeaderboardEntry = {
-  uid: string;
-  name: string | null;
-  avatarUrl: string | null;
-  totalScore: number;
-  contestsCounted: number;
-};
-
-// 이번 학기 활동회원 전원 대상, SUM(score) DESC. 점수 행이 하나도 없는 활동회원도
-// 총점 0으로 포함합니다(시상 대상 명단 전체를 봐야 하므로 — LEFT JOIN).
-export async function getRunforceLeaderboard(env: Env): Promise<RunforceLeaderboardEntry[]> {
-  const { results } = await env.CONTENT_DB.prepare(
-    `SELECT u.uid, u.name, u.avatar_url,
-            COALESCE(SUM(r.score), 0) AS total_score,
-            COUNT(r.contest_id) AS contests_counted
-     FROM users u
-     JOIN semester_membership sm ON sm.uid = u.uid AND sm.status = 'approved'
-     JOIN semesters s ON s.year = sm.year AND s.season = sm.season AND s.is_current = 1
-     LEFT JOIN runforce_results r ON r.uid = u.uid
-     GROUP BY u.uid
-     ORDER BY total_score DESC`,
-  ).all<{ uid: string; name: string | null; avatar_url: string | null; total_score: number; contests_counted: number }>();
-
-  return results.map((r) => ({ uid: r.uid, name: r.name, avatarUrl: r.avatar_url, totalScore: r.total_score, contestsCounted: r.contests_counted }));
+  return { ...contest, rows, pairedContest };
 }
 
 export type RunforceMemberBreakdownRow = {
@@ -387,36 +452,146 @@ export type RunforceMemberBreakdownRow = {
   score: number;
 };
 
-// /api/me용. SUM(score) + 대회별 행 목록(최신순). 점수 행이 없으면 total=0, breakdown=[].
-export async function getMemberRunforce(env: Env, uid: string): Promise<{ total: number; breakdown: RunforceMemberBreakdownRow[] }> {
-  const { results } = await env.CONTENT_DB.prepare(
-    `SELECT c.id AS contest_id, c.platform, c.contest_name, c.start_time_ms, c.participant_count_snapshot,
-            r.final_rank, r.score
-     FROM runforce_results r
-     JOIN runforce_contests c ON c.id = r.contest_id
-     WHERE r.uid = ?1
-     ORDER BY c.start_time_ms DESC`,
-  )
-    .bind(uid)
-    .all<{
-      contest_id: string;
-      platform: RunforcePlatform;
-      contest_name: string;
-      start_time_ms: number;
-      participant_count_snapshot: number;
-      final_rank: number;
-      score: number;
-    }>();
+// ---------- 합산(총점) 계산 — Div1/Div2 페어링 반영 ----------
+// 짝지어지지 않은 대회는 예전처럼 그대로 반영되지만, Div1/Div2로 짝지어진 대회 쌍은
+// 회원 한 명당 딱 하나의 breakdown 행만 만듭니다: Div1에 실제로 참가(platform_rank가
+// 있음)했으면 Div1 대회의 행을, 아니면(Div2 참가 또는 둘 다 미참가) Div2 대회의 행을.
 
-  const breakdown: RunforceMemberBreakdownRow[] = results.map((r) => ({
-    contestId: r.contest_id,
-    platform: r.platform,
-    contestName: r.contest_name,
-    startTimeMs: r.start_time_ms,
-    finalRank: r.final_rank,
-    participantCount: r.participant_count_snapshot,
-    score: r.score,
-  }));
+type StoredResultRow = { uid: string; platformRank: number | null; finalRank: number; score: number };
+
+async function getContestResultRows(env: Env, contestId: string, uid?: string): Promise<StoredResultRow[]> {
+  const query = uid
+    ? env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score FROM runforce_results WHERE contest_id=?1 AND uid=?2").bind(contestId, uid)
+    : env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score FROM runforce_results WHERE contest_id=?1").bind(contestId);
+  const { results } = await query.all<{ uid: string; platform_rank: number | null; final_rank: number; score: number }>();
+  return results.map((r) => ({ uid: r.uid, platformRank: r.platform_rank, finalRank: r.final_rank, score: r.score }));
+}
+
+function toBreakdownRow(contest: RunforceContestSummary, row: StoredResultRow): RunforceMemberBreakdownRow {
+  return {
+    contestId: contest.id,
+    platform: contest.platform,
+    contestName: contest.contestName,
+    startTimeMs: contest.startTimeMs,
+    finalRank: row.finalRank,
+    participantCount: contest.participantCount,
+    score: row.score,
+  };
+}
+
+type ContestGroup = { div1: RunforceContestSummary; div2: RunforceContestSummary } | { single: RunforceContestSummary };
+
+// 대상 대회 목록을 "짝지어진 쌍"과 "단독 대회"로 나눕니다. 배열 순서와 무관하게(Div1이
+// 먼저 나오든 Div2가 먼저 나오든) 항상 같은 결과가 나오도록 각 대회를 한 번씩만 방문합니다.
+function groupContests(contests: RunforceContestSummary[]): ContestGroup[] {
+  const byId = new Map(contests.map((c) => [c.id, c]));
+  const visited = new Set<string>();
+  const groups: ContestGroup[] = [];
+
+  for (const c of contests) {
+    if (visited.has(c.id)) continue;
+    visited.add(c.id);
+
+    const partner = c.pairedContestId ? byId.get(c.pairedContestId) : undefined;
+    if (partner && !visited.has(partner.id) && c.division && partner.division && c.division !== partner.division) {
+      visited.add(partner.id);
+      const div1 = c.division === "div1" ? c : partner;
+      const div2 = c.division === "div1" ? partner : c;
+      groups.push({ div1, div2 });
+    } else {
+      groups.push({ single: c });
+    }
+  }
+  return groups;
+}
+
+// uid를 지정하면(마이페이지 등 회원 한 명만 필요할 때) 그 회원 행만 조회해서 훨씬
+// 가볍게 계산합니다. 생략하면(리더보드용) 전체 회원의 breakdown을 한 번에 계산합니다.
+async function computeEffectiveBreakdown(env: Env, filterUid?: string): Promise<Map<string, RunforceMemberBreakdownRow[]>> {
+  const contests = await listTargetContests(env);
+  const groups = groupContests(contests);
+  const breakdownByUid = new Map<string, RunforceMemberBreakdownRow[]>();
+  const addRow = (uid: string, row: RunforceMemberBreakdownRow) => {
+    if (!breakdownByUid.has(uid)) breakdownByUid.set(uid, []);
+    breakdownByUid.get(uid)!.push(row);
+  };
+
+  for (const group of groups) {
+    if ("single" in group) {
+      const rows = await getContestResultRows(env, group.single.id, filterUid);
+      for (const r of rows) addRow(r.uid, toBreakdownRow(group.single, r));
+      continue;
+    }
+
+    const { div1, div2 } = group;
+    const [div1Rows, div2Rows] = await Promise.all([
+      getContestResultRows(env, div1.id, filterUid),
+      getContestResultRows(env, div2.id, filterUid),
+    ]);
+    const div2ByUid = new Map(div2Rows.map((r) => [r.uid, r]));
+    const seenUids = new Set<string>();
+
+    for (const d1 of div1Rows) {
+      seenUids.add(d1.uid);
+      if (d1.platformRank !== null) {
+        // Div1에 실제로 참가 → Div1 점수를 씀.
+        addRow(d1.uid, toBreakdownRow(div1, d1));
+      } else {
+        const d2 = div2ByUid.get(d1.uid);
+        if (d2) addRow(d1.uid, toBreakdownRow(div2, d2));
+        // Div2 스냅샷에도 이 회원 행이 없으면(둘 중 하나가 계산될 때 아직 활동회원이
+        // 아니었던 경우 등) 이 쌍에서는 기여가 없는 게 맞습니다 — 다른 대회의 기존
+        // "새 활동회원은 과거 대회 0점" 규칙과 같은 결.
+      }
+    }
+    // Div1 스냅샷 시점엔 없었지만(그새 새로 활동회원이 됨) Div2 스냅샷엔 있는 회원 —
+    // Div1에 참가했을 리 없으니 그대로 Div2 점수를 씁니다.
+    for (const d2 of div2Rows) {
+      if (!seenUids.has(d2.uid)) addRow(d2.uid, toBreakdownRow(div2, d2));
+    }
+  }
+
+  return breakdownByUid;
+}
+
+export type RunforceLeaderboardEntry = {
+  uid: string;
+  name: string | null;
+  avatarUrl: string | null;
+  totalScore: number;
+  contestsCounted: number;
+};
+
+// 이번 학기 활동회원 전원 대상, 총점 DESC. 점수 행이 하나도 없는 활동회원도
+// 총점 0으로 포함합니다(시상 대상 명단 전체를 봐야 하므로).
+export async function getRunforceLeaderboard(env: Env): Promise<RunforceLeaderboardEntry[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT u.uid, u.name, u.avatar_url
+     FROM users u
+     JOIN semester_membership sm ON sm.uid = u.uid AND sm.status = 'approved'
+     JOIN semesters s ON s.year = sm.year AND s.season = sm.season AND s.is_current = 1`,
+  ).all<{ uid: string; name: string | null; avatar_url: string | null }>();
+
+  const breakdownByUid = await computeEffectiveBreakdown(env);
+
+  const entries: RunforceLeaderboardEntry[] = results.map((u) => {
+    const rows = breakdownByUid.get(u.uid) ?? [];
+    return {
+      uid: u.uid,
+      name: u.name,
+      avatarUrl: u.avatar_url,
+      totalScore: rows.reduce((sum, r) => sum + r.score, 0),
+      contestsCounted: rows.length,
+    };
+  });
+  entries.sort((a, b) => b.totalScore - a.totalScore);
+  return entries;
+}
+
+// /api/me용. 총점 + 대회별 행 목록(최신순). 점수 행이 없으면 total=0, breakdown=[].
+export async function getMemberRunforce(env: Env, uid: string): Promise<{ total: number; breakdown: RunforceMemberBreakdownRow[] }> {
+  const breakdownByUid = await computeEffectiveBreakdown(env, uid);
+  const breakdown = (breakdownByUid.get(uid) ?? []).sort((a, b) => b.startTimeMs - a.startTimeMs);
   const total = breakdown.reduce((sum, b) => sum + b.score, 0);
   return { total, breakdown };
 }
