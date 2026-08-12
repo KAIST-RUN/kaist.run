@@ -2775,6 +2775,17 @@ export function renderRunforceSettings(config: RunforceConfig, contests: Runforc
 
     <p class="bs-card-title" style="margin-top:24px">산정 대상 대회 (${contests.length})</p>
     ${list}
+
+    <div class="bs-danger-zone">
+      <p class="bs-card-title">전체 초기화</p>
+      <p class="bs-note" style="margin-bottom:12px">
+        등록된 대회와 계산된 결과를 전부 지웁니다. 자동 탐색 설정(위)은 그대로 유지되므로, 켜져 있다면
+        다음 정각에 그 날짜범위 안의 대회들을 처음부터 다시 수집합니다. 되돌릴 수 없습니다.
+      </p>
+      <form method="post" action="/runforce/reset" onsubmit="return confirm('정말 RUNFORCE 대회를 전부 초기화할까요? 등록된 ${contests.length}개 대회와 계산된 모든 결과가 사라지고, 되돌릴 수 없습니다.')">
+        <button type="submit" class="bs-danger">RUNFORCE 대회 전체 초기화</button>
+      </form>
+    </div>
   `,
   );
 }

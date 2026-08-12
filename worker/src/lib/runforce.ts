@@ -522,6 +522,18 @@ export async function removeTargetContest(env: Env, contestRowId: string): Promi
   await env.CONTENT_DB.batch(statements);
 }
 
+// 등록된 대회 전체를 지웁니다(runforce_results → runforce_contests 순서, removeTargetContest와
+// 같은 방식) — 페어링 해제도 애초에 필요 없습니다, 어차피 다 지우므로. 자동탐색 설정
+// (runforce_config)은 안 건드립니다: 켜져 있었다면 다음 크론 때 그 날짜범위 안의 rated
+// 대회들을 처음부터 다시 수집합니다. 완전히 새로 시작하고 싶을 때(오추가/설정 실수를
+// 정리하고 다시 계산하고 싶을 때) 쓰는 되돌릴 수 없는 작업입니다.
+export async function resetAllTargetContests(env: Env): Promise<void> {
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("DELETE FROM runforce_results"),
+    env.CONTENT_DB.prepare("DELETE FROM runforce_contests"),
+  ]);
+}
+
 // ---------- 조회 API (backstage 상세/리더보드, /api/me) ----------
 
 // pairedContest: 짝지어진 대회가 있으면 그 요약(렌더링에서 링크/이름 표시용). backstage

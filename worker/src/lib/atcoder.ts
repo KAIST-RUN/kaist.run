@@ -1,11 +1,16 @@
 // AtCoder는 Codeforces와 달리 공식 공개 API가 없습니다. RUNFORCE는 두 개의 비공식/
-// 커뮤니티 엔드포인트를 조합해 씁니다 (둘 다 인증 불필요 — 구현 중 curl로 직접 확인함):
+// 커뮤니티 엔드포인트를 조합해 씁니다:
 //   - kenkoooo AtCoder Problems API(contests.json)   — 대회 목록 + rated 여부 판정
 //   - atcoder.jp/contests/{id}/results/json          — 대회별 참가자 순위(핸들→등수)
-// ⚠️ 둘 다 AtCoder/kenkoooo가 공식 문서화한 API가 아니라, 응답 모양이 예고 없이 바뀔
-// 수 있습니다. 주의: atcoder.jp/contests/{id}/standings/json은 로그인이 필요해서
-// (302 → /login) 이 용도로 쓸 수 없다는 걸 실제로 확인했습니다 — 대신 같은 정보를
-// 로그인 없이 주는 results/json을 씁니다.
+//
+// ⚠️ 2026-08 실측: atcoder.jp 도메인 전체(이 API뿐 아니라 일반 대회 페이지까지)가
+// Cloudflare Workers에서 나가는 요청을 403으로 차단합니다 — 같은 코드에서 같은 방식으로
+// 호출하는 kenkoooo.com(다른 도메인, 마찬가지로 CloudFront 뒤에 있음)과 codeforces.com은
+// 멀쩡히 응답하는데 atcoder.jp만 막히는 것까지 직접 확인했습니다. User-Agent를 바꿔봐도
+// 안 뚫립니다 — 헤더 핑거프린팅이 아니라 발신 IP 대역(Cloudflare Workers egress) 자체를
+// 막는 것으로 보입니다. 즉 fetchAtCoderStandings(순위 조회)는 지금 이 Worker 안에서는
+// 원천적으로 안 됩니다 — 우회하려면 Cloudflare 밖의 다른 서버를 거치는 중계가 필요합니다.
+// listAllKenkoooContests(대회 목록/rated 판정)는 다른 도메인이라 영향 없이 정상 동작합니다.
 
 export class AtCoderApiError extends Error {}
 

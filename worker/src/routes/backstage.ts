@@ -67,6 +67,7 @@ import {
   pairContests,
   unpairContest,
   refreshAutoDiscoveredContests,
+  resetAllTargetContests,
   RunforceError,
   type RunforcePlatform,
 } from "../lib/runforce";
@@ -1029,6 +1030,16 @@ backstage.post("/runforce/:contestId/delete", async (c) => {
   if (!gate.ok) return gate.response;
 
   await removeTargetContest(c.env, c.req.param("contestId"));
+  return c.redirect("/runforce");
+});
+
+// 산정 대상 대회를 전부 지웁니다 — 개별 삭제(위)를 일일이 반복하는 대신 한 번에.
+// 자동탐색 설정 자체는 안 건드리므로, 켜져 있으면 다음 크론 때 처음부터 다시 수집됩니다.
+backstage.post("/runforce/reset", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  await resetAllTargetContests(c.env);
   return c.redirect("/runforce");
 });
 
