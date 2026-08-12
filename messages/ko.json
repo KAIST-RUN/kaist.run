@@ -232,7 +232,7 @@
       },
       "runforce": {
         "label": "RUNFORCE",
-        "empty": "집계된 RUNFORCE 점수가 없습니다.",
+        "empty": "RUNFORCE 집계 대상 대회가 없습니다.",
         "total": "{score}",
         "showBreakdown": "대회별 내역 보기",
         "hideBreakdown": "대회별 내역 접기",

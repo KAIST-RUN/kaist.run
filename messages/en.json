@@ -232,7 +232,7 @@
       },
       "runforce": {
         "label": "RUNFORCE",
-        "empty": "No RUNFORCE points earned yet.",
+        "empty": "No contests counted for RUNFORCE yet.",
         "total": "{score}",
         "showBreakdown": "Show contest breakdown",
         "hideBreakdown": "Hide contest breakdown",

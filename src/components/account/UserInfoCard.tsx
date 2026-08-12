@@ -162,10 +162,8 @@ function RunforceRow({ user }: { user: CurrentUser }) {
   const t = useTranslations("account.memberInfo.runforce");
   const [expanded, setExpanded] = useState(false);
 
-  if (user.runforceBreakdown.length === 0) {
-    return <span className="text-sm sm:text-base">{t("empty")}</span>;
-  }
-
+  // 집계된 대회가 하나도 없어도 총점(0.000)과 펼치기 버튼은 그대로 보여줍니다 — 점수가
+  // 0인 것과 기능이 없는 것을 구분해서, 펼쳤을 때 "대상 대회가 아직 없다"는 안내를 봅니다.
   const breakdown = [...user.runforceBreakdown].sort((a, b) => b.startTimeMs - a.startTimeMs);
 
   return (
@@ -178,22 +176,25 @@ function RunforceRow({ user }: { user: CurrentUser }) {
       >
         {expanded ? t("hideBreakdown") : t("showBreakdown")}
       </button>
-      {expanded && (
-        <ul className="flex flex-col gap-1.5 text-xs sm:text-sm">
-          {breakdown.map((b) => (
-            <li key={b.contestId} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <span>
-                <span className="opacity-60">[{PLATFORM_LABEL[b.platform]}]</span> {b.contestName}
-              </span>
-              <span className="whitespace-nowrap opacity-70">
-                {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })}
-                {b.isUnratedParticipant ? ` ${t("unratedNote")}` : ""} · {formatRunforceDisplay(b.score)}
-                {t("pointsSuffix")}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {expanded &&
+        (breakdown.length === 0 ? (
+          <p className="text-xs opacity-70 sm:text-sm">{t("empty")}</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5 text-xs sm:text-sm">
+            {breakdown.map((b) => (
+              <li key={b.contestId} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <span>
+                  <span className="opacity-60">[{PLATFORM_LABEL[b.platform]}]</span> {b.contestName}
+                </span>
+                <span className="whitespace-nowrap opacity-70">
+                  {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })}
+                  {b.isUnratedParticipant ? ` ${t("unratedNote")}` : ""} · {formatRunforceDisplay(b.score)}
+                  {t("pointsSuffix")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ))}
     </div>
   );
 }
