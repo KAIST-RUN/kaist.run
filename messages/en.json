@@ -202,6 +202,7 @@
     "status": {
       "honorary": "Honorary member",
       "active": "Active member",
+      "newMember": "New member",
       "inactive": "Inactive member"
     },
     "adminBadge": "Admin",

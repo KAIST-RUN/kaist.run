@@ -30,13 +30,13 @@ function Avatar({ user }: { user: CurrentUser }) {
 
 // 명예회원 지정이 학기 소속 승인보다 우선(별개 절차로 붙는 자격이라 활동 여부와
 // 무관하게 항상 명예회원으로 보여줌), 그다음 이번 학기 소속 여부(=status==="member"
-// — /api/me가 이미 "현재 학기에 approved됐는지"로 계산해서 내려줌)로 활동/휴회원을
-// 가릅니다. status==="applicant"(한 번도 승인된 적 없음)도 여기선 휴회원과 같이
-// 묶습니다 — 대기 중인 신청은 UserInfoCard의 소속 학기 목록에 "(승인 대기)"로 이미
-// 따로 표시되니, 이 배지에서 또 구분할 필요가 없습니다.
+// — /api/me가 이미 "현재 학기에 approved됐는지"로 계산해서 내려줌)로 활동회원을
+// 가립니다. 남은 두 경우는 "한 번도 승인된 적 없음"(status==="applicant")이면
+// 신규회원, 아니면(과거엔 승인됐었지만 이번 학기는 아님) 휴회원입니다.
 function memberStatusLabel(user: CurrentUser, t: (key: string) => string): string {
   if (user.isHonoraryMember) return t("status.honorary");
   if (user.status === "member") return t("status.active");
+  if (user.status === "applicant") return t("status.newMember");
   return t("status.inactive");
 }
 

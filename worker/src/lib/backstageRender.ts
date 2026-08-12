@@ -1038,12 +1038,14 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 // 전체 명단(/members), 학기별 명단(/members/semesters/...), 관리자(/members/admins).
 
 // 명예회원 지정이 최우선(학기 소속 승인과 무관한 별개 자격), 그다음 이번 학기 소속
-// 여부(status==="member" — 현재 학기에 approved됐는지)로 활동/휴회원을 가릅니다.
-// 마이페이지(src/components/account/UserProfileCard.tsx의 memberStatusLabel)와
-// 정확히 같은 규칙 — status==="applicant"(한 번도 승인된 적 없음)도 휴회원과 묶습니다.
+// 여부(status==="member" — 현재 학기에 approved됐는지)로 활동회원을 가립니다.
+// 남은 두 경우는 한 번도 승인된 적 없으면(status==="applicant") 신규회원, 아니면
+// (과거엔 승인됐지만 이번 학기는 아님) 휴회원 — 마이페이지(src/components/account/
+// UserProfileCard.tsx의 memberStatusLabel)와 정확히 같은 규칙입니다.
 function memberStatusLabel(user: UserRecord): string {
   if (user.isHonoraryMember) return "명예회원";
   if (user.status === "member") return "활동회원";
+  if (user.status === "applicant") return "신규회원";
   return "휴회원";
 }
 const SEASON_LABEL: Record<"spring" | "fall", string> = { spring: "봄", fall: "가을" };
