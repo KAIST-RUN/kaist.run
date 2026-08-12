@@ -51,7 +51,7 @@ const FORM_STYLE = `
     transition: opacity .15s, background .15s, color .15s; display: flex; align-items: center; gap: 4px;
   }
   .bs-nav-group summary::-webkit-details-marker { display: none; }
-  .bs-nav-group summary::after { content: "▾"; font-size: 0.95em; opacity: 0.7; transition: transform .2s ease; }
+  .bs-nav-group summary::after { content: "▾"; font-size: 1.6em; line-height: 1; opacity: 0.7; transition: transform .2s ease; }
   .bs-nav-group[open] summary::after { transform: rotate(-180deg); }
   .bs-nav-group summary:hover { opacity: 1; background: rgba(128,128,128,.1); }
   .bs-nav-group summary.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
@@ -543,7 +543,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
       <button type="submit" class="bs-nav-logout">로그아웃</button>
     </form>
   `;
-  const contentGroupActive = active === "notices" || active === "board" || active === "archive";
+  const contentGroupActive = active === "notices" || active === "board" || active === "archive" || active === "uploads";
   const navLinks = `
     <div class="bs-nav-links" id="bs-nav">
       ${navLink("/", "홈", active === "home")}
@@ -553,13 +553,13 @@ function shell(title: string, active: string, bodyHtml: string): string {
           ${navLink("/notices", "공지사항", active === "notices")}
           ${navLink("/board", "게시판", active === "board")}
           ${navLink("/archive", "대회 아카이브", active === "archive")}
+          ${navLink("/uploads", "업로드", active === "uploads")}
         </div>
       </details>
       ${navLink("/members", "회원 명단", active === "members")}
       ${navLink("/contact", "연락처", active === "contact")}
       ${navLink("/bylaws", "회칙", active === "bylaws")}
       ${navLink("/apply", "지원 폼", active === "apply")}
-      ${navLink("/uploads", "업로드", active === "uploads")}
       ${drawerLogout}
     </div>
   `;
@@ -1330,7 +1330,7 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
               (s) =>
                 `<li>
                   <a class="title" href="/members/semesters/${s.year}/${s.season}">${escapeHtml(semesterLabel(s.year, s.season))}</a>
-                  ${s.isCurrent ? '<span class="bs-badge">현재 학기</span>' : ""}
+                  ${s.isCurrent ? '<span class="bs-badge" style="font-size:0.9rem;padding:5px 16px;">현재 학기</span>' : ""}
                 </li>`,
             )
             .join("\n")}
