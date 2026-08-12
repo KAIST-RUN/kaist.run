@@ -42,6 +42,30 @@ const FORM_STYLE = `
   .bs-nav-links a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
   .bs-nav-links a:hover { opacity: 1; background: rgba(128,128,128,.1); }
   .bs-nav-links a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
+
+  /* 공지사항/게시판/대회 아카이브처럼 성격이 비슷한 항목들을 <details>로 묶은
+     드롭다운입니다 — JS 없이 네이티브 disclosure로 동작합니다. */
+  .bs-nav-group { position: relative; }
+  .bs-nav-group summary {
+    list-style: none; cursor: pointer; opacity: 0.65; padding: 6px 14px; border-radius: 999px;
+    transition: opacity .15s, background .15s, color .15s; display: flex; align-items: center; gap: 4px;
+  }
+  .bs-nav-group summary::-webkit-details-marker { display: none; }
+  .bs-nav-group summary::after { content: "▾"; font-size: 0.95em; opacity: 0.7; transition: transform .2s ease; }
+  .bs-nav-group[open] summary::after { transform: rotate(-180deg); }
+  .bs-nav-group summary:hover { opacity: 1; background: rgba(128,128,128,.1); }
+  .bs-nav-group summary.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
+  .bs-nav-group-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 168px;
+    display: flex; flex-direction: column; gap: 2px; background: var(--bg);
+    border: 1px solid rgba(128,128,128,.25); border-radius: 10px; padding: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+  .bs-nav-group-menu a { padding: 8px 12px; border-radius: 8px; white-space: nowrap; }
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes bs-nav-menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .bs-nav-group[open] .bs-nav-group-menu { animation: bs-nav-menu-in .18s ease both; }
+  }
   .bs-nav-logout-form { flex-shrink: 0; }
   .bs-nav-logout { -webkit-appearance: none; appearance: none; color: var(--bg); background: var(--logo-primary); border: none; white-space: nowrap; transition: opacity .15s; }
   .bs-nav-logout:hover { opacity: 0.85; }
@@ -77,6 +101,9 @@ const FORM_STYLE = `
     }
     .bs-nav-links.bs-nav-open { transform: translateX(0); }
     .bs-nav-links a { text-align: left; padding: 10px 12px; font-size: 0.9rem; }
+    /* 좁은 화면(서랍)에서는 팝업 대신 그냥 그 자리에서 펼쳐지는 아코디언으로 */
+    .bs-nav-group-menu { position: static; box-shadow: none; border: none; padding: 0 0 0 14px; margin-top: 2px; }
+    .bs-nav-group-menu a { padding: 8px 12px; font-size: 0.9rem; }
     .bs-backdrop.bs-backdrop-open {
       display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 40;
     }
@@ -161,6 +188,11 @@ const FORM_STYLE = `
   .bs-field input:focus, .bs-field select:focus, .bs-field textarea:focus {
     outline: none; border-color: var(--logo-primary); background: rgba(128,128,128,.02);
   }
+  /* select 태그 자체는 color-scheme로 다크 대응이 되지만, 펼쳤을 때 나오는
+     옵션 목록은 브라우저 네이티브 팝업이라 일부 브라우저에서 이게 안 먹혀서
+     밝은 배경에 글자가 거의 안 보이는 상태로 나왔습니다. option에 직접
+     배경/글자색을 지정해서 팝업도 테마를 따라가게 합니다. */
+  .bs-field select option { background-color: var(--bg); color: var(--fg); }
   .bs-field input[readonly] { opacity: 0.6; }
   .bs-field textarea { resize: vertical; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem; line-height: 1.6; }
   .bs-field textarea.bs-autosize { resize: none; overflow: hidden; }
@@ -511,12 +543,18 @@ function shell(title: string, active: string, bodyHtml: string): string {
       <button type="submit" class="bs-nav-logout">로그아웃</button>
     </form>
   `;
+  const contentGroupActive = active === "notices" || active === "board" || active === "archive";
   const navLinks = `
     <div class="bs-nav-links" id="bs-nav">
       ${navLink("/", "홈", active === "home")}
-      ${navLink("/notices", "공지사항", active === "notices")}
-      ${navLink("/board", "게시판", active === "board")}
-      ${navLink("/archive", "대회 아카이브", active === "archive")}
+      <details class="bs-nav-group"${contentGroupActive ? " open" : ""}>
+        <summary class="${contentGroupActive ? "active" : ""}">콘텐츠</summary>
+        <div class="bs-nav-group-menu">
+          ${navLink("/notices", "공지사항", active === "notices")}
+          ${navLink("/board", "게시판", active === "board")}
+          ${navLink("/archive", "대회 아카이브", active === "archive")}
+        </div>
+      </details>
       ${navLink("/members", "회원 명단", active === "members")}
       ${navLink("/contact", "연락처", active === "contact")}
       ${navLink("/bylaws", "회칙", active === "bylaws")}
@@ -1680,7 +1718,7 @@ export function renderBylawsList(versions: BylawsVersionSummary[]): string {
     <p class="bs-eyebrow">Backstage</p>
     <h1>역대 회칙</h1>
     <p class="bs-note" style="margin-bottom:16px">
-      게시된 버전들 중 시행일(⭐표시)이 가장 최신인 버전이 <a href="https://kaist.run/bylaws" target="_blank" rel="noopener">kaist.run/bylaws</a>에 뜹니다.
+      게시된 버전들 중 시행일(⭐표시)이 가장 최신인 버전이 <a href="https://kaist.run/ko/bylaws" target="_blank" rel="noopener">kaist.run/bylaws</a>에 뜹니다.
       "초안"은 게시 체크를 끈 상태라 kaist.run에 전혀 안 보입니다. 나머지 게시된 버전은 그 페이지의 "역대 회칙" 목록에서 링크로 연결됩니다.
     </p>
     <a class="bs-new" href="/bylaws/new">+ 새 버전 추가</a>
