@@ -349,21 +349,29 @@ async function tryAutoPairCodeforcesDivisions(env: Env, newContestId: string, di
   ]);
 }
 
-// backstage에서 자동 페어링이 실패한(예: 대회 이름이 애매해서, 또는 시작 시각이 API마다
-// 미묘하게 달라서) 경우를 위한 수동 안전장치입니다. 두 대회 모두 division이 있어야 하고
-// (이름에서 Div1/Div2 판별 가능해야 함) 서로 달라야 합니다 — 그래야 "실제 참가한 쪽" 규칙을
-// 적용할 때 어느 쪽이 Div1인지 헷갈리지 않습니다.
+// backstage에서 자동 페어링이 실패한(예: 시작 시각이 API마다 미묘하게 달라서, 또는
+// division 컬럼/판별 로직이 추가되기 전에 이미 등록됐던 대회라서 division이 비어있는
+// 경우) 상황을 위한 수동 안전장치입니다. division이 비어있으면 여기서 이름으로 다시
+// 판별을 시도해 채워 넣습니다(runforce_results는 전혀 안 건드리므로 이미 계산된
+// 순위/점수/동점 셔플에는 영향 없음 — division은 순수 메타데이터). 그래도 둘 다
+// division이 있어야 하고(이름에서 Div1/Div2 판별 가능) 서로 달라야 합니다 — 그래야
+// "실제 참가한 쪽" 규칙을 적용할 때 어느 쪽이 Div1인지 헷갈리지 않습니다.
 export async function pairContests(env: Env, contestId: string, otherContestId: string): Promise<void> {
   if (contestId === otherContestId) throw new RunforceError("같은 대회는 짝지을 수 없습니다.");
   const [a, b] = await Promise.all([getTargetContestById(env, contestId), getTargetContestById(env, otherContestId)]);
   if (!a || !b) throw new RunforceError("대회를 찾을 수 없습니다.");
-  if (!a.division || !b.division) throw new RunforceError("두 대회 모두 이름에서 Div1/Div2를 판별할 수 있어야 짝지을 수 있습니다.");
-  if (a.division === b.division) throw new RunforceError("같은 Division끼리는 짝지을 수 없습니다.");
 
-  await env.CONTENT_DB.batch([
-    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(b.id, a.id),
-    env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(a.id, b.id),
-  ]);
+  const divisionA = a.division ?? (a.platform === "codeforces" ? detectCodeforcesDivision(a.contestName) : null);
+  const divisionB = b.division ?? (b.platform === "codeforces" ? detectCodeforcesDivision(b.contestName) : null);
+  if (!divisionA || !divisionB) throw new RunforceError("두 대회 모두 이름에서 Div1/Div2를 판별할 수 있어야 짝지을 수 있습니다.");
+  if (divisionA === divisionB) throw new RunforceError("같은 Division끼리는 짝지을 수 없습니다.");
+
+  const statements = [];
+  if (a.division !== divisionA) statements.push(env.CONTENT_DB.prepare("UPDATE runforce_contests SET division=?1 WHERE id=?2").bind(divisionA, a.id));
+  if (b.division !== divisionB) statements.push(env.CONTENT_DB.prepare("UPDATE runforce_contests SET division=?1 WHERE id=?2").bind(divisionB, b.id));
+  statements.push(env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(b.id, a.id));
+  statements.push(env.CONTENT_DB.prepare("UPDATE runforce_contests SET paired_contest_id=?1 WHERE id=?2").bind(a.id, b.id));
+  await env.CONTENT_DB.batch(statements);
 }
 
 export async function unpairContest(env: Env, contestId: string): Promise<void> {

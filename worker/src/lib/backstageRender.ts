@@ -2772,21 +2772,22 @@ export function renderRunforceSettings(config: RunforceConfig, contests: Runforc
 }
 
 // Div1/Div2 페어링 상태를 보여주는 카드 — 짝이 있으면 어느 대회와 짝지어졌는지 +
-// "실제 참가한 쪽 점수만 합산된다"는 규칙 설명 + 짝 해제 버튼. 짝은 없지만 이름에서
-// Division이 판별된 대회면(자동 페어링이 실패했거나 반대쪽이 아직 안 들어온 경우)
-// 수동으로 다른 대회와 짝지을 수 있는 폼을 보여줍니다. Division 자체가 없는(AtCoder거나
-// 이름에 Div 표기가 없는) 대회는 이 카드를 아예 안 보여줍니다.
+// "실제 참가한 쪽 점수만 합산된다"는 규칙 설명 + 짝 해제 버튼. 짝이 없으면 수동으로
+// 다른 대회와 짝지을 수 있는 폼을 보여줍니다. AtCoder 대회는 이 개념이 아예 없어서
+// 카드를 안 보여주지만, Codeforces는 division이 아직 비어있어도(자동 판별이 실패했거나,
+// 이 페어링 기능이 배포되기 전에 이미 등록된 대회라 division 컬럼이 안 채워진 경우)
+// 카드를 보여줍니다 — 짝짓기 액션(POST .../pair)이 이름에서 다시 판별을 시도하므로
+// 여기서 폼을 숨길 이유가 없습니다.
 function renderRunforceDivPairingCard(contest: RunforceContestDetail): string {
-  if (!contest.division) return "";
-
-  const divLabel = contest.division === "div1" ? "Div1" : "Div2";
+  if (contest.platform !== "codeforces") return "";
 
   if (contest.pairedContest) {
+    const thisLabel = contest.division === "div1" ? "Div1" : "Div2";
     const partnerLabel = contest.pairedContest.division === "div1" ? "Div1" : "Div2";
     return `<div class="bs-card">
       <p class="bs-card-title">Div1/Div2 페어링</p>
       <p class="bs-note">
-        이 대회(${divLabel})는
+        이 대회(${thisLabel})는
         <a href="/runforce/${encodeURIComponent(contest.pairedContest.id)}">[${partnerLabel}] ${escapeHtml(contest.pairedContest.contestName)}</a>
         와(과) 짝지어져 있습니다. 리더보드/마이페이지 총점 계산 시, Div1에 실제로 참가한 회원은 Div1 점수를,
         그 외(Div2 참가 또는 둘 다 미참가)는 Div2 점수를 가져가서 한 번만 합산됩니다 — 아래 표는 이 대회 단독
@@ -2798,12 +2799,16 @@ function renderRunforceDivPairingCard(contest: RunforceContestDetail): string {
     </div>`;
   }
 
+  const divNote = contest.division
+    ? `이 대회는 이름에서 ${contest.division === "div1" ? "Div1" : "Div2"}로 판별됐지만 아직 짝지어진 대회가 없습니다.`
+    : `이 대회는 이름에서 Div1/Div2가 자동으로 판별되지 않았습니다(자동 페어링은 시작 시각이
+       정확히 같은 경우에만 동작하고, 이 대회가 이 기능이 추가되기 전에 등록됐다면 division이
+       비어있을 수 있습니다).`;
   return `<div class="bs-card">
     <p class="bs-card-title">Div1/Div2 페어링</p>
     <p class="bs-note">
-      이 대회는 이름에서 ${divLabel}로 판별됐지만 아직 짝지어진 대회가 없습니다. 같은 라운드의
-      ${contest.division === "div1" ? "Div2" : "Div1"} 대회가 이미 등록돼 있다면, 그 대회의 행 ID를 입력해 수동으로 짝지을 수 있습니다
-      (자동 페어링은 시작 시각이 정확히 같을 때만 동작합니다).
+      ${divNote} 같은 라운드의 반대쪽 Division 대회가 이미 등록돼 있다면, 그 대회의 행 ID를
+      입력해 수동으로 짝지을 수 있습니다(짝지을 때 이름에서 Division을 다시 판별합니다).
     </p>
     <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/pair" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;">
       <input
@@ -2816,7 +2821,7 @@ function renderRunforceDivPairingCard(contest: RunforceContestDetail): string {
   </div>`;
 }
 
-export function renderRunforceContestDetail(contest: RunforceContestDetail): string {
+export function renderRunforceContestDetail(contest: RunforceContestDetail, error?: string): string {
   const rows = contest.rows
     .map(
       (r) => `<tr>
@@ -2835,6 +2840,7 @@ export function renderRunforceContestDetail(contest: RunforceContestDetail): str
     `
     <p class="bs-eyebrow">Backstage</p>
     <h1>[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</h1>
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
     <p class="bs-note" style="margin-bottom:16px">
       <a href="/runforce">← 대상 대회 목록</a> ·
       ${escapeHtml(contest.contestId)} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} ·
