@@ -976,7 +976,10 @@ backstage.get("/runforce/:contestId", async (c) => {
 
   const detail = await getTargetContestDetail(c.env, c.req.param("contestId"));
   if (!detail) return c.notFound();
-  return c.html(renderRunforceContestDetail(detail));
+  // 짝지어진 대회면 상대방의 결과표까지 같이 가져와서, 상세 페이지 하나에서 Div1/Div2
+  // 둘 다 보여줍니다(따로 페이지를 넘나들 필요 없게).
+  const pairedDetail = detail.pairedContest ? await getTargetContestDetail(c.env, detail.pairedContest.id) : null;
+  return c.html(renderRunforceContestDetail(detail, undefined, pairedDetail));
 });
 
 backstage.get("/runforce/:contestId/export.csv", async (c) => {
@@ -1012,7 +1015,8 @@ backstage.post("/runforce/:contestId/pair", async (c) => {
     const message = err instanceof RunforceError ? err.message : "짝짓기에 실패했습니다.";
     const detail = await getTargetContestDetail(c.env, contestId);
     if (!detail) return c.notFound();
-    return c.html(renderRunforceContestDetail(detail, message), 400);
+    const pairedDetail = detail.pairedContest ? await getTargetContestDetail(c.env, detail.pairedContest.id) : null;
+    return c.html(renderRunforceContestDetail(detail, message, pairedDetail), 400);
   }
 });
 

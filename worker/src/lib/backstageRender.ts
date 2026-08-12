@@ -24,6 +24,7 @@ import {
   type RunforceContestSummary,
   type RunforceLeaderboardEntry,
   type RunforcePlatform,
+  type RunforceRankedRow,
 } from "./runforce";
 
 const FORM_STYLE = `
@@ -483,11 +484,57 @@ const FORM_STYLE = `
   .bs-upload-list li form { flex-shrink: 0; }
   .bs-upload-list .bs-danger { flex-shrink: 0; }
 
-  /* RUNFORCE에서 Div1/Div2로 짝지어진 대회 한 쌍을 <li> 하나 안에 나란히 묶어서 보여줄
-     때 씁니다 — 위 .bs-upload-list li의 가로 flex 규칙 대신 세로로 쌓습니다. */
-  .bs-runforce-pair { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 6px; }
-  .bs-runforce-pair-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.75rem; }
-  .bs-runforce-pair-row { display: flex; align-items: center; gap: 10px; padding-left: 14px; border-left: 2px solid rgba(128,128,128,.2); }
+  /* RUNFORCE에서 Div1/Div2로 짝지어진 대회 한 쌍 — 평소엔 한 줄 요약만 보이고, 화살표
+     버튼을 누르면 각자 삭제 버튼 달린 두 줄로 펼쳐집니다. 제목 자체는 진짜 링크라 눌러도
+     펼쳐지는 대신 그 대회(Div1+Div2 합쳐 보여주는) 상세 페이지로 이동합니다 — 그래서
+     <details>의 "summary 전체가 토글" 기본 동작 대신 화살표 버튼만 JS로 토글합니다
+     (RUNFORCE_PAIR_TOGGLE_SCRIPT). li 자체는 display:block으로 바꿔서 .bs-upload-list
+     li의 가로 flex 규칙(그리고 그로 인한 정렬 꼬임)을 아예 안 타게 합니다 —
+     .bs-upload-list li보다 특정도가 높아야 실제로 이기므로 li를 같이 붙여 씁니다. */
+  .bs-upload-list li.bs-runforce-pair { display: block; padding: 0; }
+  /* RUNFORCE 목록의 모든 행(일반 대회 + 짝지어진 대회 요약)에 원래 있던 왼쪽 회색 줄을
+     똑같이 씁니다 — 이 목록 전용 클래스라 업로드 목록 등 .bs-upload-list를 같이 쓰는
+     다른 화면에는 전혀 영향 없습니다. .bs-runforce-pair보다 뒤에 와야 그 padding:0을
+     덮어씁니다(특정도가 같아서 소스 순서로 이깁니다). */
+  /* border-left는 항상 요소의 위아래 전체를 채우는 게 CSS 기본 동작이라(padding까지
+     포함한 박스 전체), 짧은 막대를 만들려면 border가 아니라 고정 높이(20px) ::before를
+     가운데 정렬로 겹쳐야 합니다. 짝지어진 li는 펼치면(body 표시) li 전체 높이가
+     늘어나므로, li 기준으로 세로 중앙 정렬하면 펼칠 때마다 막대가 아래로 밀립니다 —
+     그래서 짝 쪽은 li가 아니라 높이가 절대 안 바뀌는 .bs-runforce-pair-summary 자신을
+     기준으로 따로 그립니다(바로 아래 규칙). */
+  .bs-upload-list li.bs-runforce-list-item { padding-left: 14px; }
+  .bs-upload-list li.bs-runforce-list-item:not(.bs-runforce-pair) { position: relative; }
+  .bs-upload-list li.bs-runforce-list-item:not(.bs-runforce-pair)::before {
+    content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 2px; height: 20px; background: rgba(128,128,128,.3);
+  }
+  /* 왼쪽 인덴트는 li(.bs-runforce-list-item)의 padding-left가 이미 주므로, 여기서
+     또 왼쪽 패딩을 주면 이중으로 밀려서(li 14px + 여기 6px) 일반 행보다 더 들어가
+     보입니다 — 왼쪽만 0으로 빼고, 막대는 이 요소(높이 고정) 기준으로 그립니다. */
+  .bs-runforce-pair-summary {
+    position: relative; display: flex; align-items: center; gap: 10px;
+    padding: 12px 6px 12px 0; transition: background .15s;
+  }
+  .bs-runforce-pair-summary::before {
+    content: ""; position: absolute; left: -14px; top: 50%; transform: translateY(-50%);
+    width: 2px; height: 20px; background: rgba(128,128,128,.3);
+  }
+  .bs-runforce-pair-summary:hover { background: rgba(128,128,128,.05); }
+  .bs-runforce-pair-toggle {
+    border: none; background: transparent; color: inherit; cursor: pointer;
+    opacity: 0.7; font-size: 1.6em; line-height: 1; transition: transform .2s ease;
+  }
+  .bs-runforce-pair-toggle[aria-expanded="true"] { transform: rotate(180deg); }
+  .bs-runforce-pair-body { display: flex; flex-direction: column; gap: 6px; padding: 0 6px 12px 0; }
+  .bs-runforce-pair-body[hidden] { display: none; }
+  /* 서브 행(Div1/Div2) 전용 — 일반 행(.bs-upload-list li)이나 그 안의 어떤 클래스와도
+     안 겹치게 이름을 분리했습니다(공유하다가 한쪽만 고치려던 CSS가 다른 쪽까지 새 나간
+     적이 있어서). 회색 줄/들여쓰기 없이 일반 행과 똑같이 정렬 — "• Div. 1" 점 표기 자체가
+     이미 하위 항목이라는 걸 보여주므로 따로 안 필요합니다. */
+  .bs-runforce-pair-subrow { display: flex; align-items: center; gap: 10px; }
+  .bs-runforce-pair-subrow .bs-runforce-dot { font-size: 1.4em; line-height: 0; vertical-align: -1px; margin-right: 8px; opacity: 0.8; }
+  /* 링크(.bs-upload-open)가 아니라 그냥 정보만 보여주는 행 — 클릭 안 되고 hover 밑줄도 없음. */
+  .bs-upload-open-static { display: flex; align-items: center; gap: 14px; flex: 3 1 auto; min-width: 0; }
 
   .bs-member-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
   .bs-member-list li { border-bottom: 1px solid rgba(128,128,128,.18); display: flex; align-items: center; gap: 12px; padding: 10px 6px; transition: background .15s; }
@@ -2704,36 +2751,80 @@ function runforceSubnav(active: "targets" | "leaderboard"): string {
   </div>`;
 }
 
-function runforceContestSubRow(contest: RunforceContestSummary, label?: string): string {
-  return `<div class="bs-runforce-pair-row">
+// 짝 없는 일반 대회 행 — 짝지어진 행(runforceContestPairRow)과 완전히 별개 구조/클래스를
+// 씁니다. 예전에 이 둘이 클래스를 공유했다가, 짝 쪽만 고치려던 CSS 변경이 일반 행에도
+// 새 나가서 사고가 났던 적이 있어 이후로는 절대 안 섞습니다.
+function runforceContestRow(contest: RunforceContestSummary): string {
+  return `<li class="bs-runforce-list-item">
     <a class="bs-upload-open" href="/runforce/${encodeURIComponent(contest.id)}">
       <div class="info">
-        <div class="name">${label ? `[${label}] ` : ""}[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</div>
+        <div class="name">[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</div>
         <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명</div>
       </div>
     </a>
     <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('이 대회를 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
       <button type="submit" class="bs-danger bs-icon-btn" aria-label="삭제">${TRASH_ICON_SVG}</button>
     </form>
+  </li>`;
+}
+
+// "Codeforces Round 1112 (Div. 1)" → "Codeforces Round 1112" — 짝 요약 줄 제목에서는
+// division 표시가 중복이라(아래 메타줄에 이미 "Div1+Div2 짝"이 있음) 떼어냅니다.
+function stripDivisionSuffix(name: string): string {
+  return name.replace(/\s*\(div\.?\s*[12]\)\s*$/i, "").trim();
+}
+
+// 짝지어진 대회를 펼쳤을 때 나오는 두 줄 — 제목은 이미 요약 줄에 나와 있으므로 여기서는
+// 전체 이름을 반복하지 않고 "• Div. 1"/"• Div. 2" 점 표기만 씁니다. 클릭도 안 되고(상세
+// 페이지 개념이 없음) 삭제 버튼만 각자 있습니다.
+function runforceContestPairSubRow(contest: RunforceContestSummary, label: string): string {
+  return `<div class="bs-runforce-pair-subrow">
+    <div class="bs-upload-open-static">
+      <div class="info">
+        <div class="name"><span class="bs-runforce-dot">•</span>${label}</div>
+        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명</div>
+      </div>
+    </div>
+    <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('${label} 쪽을 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
+      <button type="submit" class="bs-danger bs-icon-btn" aria-label="삭제">${TRASH_ICON_SVG}</button>
+    </form>
   </div>`;
 }
 
-function runforceContestRow(contest: RunforceContestSummary): string {
-  return `<li>${runforceContestSubRow(contest)}</li>`;
-}
-
-// Div1/Div2로 짝지어진 대회는 한 라운드를 반으로 쪼갠 것뿐이라, 목록에서도 별개의 두 행
-// 대신 하나의 <li> 안에 나란히 묶어서 보여줍니다 — 삭제는 각자 따로 여전히 가능합니다.
+// Div1/Div2로 짝지어진 대회는 한 라운드를 반으로 쪼갠 것뿐이라, 목록에서 평소엔 한 줄로
+// 접혀 있다가(요약: division 표시 뗀 기본 이름, 아래 메타줄에 "Div. 1 + Div. 2 짝" 표시)
+// 화살표 버튼을 누르면 점 표기 두 줄로 펼쳐집니다. 제목 자체는 진짜 링크라 눌러도 안
+// 펼쳐지고 바로 그 대회(Div1+Div2 합쳐 보여주는) 상세 페이지로 이동합니다 — 펼치기는
+// 화살표 버튼 전용(RUNFORCE_PAIR_TOGGLE_SCRIPT가 처리).
 function runforceContestPairRow(div1: RunforceContestSummary, div2: RunforceContestSummary): string {
-  return `<li class="bs-runforce-pair">
-    <div class="bs-runforce-pair-head">
-      <span class="bs-badge-outline">Div1 + Div2 짝</span>
-      <span class="meta">${escapeHtml(formatKstDateTime(div1.startTimeMs))}</span>
+  return `<li class="bs-runforce-pair bs-runforce-list-item">
+    <div class="bs-runforce-pair-summary">
+      <a class="bs-upload-open" href="/runforce/${encodeURIComponent(div1.id)}">
+        <div class="info">
+          <div class="name">[${PLATFORM_LABEL[div1.platform]}] ${escapeHtml(stripDivisionSuffix(div1.contestName))}</div>
+          <div class="meta">${escapeHtml(formatKstDateTime(div1.startTimeMs))}</div>
+        </div>
+      </a>
+      <button type="button" class="bs-runforce-pair-toggle" aria-label="펼치기" aria-expanded="false">▾</button>
     </div>
-    ${runforceContestSubRow(div1, "Div1")}
-    ${runforceContestSubRow(div2, "Div2")}
+    <div class="bs-runforce-pair-body" hidden>
+      ${runforceContestPairSubRow(div1, "Div. 1")}
+      ${runforceContestPairSubRow(div2, "Div. 2")}
+    </div>
   </li>`;
 }
+
+const RUNFORCE_PAIR_TOGGLE_SCRIPT = `
+  document.querySelectorAll(".bs-runforce-pair-toggle").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var li = btn.closest(".bs-runforce-pair");
+      var body = li.querySelector(".bs-runforce-pair-body");
+      var isOpen = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      if (isOpen) body.setAttribute("hidden", ""); else body.removeAttribute("hidden");
+    });
+  });
+`;
 
 function renderRunforceContestGroup(group: ContestGroup): string {
   return "single" in group ? runforceContestRow(group.single) : runforceContestPairRow(group.div1, group.div2);
@@ -2818,6 +2909,7 @@ export function renderRunforceSettings(config: RunforceConfig, contests: Runforc
         <button type="submit" class="bs-danger">RUNFORCE 대회 전체 초기화</button>
       </form>
     </div>
+    <script>${RUNFORCE_PAIR_TOGGLE_SCRIPT}</script>
   `,
   );
 }
@@ -2829,26 +2921,10 @@ export function renderRunforceSettings(config: RunforceConfig, contests: Runforc
 // 이 페어링 기능이 배포되기 전에 이미 등록된 대회라 division 컬럼이 안 채워진 경우)
 // 카드를 보여줍니다 — 짝짓기 액션(POST .../pair)이 이름에서 다시 판별을 시도하므로
 // 여기서 폼을 숨길 이유가 없습니다.
+// 짝지어져 있을 때는 renderRunforceContestDetail이 이 카드 대신 두 결과표를 한
+// 페이지에 나란히 보여주므로, 여기서는 "아직 안 짝지어진" 경우만 다룹니다.
 function renderRunforceDivPairingCard(contest: RunforceContestDetail): string {
-  if (contest.platform !== "codeforces") return "";
-
-  if (contest.pairedContest) {
-    const thisLabel = contest.division === "div1" ? "Div1" : "Div2";
-    const partnerLabel = contest.pairedContest.division === "div1" ? "Div1" : "Div2";
-    return `<div class="bs-card">
-      <p class="bs-card-title">Div1/Div2 페어링</p>
-      <p class="bs-note">
-        이 대회(${thisLabel})는
-        <a href="/runforce/${encodeURIComponent(contest.pairedContest.id)}">[${partnerLabel}] ${escapeHtml(contest.pairedContest.contestName)}</a>
-        와(과) 짝지어져 있습니다. 리더보드/마이페이지 총점 계산 시, Div1에 실제로 참가한 회원은 Div1 점수를,
-        그 외(Div2 참가 또는 둘 다 미참가)는 Div2 점수를 가져가서 한 번만 합산됩니다 — 아래 표는 이 대회 단독
-        계산 결과이므로, 다른 회원의 총점과 직접 비교하면 안 맞을 수 있습니다.
-      </p>
-      <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/unpair" onsubmit="return confirm('짝을 해제할까요? 해제해도 각 대회의 계산 결과 자체는 안 바뀌고, 합산 시 둘 다 따로 반영됩니다.')" style="margin-top:8px;">
-        <button type="submit" class="bs-danger">짝 해제</button>
-      </form>
-    </div>`;
-  }
+  if (contest.platform !== "codeforces" || contest.pairedContest) return "";
 
   const divNote = contest.division
     ? `이 대회는 이름에서 ${contest.division === "div1" ? "Div1" : "Div2"}로 판별됐지만 아직 짝지어진 대회가 없습니다.`
@@ -2872,8 +2948,8 @@ function renderRunforceDivPairingCard(contest: RunforceContestDetail): string {
   </div>`;
 }
 
-export function renderRunforceContestDetail(contest: RunforceContestDetail, error?: string): string {
-  const rows = contest.rows
+function runforceResultsTable(rows: RunforceRankedRow[]): string {
+  const trs = rows
     .map(
       (r) => `<tr>
         <td class="num">${r.finalRank + 1}</td>
@@ -2884,6 +2960,65 @@ export function renderRunforceContestDetail(contest: RunforceContestDetail, erro
       </tr>`,
     )
     .join("\n");
+  return `<div class="bs-table-wrap">
+    <table class="bs-table">
+      <thead><tr><th>순위</th><th>이름</th><th>핸들</th><th>대회 원본 순위</th><th>RUNFORCE</th></tr></thead>
+      <tbody>${trs}</tbody>
+    </table>
+  </div>`;
+}
+
+// 짝지어진 대회 하나(Div1 또는 Div2)의 결과표 섹션 — 제목/CSV/삭제 버튼까지 통째로,
+// 한 페이지 안에 두 번(Div1용, Div2용) 나란히 씁니다.
+function runforceContestSection(contest: RunforceContestDetail, label: string): string {
+  return `<div class="bs-card">
+    <div class="bylaws-card-header">
+      <p class="bs-card-title">[${label}] ${escapeHtml(contest.contestName)}</p>
+      <a class="bs-new bs-new-outline" href="/runforce/${encodeURIComponent(contest.id)}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+    </div>
+    <p class="bs-note" style="margin-bottom:12px">
+      ${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명
+    </p>
+    ${runforceResultsTable(contest.rows)}
+    <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('[${label}] ${escapeHtml(contest.contestName)}을(를) 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')" style="margin-top:12px;">
+      <button type="submit" class="bs-danger">[${label}] 삭제</button>
+    </form>
+  </div>`;
+}
+
+export function renderRunforceContestDetail(
+  contest: RunforceContestDetail,
+  error?: string,
+  pairedDetail?: RunforceContestDetail | null,
+): string {
+  // 짝지어진 대회면 상세 페이지끼리 넘나들 필요 없이, 두 결과표를 이 페이지 하나에
+  // 같이 보여줍니다 — Div1이 항상 위, Div2가 아래(어느 쪽 링크로 들어왔든 순서 고정).
+  if (pairedDetail) {
+    const div1 = contest.division === "div1" ? contest : pairedDetail;
+    const div2 = contest.division === "div1" ? pairedDetail : contest;
+    return shell(
+      `${contest.contestName} (Div1+Div2)`,
+      "runforce",
+      `
+      <p class="bs-eyebrow">Backstage</p>
+      <h1>[${PLATFORM_LABEL[contest.platform]}] Div1 + Div2</h1>
+      ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+      <p class="bs-note" style="margin-bottom:16px">
+        <a href="/runforce">← 대상 대회 목록</a> · ${escapeHtml(formatKstDateTime(contest.startTimeMs))}
+      </p>
+      <p class="bs-note" style="margin-bottom:16px">
+        리더보드/마이페이지 총점 계산 시, Div1에 실제로 참가한 회원은 Div1 점수를, 그 외(Div2 참가 또는
+        둘 다 미참가)는 Div2 점수를 가져가서 한 번만 합산됩니다 — 아래 두 표는 각 대회 단독 계산 결과입니다.
+      </p>
+      <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/unpair" onsubmit="return confirm('짝을 해제할까요? 해제해도 각 대회의 계산 결과 자체는 안 바뀌고, 합산 시 둘 다 따로 반영됩니다.')" style="margin-bottom:20px;">
+        <button type="submit" class="bs-danger">짝 해제</button>
+      </form>
+
+      ${runforceContestSection(div1, "Div1")}
+      ${runforceContestSection(div2, "Div2")}
+    `,
+    );
+  }
 
   return shell(
     contest.contestName,
@@ -2904,12 +3039,7 @@ export function renderRunforceContestDetail(contest: RunforceContestDetail, erro
 
     ${renderRunforceDivPairingCard(contest)}
 
-    <div class="bs-table-wrap">
-      <table class="bs-table">
-        <thead><tr><th>순위</th><th>이름</th><th>핸들</th><th>대회 원본 순위</th><th>RUNFORCE</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    ${runforceResultsTable(contest.rows)}
 
     <div class="bs-danger-zone">
       <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('이 대회를 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
