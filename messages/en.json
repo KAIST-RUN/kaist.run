@@ -233,7 +233,7 @@
       "runforce": {
         "label": "RUNFORCE",
         "empty": "No RUNFORCE points earned yet.",
-        "total": "Total: {score} pts",
+        "total": "{score}",
         "showBreakdown": "Show contest breakdown",
         "hideBreakdown": "Hide contest breakdown",
         "rankOf": "Rank {rank} of {total}",

@@ -15,7 +15,7 @@ import type {
 } from "./content";
 import type { UploadedFile } from "./uploads";
 import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
-import type { RunforceConfig, RunforceContestDetail, RunforceContestSummary, RunforceLeaderboardEntry, RunforcePlatform } from "./runforce";
+import { formatRunforceDisplay, type RunforceConfig, type RunforceContestDetail, type RunforceContestSummary, type RunforceLeaderboardEntry, type RunforcePlatform } from "./runforce";
 
 const FORM_STYLE = `
   html { scrollbar-gutter: stable; }
@@ -2774,7 +2774,7 @@ export function renderRunforceContestDetail(contest: RunforceContestDetail): str
         <td>${escapeHtml(r.name || "(이름 없음)")}</td>
         <td>${r.handle ? escapeHtml(r.handle) : `<span class="bs-note">미등록</span>`}</td>
         <td class="num">${r.platformRank ?? "미참가"}</td>
-        <td class="num">${r.score.toFixed(1)}</td>
+        <td class="num">${formatRunforceDisplay(r.score)}</td>
       </tr>`,
     )
     .join("\n");
@@ -2817,7 +2817,7 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
       (e, idx) => `<tr>
         <td class="num">${idx + 1}</td>
         <td>${escapeHtml(e.name || "(이름 없음)")}</td>
-        <td class="num">${Math.round(e.totalScore)}</td>
+        <td class="num">${formatRunforceDisplay(e.totalScore)}</td>
         <td class="num">${e.contestsCounted}</td>
       </tr>`,
     )

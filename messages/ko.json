@@ -233,7 +233,7 @@
       "runforce": {
         "label": "RUNFORCE",
         "empty": "집계된 RUNFORCE 점수가 없습니다.",
-        "total": "총 {score}점",
+        "total": "{score}",
         "showBreakdown": "대회별 내역 보기",
         "hideBreakdown": "대회별 내역 접기",
         "rankOf": "{total}명 중 {rank}위",

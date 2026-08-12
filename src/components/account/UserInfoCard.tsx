@@ -146,6 +146,15 @@ function HandlesRow({ user }: { user: CurrentUser }) {
 
 const PLATFORM_LABEL: Record<"codeforces" | "atcoder", string> = { codeforces: "Codeforces", atcoder: "AtCoder" };
 
+// 화면에 RUNFORCE 점수를 보여줄 때 공통으로 쓰는 표시 변환 — worker/src/lib/runforce.ts의
+// formatRunforceDisplay와 정확히 같은 규칙(원시 저장값은 대회별로 내림한 정수 그대로,
+// 화면에는 1000으로 나눈 실수로 축약). 정수를 1000으로 나누면 소수점 이하 최대 3자리라
+// toFixed(3)이 항상 정확히 떨어집니다. 프런트/워커가 별도 패키지라 이 한 줄을 공유할
+// 방법이 없어 그대로 복제합니다.
+function formatRunforceDisplay(rawScore: number): string {
+  return (rawScore / 1000).toFixed(3);
+}
+
 // RUNFORCE 총점 + 대회별 내역(접었다 폈다). 읽기 전용 — HandlesRow와 달리 본인이
 // 고칠 수 있는 값이 아니라 별도 fetch 없이 이미 /api/me 페이로드에 실려 온 값을
 // 그대로 보여주기만 합니다.
@@ -161,7 +170,7 @@ function RunforceRow({ user }: { user: CurrentUser }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-bold sm:text-base">{t("total", { score: Math.round(user.runforceTotal) })}</span>
+      <span className="text-sm font-bold sm:text-base">{t("total", { score: formatRunforceDisplay(user.runforceTotal) })}</span>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -177,7 +186,7 @@ function RunforceRow({ user }: { user: CurrentUser }) {
                 <span className="opacity-60">[{PLATFORM_LABEL[b.platform]}]</span> {b.contestName}
               </span>
               <span className="whitespace-nowrap opacity-70">
-                {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })} · {Math.round(b.score)}
+                {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })} · {formatRunforceDisplay(b.score)}
                 {t("pointsSuffix")}
               </span>
             </li>

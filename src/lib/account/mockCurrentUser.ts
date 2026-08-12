@@ -23,7 +23,9 @@ const MOCK_MEMBER: CurrentUser = {
   codeforces: null,
   atcoder: "run_ac",
   // 대회별 내역 펼치기/접기 UI를 미리보기용으로 확인할 수 있게 여러 건 넣어둡니다.
-  runforceTotal: 245000,
+  // runforceTotal은 실제 백엔드와 같은 규칙으로 breakdown 점수(대회별로 이미 내림된
+  // 정수)의 합입니다 — 245000 + 88000.
+  runforceTotal: 333000,
   runforceBreakdown: [
     {
       contestId: "mock-contest-2",

@@ -125,10 +125,21 @@ const SIGMOID_NEG5 = sigmoid(-5);
 
 // score(x) = 300000 * (sigmoid(10*(x-0.5)) - sigmoid(-5)) / (sigmoid(5) - sigmoid(-5))
 // x=1(1등)이면 정확히 300000점, x→0(최하위)이면 0에 가깝지만 음수는 없음.
+// 반환값은 아직 내림 전 원시값입니다 — 대회별로 실제 적용(저장)되는 값은
+// computeContestRanking에서 이 값을 내림한 정수입니다.
 export function computeRunforceScore(x: number): number {
   const numerator = sigmoid(10 * (x - 0.5)) - SIGMOID_NEG5;
   const denominator = SIGMOID_5 - SIGMOID_NEG5;
   return 300000 * (numerator / denominator);
+}
+
+// 화면/CSV에 RUNFORCE 점수를 보여줄 때 공통으로 쓰는 표시 변환입니다. 저장/합산되는
+// 실제 값(runforce_results.score, 총점)은 대회별로 내림한 정수 그대로지만, 사람이
+// 보기엔 숫자가 너무 커서(최대 300000) 1000으로 나눈 실수로 축약해서 보여줍니다.
+// 정수를 1000으로 나누면 소수점 이하가 최대 3자리이므로 toFixed(3)이 항상 정확하게
+// 떨어집니다(부동소수점 표시 오차 걱정 없음).
+export function formatRunforceDisplay(rawScore: number): string {
+  return (rawScore / 1000).toFixed(3);
 }
 
 // crypto.getRandomValues 기반 진짜 난수(Math.random 아님) — 실제 배포 시 무작위 동점
@@ -170,7 +181,10 @@ export type RunforceRankedRow = {
 //     nonParticipants 그룹 전체도 하나의 동점 묶음으로 셔플.
 //  4) [셔플된 버킷들을 rank 오름차순으로 이어붙임] + [셔플된 nonParticipants] 순서로 concat
 //     → 이 순서의 인덱스가 그대로 0-indexed final_rank.
-//  5) x = 1 - finalRank/total; score = computeRunforceScore(x).
+//  5) x = 1 - finalRank/total; score = floor(computeRunforceScore(x)) — 대회별로 내림한
+//     정수를 "적용값"으로 저장합니다. 총점은 이 내림한 정수들의 합(= 대회마다 내림 후
+//     합산)이지, 합산 후 한 번에 내림하는 게 아닙니다 — getRunforceLeaderboard/
+//     getMemberRunforce의 SUM(score)이 이미 내림된 값들을 더하는 것이므로 자연히 그렇게 됩니다.
 export function computeContestRanking(
   members: RunforceRankInput[],
   platformRanks: Map<string, number>,
@@ -216,7 +230,7 @@ export function computeContestRanking(
       platformRank: w.platformRank,
       finalRank: idx,
       x,
-      score: computeRunforceScore(x),
+      score: Math.floor(computeRunforceScore(x)),
     };
   });
 }

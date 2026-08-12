@@ -63,6 +63,7 @@ import {
   removeTargetContest,
   getTargetContestDetail,
   getRunforceLeaderboard,
+  formatRunforceDisplay,
   RunforceError,
   type RunforcePlatform,
 } from "../lib/runforce";
@@ -943,7 +944,7 @@ backstage.get("/runforce/leaderboard/export.csv", async (c) => {
   const entries = await getRunforceLeaderboard(c.env);
   const csv = toCsvDocument(
     ["UID", "이름", "총점", "참가 대회 수"],
-    entries.map((e) => [e.uid, e.name, Math.round(e.totalScore), e.contestsCounted]),
+    entries.map((e) => [e.uid, e.name, formatRunforceDisplay(e.totalScore), e.contestsCounted]),
   );
   const filename = "runforce-leaderboard.csv";
   return new Response(csv, {
@@ -972,7 +973,7 @@ backstage.get("/runforce/:contestId/export.csv", async (c) => {
 
   const csv = toCsvDocument(
     ["순위", "이름", "핸들", "대회 원본 순위", "RUNFORCE"],
-    detail.rows.map((r) => [r.finalRank + 1, r.name, r.handle, r.platformRank, r.score.toFixed(1)]),
+    detail.rows.map((r) => [r.finalRank + 1, r.name, r.handle, r.platformRank, formatRunforceDisplay(r.score)]),
   );
   const filename = `runforce-${detail.platform}-${detail.contestId}.csv`;
   return new Response(csv, {
