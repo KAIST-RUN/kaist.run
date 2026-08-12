@@ -229,6 +229,15 @@
         "cancel": "Cancel",
         "saving": "Saving...",
         "saveError": "Couldn't save. Please try again."
+      },
+      "runforce": {
+        "label": "RUNFORCE",
+        "empty": "No RUNFORCE points earned yet.",
+        "total": "Total: {score} pts",
+        "showBreakdown": "Show contest breakdown",
+        "hideBreakdown": "Hide contest breakdown",
+        "rankOf": "Rank {rank} of {total}",
+        "pointsSuffix": " pts"
       }
     },
     "menu": {

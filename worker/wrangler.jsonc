@@ -94,5 +94,12 @@
 		"GOOGLE_SHEET_RANGE": "Sheet1",
 		"EMAIL_FORWARD_TO": "kaist.run@gmail.com",
 		"GITHUB_REPO": "KAIST-RUN/kaist.run"
+	},
+	// RUNFORCE 날짜범위 자동탐색을 매 정각마다 새로고침합니다(KST/UTC 둘 다 :00 정각이라
+	// 오프셋 계산 불필요). worker/src/index.ts의 scheduled() → worker/src/lib/runforce.ts::
+	// refreshAutoDiscoveredContests가 실제 작업을 합니다. 설정이 꺼져 있으면 즉시 반환하므로
+	// 평소엔 거의 아무 일도 안 합니다.
+	"triggers": {
+		"crons": ["0 * * * *"]
 	}
 }

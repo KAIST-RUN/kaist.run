@@ -3,6 +3,7 @@ import type { CurrentUser, Env } from "../types";
 import { requireSession } from "../lib/authGuard";
 import { getUserSemesters } from "../lib/semesters";
 import { updateUserHandles } from "../lib/members";
+import { getMemberRunforce } from "../lib/runforce";
 
 export const me = new Hono<{ Bindings: Env }>();
 
@@ -17,7 +18,7 @@ me.get("/", async (c) => {
   }
 
   const { session, member } = auth;
-  const semesters = await getUserSemesters(c.env, member.uid);
+  const [semesters, runforce] = await Promise.all([getUserSemesters(c.env, member.uid), getMemberRunforce(c.env, member.uid)]);
   const user: CurrentUser = {
     discordId: session.discordId,
     discordUsername: session.discordUsername,
@@ -33,6 +34,8 @@ me.get("/", async (c) => {
     solvedAc: member.solvedAc,
     codeforces: member.codeforces,
     atcoder: member.atcoder,
+    runforceTotal: runforce.total,
+    runforceBreakdown: runforce.breakdown,
   };
 
   return c.json(user);

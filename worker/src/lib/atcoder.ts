@@ -1,0 +1,93 @@
+// AtCoder는 Codeforces와 달리 공식 공개 API가 없습니다. RUNFORCE는 두 개의 비공식/
+// 커뮤니티 엔드포인트를 조합해 씁니다 (둘 다 인증 불필요 — 구현 중 curl로 직접 확인함):
+//   - kenkoooo AtCoder Problems API(contests.json)   — 대회 목록 + rated 여부 판정
+//   - atcoder.jp/contests/{id}/results/json          — 대회별 참가자 순위(핸들→등수)
+// ⚠️ 둘 다 AtCoder/kenkoooo가 공식 문서화한 API가 아니라, 응답 모양이 예고 없이 바뀔
+// 수 있습니다. 주의: atcoder.jp/contests/{id}/standings/json은 로그인이 필요해서
+// (302 → /login) 이 용도로 쓸 수 없다는 걸 실제로 확인했습니다 — 대신 같은 정보를
+// 로그인 없이 주는 results/json을 씁니다.
+
+export class AtCoderApiError extends Error {}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new AtCoderApiError(`AtCoder API request failed: ${url} → ${res.status}`);
+  try {
+    return (await res.json()) as T;
+  } catch (err) {
+    throw new AtCoderApiError(`AtCoder API returned non-JSON: ${url} (${err instanceof Error ? err.message : String(err)})`);
+  }
+}
+
+export type AtCoderContestSummary = {
+  id: string; // 예: "abc300"
+  name: string;
+  startTimeMs: number;
+};
+
+type KenkoooContestEntry = {
+  id: string;
+  start_epoch_second: number;
+  duration_second: number;
+  title: string;
+  rate_change: string; // "-"=unrated, "All"/"~ 1999"/"1200 ~ 2799" 등이면 rated
+};
+
+let contestsCache: { fetchedAtMs: number; entries: KenkoooContestEntry[] } | null = null;
+const CONTESTS_CACHE_TTL_MS = 5 * 60 * 1000; // 전체 대회를 한 번에 내려주는 무거운 응답(수천 건)이라, 한 번의 cron tick 안에서 여러 번 다시 받지 않도록 짧게 캐싱
+
+// contests.json은 전체 대회를 한 번에 내려주는 단일 JSON입니다(페이지네이션 없음).
+async function listAllKenkoooContests(): Promise<KenkoooContestEntry[]> {
+  if (contestsCache && Date.now() - contestsCache.fetchedAtMs < CONTESTS_CACHE_TTL_MS) return contestsCache.entries;
+  const entries = await fetchJson<KenkoooContestEntry[]>("https://kenkoooo.com/atcoder/resources/contests.json");
+  contestsCache = { fetchedAtMs: Date.now(), entries };
+  return entries;
+}
+
+// start_epoch_second가 [startDate 00:00 KST, endDate 23:59:59 KST] 범위 안이고,
+// rate_change !== "-"(unrated 제외 — AHC 등 마라톤형 대회는 대개 이걸로 걸러짐)이고,
+// 이미 끝난(종료 시각이 현재보다 과거) 대회만 남깁니다.
+export async function listAtCoderContestsInRange(startDate: string, endDate: string): Promise<AtCoderContestSummary[]> {
+  const contests = await listAllKenkoooContests();
+  const rangeStartSec = Date.parse(`${startDate}T00:00:00+09:00`) / 1000;
+  const rangeEndSec = Date.parse(`${endDate}T23:59:59+09:00`) / 1000;
+  const nowSec = Date.now() / 1000;
+
+  return contests
+    .filter((c) => c.rate_change !== "-")
+    .filter((c) => c.start_epoch_second >= rangeStartSec && c.start_epoch_second <= rangeEndSec)
+    .filter((c) => c.start_epoch_second + c.duration_second <= nowSec)
+    .map((c) => ({ id: c.id, name: c.title, startTimeMs: c.start_epoch_second * 1000 }));
+}
+
+// 수동 추가 시 rated 검증용 — 자동탐색과 동일한 기준(rate_change !== "-")을 재사용합니다.
+export async function isAtCoderContestRated(contestId: string): Promise<boolean> {
+  const contests = await listAllKenkoooContests();
+  const found = contests.find((c) => c.id === contestId);
+  if (!found) throw new AtCoderApiError(`AtCoder contest not found: ${contestId}`);
+  return found.rate_change !== "-";
+}
+
+// 수동 추가(backstage) 시 대회 이름/시작시각 표시용 — codeforces.ts::fetchCodeforcesContestMeta와
+// 같은 목적. contests.json 캐시를 재사용하므로 추가 API 호출이 없습니다.
+export async function fetchAtCoderContestMeta(contestId: string): Promise<AtCoderContestSummary | null> {
+  const contests = await listAllKenkoooContests();
+  const found = contests.find((c) => c.id === contestId);
+  if (!found) return null;
+  return { id: found.id, name: found.title, startTimeMs: found.start_epoch_second * 1000 };
+}
+
+export type AtCoderRankEntry = { handle: string; rank: number };
+
+type AtCoderResultEntry = { Place: number; UserScreenName: string };
+
+// GET atcoder.jp/contests/{id}/results/json — 그 대회에 참가 등록한 전원(별도 로그인
+// 불필요, 대회 종료 후 공개)을 Place(순위, 1-indexed) 기준으로 내려줍니다. Codeforces의
+// contest.ratingChanges와 달리 IsRated=false인 참가자(레이팅 상한 초과 등으로 본인 레이팅은
+// 안 바뀐 경우)도 포함되는데, 이 대회 자체는 이미 isAtCoderContestRated로 rated임을
+// 확인했으므로 실제 대회 순위인 Place를 그대로 랭킹에 씁니다(레이팅 변동 여부와 무관하게
+// 등수 자체는 유효한 성적).
+export async function fetchAtCoderStandings(contestId: string): Promise<AtCoderRankEntry[]> {
+  const results = await fetchJson<AtCoderResultEntry[]>(`https://atcoder.jp/contests/${encodeURIComponent(contestId)}/results/json`);
+  return results.map((r) => ({ handle: r.UserScreenName, rank: r.Place }));
+}

@@ -22,6 +22,28 @@ const MOCK_MEMBER: CurrentUser = {
   solvedAc: "run_handle",
   codeforces: null,
   atcoder: "run_ac",
+  // 대회별 내역 펼치기/접기 UI를 미리보기용으로 확인할 수 있게 여러 건 넣어둡니다.
+  runforceTotal: 245000,
+  runforceBreakdown: [
+    {
+      contestId: "mock-contest-2",
+      platform: "atcoder",
+      contestName: "AtCoder Beginner Contest 300",
+      startTimeMs: Date.parse("2026-05-20T21:00:00+09:00"),
+      finalRank: 1,
+      participantCount: 24,
+      score: 245000,
+    },
+    {
+      contestId: "mock-contest-1",
+      platform: "codeforces",
+      contestName: "Codeforces Round 950 (Div. 2)",
+      startTimeMs: Date.parse("2026-05-06T22:35:00+09:00"),
+      finalRank: 5,
+      participantCount: 24,
+      score: 88000,
+    },
+  ],
 };
 
 const MOCK_ADMIN: CurrentUser = {
@@ -42,6 +64,9 @@ const MOCK_ALUMNI: CurrentUser = {
   avatarUrl: null,
   status: "alumni",
   semesters: [{ year: 2022, season: "spring", status: "approved" }],
+  // 비어있는 상태(집계된 대회가 하나도 없는 경우) UI 확인용.
+  runforceTotal: 0,
+  runforceBreakdown: [],
 };
 
 // 명예회원 — 이번 학기 소속 여부와 무관하게 상태 배지가 항상 "명예회원"으로 뜨는지
@@ -71,6 +96,8 @@ const MOCK_APPLICANT_WITH_NULLS: CurrentUser = {
   solvedAc: null,
   codeforces: null,
   atcoder: null,
+  runforceTotal: 0,
+  runforceBreakdown: [],
 };
 
 // loading 상태를 계속 유지하는 fixture 용 — 절대 resolve되지 않는 Promise.

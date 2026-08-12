@@ -245,10 +245,14 @@ export async function touchUserAvatar(env: Env, discordId: string, avatarUrl: st
 
 export async function deleteUser(env: Env, uid: string): Promise<void> {
   // FK cascade가 없으므로(이 저장소의 다른 마이그레이션과 같은 관례) 순서대로 지웁니다.
+  // runforce_results는 이 유저 본인 행(WHERE uid=?1)만 지우므로, 이 유저가 참가했던
+  // 대회의 다른 회원 final_rank/score는 전혀 안 건드립니다(RUNFORCE의 "삭제해도 남의
+  // 점수에 영향 없음" 요구사항이 이 스코프만으로 자동 성립 — worker/src/lib/runforce.ts 참고).
   await env.CONTENT_DB.batch([
     env.CONTENT_DB.prepare("DELETE FROM semester_membership WHERE uid = ?1").bind(uid),
     env.CONTENT_DB.prepare("DELETE FROM admins WHERE uid = ?1").bind(uid),
     env.CONTENT_DB.prepare("DELETE FROM honorary_members WHERE uid = ?1").bind(uid),
+    env.CONTENT_DB.prepare("DELETE FROM runforce_results WHERE uid = ?1").bind(uid),
     env.CONTENT_DB.prepare("DELETE FROM users WHERE uid = ?1").bind(uid),
   ]);
 }
@@ -330,4 +334,21 @@ export async function listCurrentSemesterHandles(env: Env, site: HandleSite): Pr
      WHERE u.${column} IS NOT NULL AND u.${column} != ''`,
   ).all<{ discord_id: string; handle: string }>();
   return results.map((r) => ({ discordId: r.discord_id, handle: r.handle }));
+}
+
+export type ActiveMemberHandle = { uid: string; name: string | null; avatarUrl: string | null; handle: string | null };
+
+// RUNFORCE 랭킹용(worker/src/lib/runforce.ts) — 이번 학기 활동회원 "전원"을 uid 기준으로
+// 돌려줍니다. listCurrentSemesterHandles와 달리 핸들이 없는 사람도 포함합니다 — RUNFORCE는
+// 핸들 미등록자도 순위 계산에서 최하위 동점 그룹으로 넣어야 하므로 걸러내면 안 됩니다.
+// discordId가 아니라 uid를 반환하는 것도 마찬가지 이유(runforce_results.uid가 이걸 그대로 저장).
+export async function listActiveMembersWithHandle(env: Env, site: HandleSite): Promise<ActiveMemberHandle[]> {
+  const column = HANDLE_COLUMN[site];
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT u.uid, u.name, u.avatar_url, u.${column} AS handle
+     FROM users u
+     JOIN semester_membership sm ON sm.uid = u.uid AND sm.status = 'approved'
+     JOIN semesters s ON s.year = sm.year AND s.season = sm.season AND s.is_current = 1`,
+  ).all<{ uid: string; name: string | null; avatar_url: string | null; handle: string | null }>();
+  return results.map((r) => ({ uid: r.uid, name: r.name, avatarUrl: r.avatar_url, handle: r.handle }));
 }

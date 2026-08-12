@@ -15,6 +15,7 @@ import { storeRawEmail } from "./lib/emailStore";
 import { indexEmail } from "./lib/emailIndex";
 import { formatAddress, formatAddressList } from "./lib/emailRender";
 import { ALLOWED_ORIGINS } from "./lib/constants";
+import { refreshAutoDiscoveredContests } from "./lib/runforce";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -81,5 +82,17 @@ export default {
 
     const headers = viewUrl ? new Headers({ "X-Kaist-Run-Email-Url": viewUrl }) : undefined;
     await message.forward(env.EMAIL_FORWARD_TO, headers);
+  },
+
+  // wrangler.jsonc의 triggers.crons("0 * * * *")가 매시 정각마다 호출합니다. 설정이
+  // 꺼져 있으면 refreshAutoDiscoveredContests가 즉시 반환하므로 평소엔 가벼운 조회 한 번뿐.
+  // ctx.waitUntil로 감싸서 이 함수가 리턴한 뒤에도 실제 작업이 끝날 시간을 확보합니다
+  // (email() 핸들러가 storeRawEmail을 감싸는 것과 같은 이유).
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(
+      refreshAutoDiscoveredContests(env).catch((err) => {
+        console.error("RUNFORCE 자동탐색 새로고침 실패", err);
+      }),
+    );
   },
 };

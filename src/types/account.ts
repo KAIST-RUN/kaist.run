@@ -26,6 +26,19 @@ export type CurrentUser = {
   solvedAc: string | null;
   codeforces: string | null;
   atcoder: string | null;
+
+  // RUNFORCE(worker/src/lib/runforce.ts::getMemberRunforce) — semesters처럼 nullable이
+  // 아닙니다: 산정 대상 대회가 하나도 없으면 total=0, breakdown=[]로 내려갑니다.
+  runforceTotal: number;
+  runforceBreakdown: {
+    contestId: string;
+    platform: "codeforces" | "atcoder";
+    contestName: string;
+    startTimeMs: number;
+    finalRank: number; // 0-indexed — 화면에는 +1해서 보여줌
+    participantCount: number;
+    score: number;
+  }[];
 };
 
 // /api/me 호출 결과를 나타내는 판별 유니온입니다.

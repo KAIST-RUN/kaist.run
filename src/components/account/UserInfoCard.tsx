@@ -144,6 +144,50 @@ function HandlesRow({ user }: { user: CurrentUser }) {
   );
 }
 
+const PLATFORM_LABEL: Record<"codeforces" | "atcoder", string> = { codeforces: "Codeforces", atcoder: "AtCoder" };
+
+// RUNFORCE 총점 + 대회별 내역(접었다 폈다). 읽기 전용 — HandlesRow와 달리 본인이
+// 고칠 수 있는 값이 아니라 별도 fetch 없이 이미 /api/me 페이로드에 실려 온 값을
+// 그대로 보여주기만 합니다.
+function RunforceRow({ user }: { user: CurrentUser }) {
+  const t = useTranslations("account.memberInfo.runforce");
+  const [expanded, setExpanded] = useState(false);
+
+  if (user.runforceBreakdown.length === 0) {
+    return <span className="text-sm sm:text-base">{t("empty")}</span>;
+  }
+
+  const breakdown = [...user.runforceBreakdown].sort((a, b) => b.startTimeMs - a.startTimeMs);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-bold sm:text-base">{t("total", { score: Math.round(user.runforceTotal) })}</span>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-fit text-xs underline opacity-60 transition-opacity hover:opacity-100"
+      >
+        {expanded ? t("hideBreakdown") : t("showBreakdown")}
+      </button>
+      {expanded && (
+        <ul className="flex flex-col gap-1.5 text-xs sm:text-sm">
+          {breakdown.map((b) => (
+            <li key={b.contestId} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <span>
+                <span className="opacity-60">[{PLATFORM_LABEL[b.platform]}]</span> {b.contestName}
+              </span>
+              <span className="whitespace-nowrap opacity-70">
+                {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })} · {Math.round(b.score)}
+                {t("pointsSuffix")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // 회원 정보를 보여주는 카드입니다. 대부분 읽기 전용이지만, 핸들 행만은 본인이
 // 직접 고칠 수 있습니다(위 HandlesRow).
 // 보안: discordId(내부 식별자) 원문은 여기서도 절대 노출하지 않습니다.
@@ -180,6 +224,7 @@ export default function UserInfoCard({ user }: { user: CurrentUser }) {
         ),
     },
     { label: t("handles.label"), content: <HandlesRow user={user} /> },
+    { label: t("runforce.label"), content: <RunforceRow user={user} /> },
     { label: t("discordAccount"), content: discordAccount },
   ];
 

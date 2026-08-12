@@ -15,6 +15,7 @@ import type {
 } from "./content";
 import type { UploadedFile } from "./uploads";
 import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
+import type { RunforceConfig, RunforceContestDetail, RunforceContestSummary, RunforceLeaderboardEntry, RunforcePlatform } from "./runforce";
 
 const FORM_STYLE = `
   html { scrollbar-gutter: stable; }
@@ -454,6 +455,16 @@ const FORM_STYLE = `
   .bs-badge { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
   /* 명예회원/활동회원/휴회원처럼 "관리자" 배지만큼 강조할 필요는 없는 상태 표시용 — 테두리만. */
   .bs-badge-outline { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); opacity: .75; }
+
+  /* RUNFORCE 대회별 상세/리더보드 — backstage에서 처음 쓰는 진짜 <table>입니다.
+     여기 전까지는 전부 <ul> 기반 행이었지만, 순위/이름/핸들/원본순위/점수처럼
+     컬럼이 4~5개인 진짜 표 형태 데이터라 table이 더 적합합니다. */
+  .bs-table-wrap { overflow-x: auto; } /* 좁은 화면에서 페이지 자체가 아니라 표 안에서만 가로 스크롤 */
+  .bs-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-top: 12px; }
+  .bs-table th, .bs-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(128,128,128,.18); white-space: nowrap; }
+  .bs-table th { font-weight: 700; opacity: .6; font-size: 0.75rem; text-transform: uppercase; }
+  .bs-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bs-table tr:hover td { background: rgba(128,128,128,.05); }
 `;
 
 function navLink(href: string, label: string, active: boolean): string {
@@ -518,6 +529,7 @@ function shell(title: string, active: string, bodyHtml: string): string {
       ${navLink("/board", "게시판", active === "board")}
       ${navLink("/archive", "대회 아카이브", active === "archive")}
       ${navLink("/members", "회원 명단", active === "members")}
+      ${navLink("/runforce", "RUNFORCE", active === "runforce")}
       ${navLink("/contact", "연락처", active === "contact")}
       ${navLink("/bylaws", "회칙", active === "bylaws")}
       ${navLink("/apply", "지원 폼", active === "apply")}
@@ -2615,6 +2627,186 @@ export function renderUploadList(files: UploadedFile[], meta: UploadListPage, er
     </form>
     ${body}
     ${pager}
+  `,
+  );
+}
+
+// ---------- RUNFORCE ----------
+// 활동회원의 Codeforces/AtCoder 대회 성적을 상대평가해 포인트로 매기는 기능
+// (worker/src/lib/runforce.ts). "대상 대회"(설정+목록, 대회별 상세는 여기서 링크로
+// drill-down)와 "리더보드" 2개 pill로 나눕니다 — members처럼 항상 떠 있는 하위탭이
+// 아니라, 학기별 명단→개별 학기 상세와 같은 관계로 대회 상세 페이지는 뒤로가기
+// 링크만 둡니다.
+
+const PLATFORM_LABEL: Record<RunforcePlatform, string> = { codeforces: "Codeforces", atcoder: "AtCoder" };
+
+function runforceSubnav(active: "targets" | "leaderboard"): string {
+  return `<div class="bs-subnav">
+    <a href="/runforce"${active === "targets" ? ' class="active"' : ""}>대상 대회</a>
+    <a href="/runforce/leaderboard"${active === "leaderboard" ? ' class="active"' : ""}>리더보드</a>
+  </div>`;
+}
+
+function runforceContestRow(contest: RunforceContestSummary): string {
+  return `<li>
+    <a class="bs-upload-open" href="/runforce/${encodeURIComponent(contest.id)}">
+      <div class="info">
+        <div class="name">[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</div>
+        <div class="meta">${escapeHtml(contest.contestId)} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명</div>
+      </div>
+    </a>
+    <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('이 대회를 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
+      <button type="submit" class="bs-danger bs-icon-btn" aria-label="삭제">${TRASH_ICON_SVG}</button>
+    </form>
+  </li>`;
+}
+
+export function renderRunforceSettings(config: RunforceConfig, contests: RunforceContestSummary[], error?: string): string {
+  const list =
+    contests.length === 0
+      ? `<p class="empty">등록된 대회가 없습니다. 아래에서 수동으로 추가하거나, 자동 탐색을 켜주세요.</p>`
+      : `<ul class="bs-upload-list">${contests.map(runforceContestRow).join("\n")}</ul>`;
+
+  return shell(
+    "RUNFORCE",
+    "runforce",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>RUNFORCE</h1>
+    ${runforceSubnav("targets")}
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+
+    <div class="bs-card">
+      <p class="bs-card-title">날짜범위 자동 탐색</p>
+      <form method="post" action="/runforce/config" class="bs-row2">
+        <div class="bs-field">
+          <label>시작일</label>
+          <input type="date" name="rangeStartDate" value="${escapeHtml(config.rangeStartDate ?? "")}" />
+        </div>
+        <div class="bs-field">
+          <label>종료일</label>
+          <input type="date" name="rangeEndDate" value="${escapeHtml(config.rangeEndDate ?? "")}" />
+        </div>
+        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;">
+          <input type="checkbox" id="autoDiscoveryEnabled" name="autoDiscoveryEnabled" value="1" ${config.autoDiscoveryEnabled ? "checked" : ""} />
+          <label for="autoDiscoveryEnabled" style="margin:0;">매시 정각마다 이 기간의 rated 대회를 자동으로 추가</label>
+        </div>
+        <div style="grid-column:1/-1;">
+          <button type="submit" class="bs-submit">저장</button>
+        </div>
+      </form>
+      <p class="bs-note" style="margin-top:8px">이미 등록된 대회는 다시 계산되지 않습니다 — 새로 열린 rated 대회만 추가됩니다.</p>
+    </div>
+
+    <div class="bs-card">
+      <p class="bs-card-title">대회 수동 추가</p>
+      <form method="post" action="/runforce/contests/add" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <select
+          name="platform"
+          style="font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
+        >
+          <option value="codeforces">Codeforces</option>
+          <option value="atcoder">AtCoder</option>
+        </select>
+        <input
+          type="text" name="contestId" required
+          placeholder="대회 ID (예: 1900, abc300)"
+          style="flex:1 1 auto;min-width:0;font:inherit;padding:10px 12px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.04);color:inherit;"
+        />
+        <button type="submit" class="bs-submit">추가</button>
+      </form>
+      <p class="bs-note" style="margin-top:8px">rated 대회만 추가할 수 있습니다 — 대회 종료 후 레이팅이 반영된 뒤 추가해 주세요.</p>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <a class="bs-new bs-new-outline" href="/runforce/leaderboard/export.csv" style="margin-bottom:0">리더보드 CSV 다운로드</a>
+    </div>
+
+    <p class="bs-card-title" style="margin-top:24px">산정 대상 대회 (${contests.length})</p>
+    ${list}
+  `,
+  );
+}
+
+export function renderRunforceContestDetail(contest: RunforceContestDetail): string {
+  const rows = contest.rows
+    .map(
+      (r) => `<tr>
+        <td class="num">${r.finalRank + 1}</td>
+        <td>${escapeHtml(r.name || "(이름 없음)")}</td>
+        <td>${r.handle ? escapeHtml(r.handle) : `<span class="bs-note">미등록</span>`}</td>
+        <td class="num">${r.platformRank ?? "미참가"}</td>
+        <td class="num">${r.score.toFixed(1)}</td>
+      </tr>`,
+    )
+    .join("\n");
+
+  return shell(
+    contest.contestName,
+    "runforce",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</h1>
+    <p class="bs-note" style="margin-bottom:16px">
+      <a href="/runforce">← 대상 대회 목록</a> ·
+      ${escapeHtml(contest.contestId)} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} ·
+      ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명
+    </p>
+
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <a class="bs-new bs-new-outline" href="/runforce/${encodeURIComponent(contest.id)}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+    </div>
+
+    <div class="bs-table-wrap">
+      <table class="bs-table">
+        <thead><tr><th>순위</th><th>이름</th><th>핸들</th><th>대회 원본 순위</th><th>RUNFORCE</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div class="bs-danger-zone">
+      <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('이 대회를 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
+        <button type="submit" class="bs-danger">이 대회 삭제</button>
+      </form>
+    </div>
+  `,
+  );
+}
+
+export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): string {
+  const rows = entries
+    .map(
+      (e, idx) => `<tr>
+        <td class="num">${idx + 1}</td>
+        <td>${escapeHtml(e.name || "(이름 없음)")}</td>
+        <td class="num">${Math.round(e.totalScore)}</td>
+        <td class="num">${e.contestsCounted}</td>
+      </tr>`,
+    )
+    .join("\n");
+
+  return shell(
+    "RUNFORCE 리더보드",
+    "runforce",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>RUNFORCE 리더보드</h1>
+    ${runforceSubnav("leaderboard")}
+
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <a class="bs-new bs-new-outline" href="/runforce/leaderboard/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+    </div>
+
+    ${
+      entries.length === 0
+        ? `<p class="empty">이번 학기 활동회원이 없습니다.</p>`
+        : `<div class="bs-table-wrap">
+      <table class="bs-table">
+        <thead><tr><th>순위</th><th>이름</th><th>총점</th><th>참가 대회 수</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`
+    }
   `,
   );
 }

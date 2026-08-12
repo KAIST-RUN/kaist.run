@@ -56,6 +56,17 @@ import {
 } from "../lib/semesters";
 import { toCsvDocument } from "../lib/csv";
 import {
+  getRunforceConfig,
+  setRunforceConfig,
+  listTargetContests,
+  addTargetContest,
+  removeTargetContest,
+  getTargetContestDetail,
+  getRunforceLeaderboard,
+  RunforceError,
+  type RunforcePlatform,
+} from "../lib/runforce";
+import {
   getApplyFormConfig,
   connectApplyForm,
   saveApplyFormLabels,
@@ -87,6 +98,9 @@ import {
   type BylawsVersionFormData,
   renderUploadList,
   renderApplyFormPage,
+  renderRunforceSettings,
+  renderRunforceContestDetail,
+  renderRunforceLeaderboard,
   type NoticeFormData,
   type BoardFormData,
 } from "../lib/backstageRender";
@@ -860,6 +874,121 @@ backstage.post("/members/honorary/revoke", async (c) => {
   const { get } = await readForm(c);
   await revokeHonoraryMember(c.env, get("uid"));
   return c.redirect("/members/honorary");
+});
+
+// ---------- runforce ----------
+
+function isRunforcePlatform(value: string): value is RunforcePlatform {
+  return value === "codeforces" || value === "atcoder";
+}
+
+backstage.get("/runforce", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const [config, contests] = await Promise.all([getRunforceConfig(c.env), listTargetContests(c.env)]);
+  return c.html(renderRunforceSettings(config, contests));
+});
+
+backstage.post("/runforce/config", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  try {
+    await setRunforceConfig(c.env, {
+      autoDiscoveryEnabled: get("autoDiscoveryEnabled") === "1",
+      rangeStartDate: get("rangeStartDate") || null,
+      rangeEndDate: get("rangeEndDate") || null,
+    });
+    return c.redirect("/runforce");
+  } catch (err) {
+    const message = err instanceof RunforceError ? err.message : "설정을 저장하지 못했습니다.";
+    const [config, contests] = await Promise.all([getRunforceConfig(c.env), listTargetContests(c.env)]);
+    return c.html(renderRunforceSettings(config, contests, message), 400);
+  }
+});
+
+backstage.post("/runforce/contests/add", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const { get } = await readForm(c);
+  const platform = get("platform");
+  const contestId = get("contestId");
+  if (!isRunforcePlatform(platform)) return c.notFound();
+
+  try {
+    const contest = await addTargetContest(c.env, platform, contestId, { uid: gate.member.uid, name: gate.member.name }, "manual");
+    return c.redirect(`/runforce/${encodeURIComponent(contest.id)}`);
+  } catch (err) {
+    const message = err instanceof RunforceError ? err.message : "대회 정보를 가져오지 못했습니다.";
+    const [config, contests] = await Promise.all([getRunforceConfig(c.env), listTargetContests(c.env)]);
+    return c.html(renderRunforceSettings(config, contests, message), 400);
+  }
+});
+
+backstage.get("/runforce/leaderboard", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const entries = await getRunforceLeaderboard(c.env);
+  return c.html(renderRunforceLeaderboard(entries));
+});
+
+backstage.get("/runforce/leaderboard/export.csv", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const entries = await getRunforceLeaderboard(c.env);
+  const csv = toCsvDocument(
+    ["UID", "이름", "총점", "참가 대회 수"],
+    entries.map((e) => [e.uid, e.name, Math.round(e.totalScore), e.contestsCounted]),
+  );
+  const filename = "runforce-leaderboard.csv";
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    },
+  });
+});
+
+backstage.get("/runforce/:contestId", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const detail = await getTargetContestDetail(c.env, c.req.param("contestId"));
+  if (!detail) return c.notFound();
+  return c.html(renderRunforceContestDetail(detail));
+});
+
+backstage.get("/runforce/:contestId/export.csv", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const detail = await getTargetContestDetail(c.env, c.req.param("contestId"));
+  if (!detail) return c.notFound();
+
+  const csv = toCsvDocument(
+    ["순위", "이름", "핸들", "대회 원본 순위", "RUNFORCE"],
+    detail.rows.map((r) => [r.finalRank + 1, r.name, r.handle, r.platformRank, r.score.toFixed(1)]),
+  );
+  const filename = `runforce-${detail.platform}-${detail.contestId}.csv`;
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    },
+  });
+});
+
+backstage.post("/runforce/:contestId/delete", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  await removeTargetContest(c.env, c.req.param("contestId"));
+  return c.redirect("/runforce");
 });
 
 // ---------- contact ----------
