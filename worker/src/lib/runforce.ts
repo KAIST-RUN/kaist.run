@@ -4,6 +4,7 @@ import {
   fetchCodeforcesContestMeta,
   fetchCodeforcesContestRatingChanges,
   isCodeforcesContestRated,
+  isCodeforcesOutOfCompetitionParticipant,
   listCodeforcesContestsInRange,
 } from "./codeforces";
 import { fetchAtCoderContestMeta, fetchAtCoderStandings, isAtCoderContestRated, listAtCoderContestsInRange } from "./atcoder";
@@ -188,44 +189,65 @@ export type RunforceRankedRow = {
   name: string | null;
   avatarUrl: string | null;
   handle: string | null; // handle_snapshot — 계산 시점 핸들(참가 여부와 무관하게 등록돼 있었다면 그대로 저장)
-  platformRank: number | null; // 미참가자(핸들 없음 또는 이 대회에 없음)는 null
+  platformRank: number | null; // 미참가자(핸들 없음 또는 이 대회에 없음)는 null. unrated 참가자도 null(진짜 CF 순위를 알 방법이 없음)
   finalRank: number; // 0-indexed, 동점 무작위 처리 확정 후
   x: number;
   score: number;
+  // 단독 Div.2 라운드에서 레이팅 상한 초과로 실시간 참가했지만 unrated(OUT_OF_COMPETITION)
+  // 처리된 회원 — score는 일반 공식이 아니라 별도 규칙(아래 computeContestRanking 참고)으로
+  // 직접 계산됩니다. 이 필드가 없으면(false) score는 언제나 x로부터 공식으로 유도된 값입니다.
+  isUnratedParticipant: boolean;
 };
 
 // members: 이번 학기 활동회원 전원(핸들 없는 사람도 포함). platformRanks: 대회 원본
-// 순위표를 handle(trim + 소문자 정규화)→rank로 만든 Map.
+// 순위표를 handle(trim + 소문자 정규화)→rank로 만든 Map. unratedParticipantUids: 단독
+// Div.2 라운드에서 레이팅 상한 초과로 실시간 참가했지만 unrated 처리된 회원의 uid
+// 집합(addTargetContest가 isCodeforcesOutOfCompetitionParticipant로 미리 판정해서
+// 넘겨줌) — AtCoder거나 Div1/Div2 분리 라운드, 또는 그냥 일반 대회면 항상 undefined.
 //
 // 알고리즘:
 //  1) total = members.length. 0이면 에러.
-//  2) participants = handle이 있고 platformRanks에 있는 회원, platformRank 오름차순.
-//     nonParticipants = 나머지 전부(핸들 없음 OR 그 대회에 없음).
+//  2) participants = handle이 있고 platformRanks에 있는 회원(=공식 rated 참가자),
+//     platformRank 오름차순. unratedGroup = unratedParticipantUids에 속하면서
+//     platformRank가 없는 회원. nonParticipants = 나머지 전부(핸들 없음, 이 대회에 없음,
+//     또는 unrated 판정 대상이 아닌 미참가자).
 //  3) participants를 platformRank가 같은 값끼리 버킷으로 묶고, 버킷 내부(2명 이상)만 셔플.
-//     nonParticipants 그룹 전체도 하나의 동점 묶음으로 셔플.
-//  4) [셔플된 버킷들을 rank 오름차순으로 이어붙임] + [셔플된 nonParticipants] 순서로 concat
-//     → 이 순서의 인덱스가 그대로 0-indexed final_rank.
-//  5) x = 1 - finalRank/total; score = floor(computeRunforceScore(x)) — 대회별로 내림한
-//     정수를 "적용값"으로 저장합니다. 총점은 이 내림한 정수들의 합(= 대회마다 내림 후
-//     합산)이지, 합산 후 한 번에 내림하는 게 아닙니다 — getRunforceLeaderboard/
-//     getMemberRunforce의 SUM(score)이 이미 내림된 값들을 더하는 것이므로 자연히 그렇게 됩니다.
+//     unratedGroup 전체, nonParticipants 전체도 각각 하나의 동점 묶음으로 셔플.
+//  4) [셔플된 participants 버킷들을 rank 오름차순으로 이어붙임] + [셔플된 unratedGroup]
+//     + [셔플된 nonParticipants] 순서로 concat → 이 순서의 인덱스가 그대로 0-indexed
+//     final_rank. unratedGroup을 participants "바로 뒤"(nonParticipants보다는 앞)에 두는
+//     건 "실시간으로 실제 참가했다"는 사실이 아예 미참가보다는 낫다고 보는 게 자연스러워서
+//     — participants 각자의 final_rank/score 계산에는 영향 없습니다(항상 맨 앞 블록이라
+//     unratedGroup/nonParticipants가 몇 명이든 무관).
+//  5) participants/nonParticipants: x = 1 - finalRank/total; score = floor(computeRunforceScore(x)).
+//     unratedGroup: score는 공식으로 안 구하고 직접 대입합니다 — rated 참가자(=participants)가
+//     한 명도 없으면 1등에 해당하는 점수(300000), 있으면 rated 참가자들의 score(이미 위
+//     공식으로 계산된 값) 중 중앙값(개수가 짝수면 두 중앙값의 평균, 그 결과를 다시 내림)을
+//     그대로 적용합니다. x는 표시상 의미만 있고(디버깅/기록용) 실제 score와 무관하게
+//     자기 위치 기준 그대로 둡니다.
+//     총점은 대회마다 이렇게 내림/직접대입된 정수들의 합이지, 합산 후 한 번에 내림하는 게
+//     아닙니다 — getRunforceLeaderboard/getMemberRunforce의 SUM이 이미 이 정수들을 더하는
+//     것이므로 자연히 그렇게 됩니다.
 export function computeContestRanking(
   members: RunforceRankInput[],
   platformRanks: Map<string, number>,
   rng: () => number = defaultRng,
+  unratedParticipantUids?: Set<string>,
 ): RunforceRankedRow[] {
   const total = members.length;
   if (total === 0) throw new RunforceError("활동회원이 없어 랭킹을 계산할 수 없습니다.");
 
-  type Working = RunforceRankInput & { platformRank: number | null };
+  type Working = RunforceRankInput & { platformRank: number | null; isUnratedParticipant: boolean };
   const working: Working[] = members.map((m) => {
     const key = m.handle ? m.handle.trim().toLowerCase() : null;
     const rank = key ? (platformRanks.get(key) ?? null) : null;
-    return { ...m, platformRank: rank };
+    const isUnratedParticipant = rank === null && !!unratedParticipantUids?.has(m.uid);
+    return { ...m, platformRank: rank, isUnratedParticipant };
   });
 
   const participants = working.filter((w): w is Working & { platformRank: number } => w.platformRank !== null);
-  const nonParticipants = working.filter((w) => w.platformRank === null);
+  const unratedGroup = working.filter((w) => w.platformRank === null && w.isUnratedParticipant);
+  const nonParticipants = working.filter((w) => w.platformRank === null && !w.isUnratedParticipant);
   participants.sort((a, b) => a.platformRank - b.platformRank);
 
   const orderedParticipants: Working[] = [];
@@ -239,13 +261,31 @@ export function computeContestRanking(
     i = j;
   }
 
+  const shuffledUnratedGroup = [...unratedGroup];
+  if (shuffledUnratedGroup.length > 1) shuffleInPlace(shuffledUnratedGroup, rng);
+
   const shuffledNonParticipants = [...nonParticipants];
   if (shuffledNonParticipants.length > 1) shuffleInPlace(shuffledNonParticipants, rng);
 
-  const finalOrder = [...orderedParticipants, ...shuffledNonParticipants];
+  const finalOrder = [...orderedParticipants, ...shuffledUnratedGroup, ...shuffledNonParticipants];
+
+  // unratedGroup에게 적용할 점수 — orderedParticipants는 항상 맨 앞 블록이라(4번 참고)
+  // 이 시점에 이미 최종 확정된 값과 동일하게 계산할 수 있습니다.
+  let unratedOverrideScore = 0;
+  if (shuffledUnratedGroup.length > 0) {
+    if (orderedParticipants.length === 0) {
+      unratedOverrideScore = 300000;
+    } else {
+      const ratedScores = orderedParticipants.map((w, idx) => Math.floor(computeRunforceScore(1 - idx / total))).sort((a, b) => a - b);
+      const mid = Math.floor(ratedScores.length / 2);
+      const median = ratedScores.length % 2 === 0 ? (ratedScores[mid - 1] + ratedScores[mid]) / 2 : ratedScores[mid];
+      unratedOverrideScore = Math.floor(median);
+    }
+  }
 
   return finalOrder.map((w, idx) => {
     const x = 1 - idx / total;
+    const score = w.isUnratedParticipant ? unratedOverrideScore : Math.floor(computeRunforceScore(x));
     return {
       uid: w.uid,
       name: w.name,
@@ -254,7 +294,8 @@ export function computeContestRanking(
       platformRank: w.platformRank,
       finalRank: idx,
       x,
-      score: Math.floor(computeRunforceScore(x)),
+      score,
+      isUnratedParticipant: w.isUnratedParticipant,
     };
   });
 }
@@ -296,13 +337,39 @@ export async function addTargetContest(
     if (current === undefined || entry.rank < current) platformRanks.set(key, entry.rank);
   }
 
-  const members = await listActiveMembersWithHandle(env, platform);
-  const ranked = computeContestRanking(members, platformRanks);
-
   // Div1/Div2 분리 라운드 감지 — AtCoder는 이 패턴이 없으므로 codeforces일 때만.
   const division = platform === "codeforces" ? detectCodeforcesDivision(meta.name) : null;
-
   const rowId = crypto.randomUUID();
+
+  const members = await listActiveMembersWithHandle(env, platform);
+
+  // 단독 Div.2 라운드(=division이 'div2'이고, 같은 시작 시각의 미페어링 Div1이 없음)에서
+  // 레이팅 상한 초과로 unrated 처리된 채로 실시간 참가한 회원을 찾습니다. rated 참가자로
+  // 이미 잡힌(=platformRanks에 핸들이 있는) 회원은 애초에 확인할 필요가 없습니다.
+  let unratedParticipantUids: Set<string> | undefined;
+  if (platform === "codeforces" && division === "div2") {
+    const div1Partner = await findUnpairedCodeforcesPartner(env, "div1", meta.startTimeMs, rowId);
+    if (!div1Partner) {
+      const candidates = members.filter((m) => m.handle && !platformRanks.has(m.handle.trim().toLowerCase()));
+      if (candidates.length > 0) {
+        unratedParticipantUids = new Set();
+        const contestStartSeconds = Math.floor(meta.startTimeMs / 1000);
+        for (const m of candidates) {
+          try {
+            const isOutOfCompetition = await isCodeforcesOutOfCompetitionParticipant(m.handle!, contestId, contestStartSeconds);
+            if (isOutOfCompetition) unratedParticipantUids.add(m.uid);
+          } catch (err) {
+            // 핸들 하나 확인이 실패해도(오타로 존재하지 않는 핸들 등) 전체 대회 추가를
+            // 막지 않습니다 — 그냥 그 사람은 미참가자로 취급됩니다.
+            console.error(`RUNFORCE: unrated 참가자 확인 실패 (handle=${m.handle})`, err);
+          }
+        }
+      }
+    }
+  }
+
+  const ranked = computeContestRanking(members, platformRanks, undefined, unratedParticipantUids);
+
   const statements = [
     env.CONTENT_DB.prepare(
       `INSERT INTO runforce_contests
@@ -311,9 +378,9 @@ export async function addTargetContest(
     ).bind(rowId, platform, contestId, meta.name, meta.startTimeMs, source, addedBy.uid, addedBy.name, ranked.length, division),
     ...ranked.map((r) =>
       env.CONTENT_DB.prepare(
-        `INSERT INTO runforce_results (contest_id, uid, handle_snapshot, platform_rank, final_rank, x, score)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
-      ).bind(rowId, r.uid, r.handle, r.platformRank, r.finalRank, r.x, r.score),
+        `INSERT INTO runforce_results (contest_id, uid, handle_snapshot, platform_rank, final_rank, x, score, is_unrated_participant)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+      ).bind(rowId, r.uid, r.handle, r.platformRank, r.finalRank, r.x, r.score, r.isUnratedParticipant ? 1 : 0),
     ),
   ];
   await env.CONTENT_DB.batch(statements);
@@ -332,15 +399,29 @@ export async function addTargetContest(
 
 // ---------- Div1/Div2 페어링 ----------
 
-async function tryAutoPairCodeforcesDivisions(env: Env, newContestId: string, division: RunforceDivision, startTimeMs: number): Promise<void> {
-  const wantedDivision: RunforceDivision = division === "div1" ? "div2" : "div1";
+// division의 짝(반대 division)이 될 수 있는, 아직 미페어링 상태인 대회를 같은 시작 시각
+// 기준으로 찾습니다. 자동 페어링(tryAutoPairCodeforcesDivisions)과, "이 Div2 라운드가
+// 단독인가"(=짝지어질 Div1이 없는가) 판정(addTargetContest의 unrated 참가자 처리 여부
+// 결정) 양쪽에서 재사용합니다.
+async function findUnpairedCodeforcesPartner(
+  env: Env,
+  wantedDivision: RunforceDivision,
+  startTimeMs: number,
+  excludeContestId: string,
+): Promise<{ id: string } | null> {
   const candidate = await env.CONTENT_DB.prepare(
     `SELECT id FROM runforce_contests
      WHERE platform='codeforces' AND division=?1 AND start_time_ms=?2 AND paired_contest_id IS NULL AND id != ?3
      LIMIT 1`,
   )
-    .bind(wantedDivision, startTimeMs, newContestId)
+    .bind(wantedDivision, startTimeMs, excludeContestId)
     .first<{ id: string }>();
+  return candidate ?? null;
+}
+
+async function tryAutoPairCodeforcesDivisions(env: Env, newContestId: string, division: RunforceDivision, startTimeMs: number): Promise<void> {
+  const wantedDivision: RunforceDivision = division === "div1" ? "div2" : "div1";
+  const candidate = await findUnpairedCodeforcesPartner(env, wantedDivision, startTimeMs, newContestId);
   if (!candidate) return;
 
   await env.CONTENT_DB.batch([
@@ -416,7 +497,7 @@ export async function getTargetContestDetail(env: Env, contestRowId: string): Pr
   if (!contest) return null;
 
   const { results } = await env.CONTENT_DB.prepare(
-    `SELECT r.uid, u.name, u.avatar_url, r.handle_snapshot, r.platform_rank, r.final_rank, r.x, r.score
+    `SELECT r.uid, u.name, u.avatar_url, r.handle_snapshot, r.platform_rank, r.final_rank, r.x, r.score, r.is_unrated_participant
      FROM runforce_results r
      LEFT JOIN users u ON u.uid = r.uid
      WHERE r.contest_id = ?1
@@ -432,6 +513,7 @@ export async function getTargetContestDetail(env: Env, contestRowId: string): Pr
       final_rank: number;
       x: number;
       score: number;
+      is_unrated_participant: number;
     }>();
 
   const rows: RunforceRankedRow[] = results.map((r) => ({
@@ -443,6 +525,7 @@ export async function getTargetContestDetail(env: Env, contestRowId: string): Pr
     finalRank: r.final_rank,
     x: r.x,
     score: r.score,
+    isUnratedParticipant: !!r.is_unrated_participant,
   }));
 
   const pairedContest = contest.pairedContestId ? await getTargetContestById(env, contest.pairedContestId) : null;
@@ -458,6 +541,7 @@ export type RunforceMemberBreakdownRow = {
   finalRank: number;
   participantCount: number;
   score: number;
+  isUnratedParticipant: boolean;
 };
 
 // ---------- 합산(총점) 계산 — Div1/Div2 페어링 반영 ----------
@@ -465,14 +549,20 @@ export type RunforceMemberBreakdownRow = {
 // 회원 한 명당 딱 하나의 breakdown 행만 만듭니다: Div1에 실제로 참가(platform_rank가
 // 있음)했으면 Div1 대회의 행을, 아니면(Div2 참가 또는 둘 다 미참가) Div2 대회의 행을.
 
-type StoredResultRow = { uid: string; platformRank: number | null; finalRank: number; score: number };
+type StoredResultRow = { uid: string; platformRank: number | null; finalRank: number; score: number; isUnratedParticipant: boolean };
 
 async function getContestResultRows(env: Env, contestId: string, uid?: string): Promise<StoredResultRow[]> {
   const query = uid
-    ? env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score FROM runforce_results WHERE contest_id=?1 AND uid=?2").bind(contestId, uid)
-    : env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score FROM runforce_results WHERE contest_id=?1").bind(contestId);
-  const { results } = await query.all<{ uid: string; platform_rank: number | null; final_rank: number; score: number }>();
-  return results.map((r) => ({ uid: r.uid, platformRank: r.platform_rank, finalRank: r.final_rank, score: r.score }));
+    ? env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score, is_unrated_participant FROM runforce_results WHERE contest_id=?1 AND uid=?2").bind(contestId, uid)
+    : env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score, is_unrated_participant FROM runforce_results WHERE contest_id=?1").bind(contestId);
+  const { results } = await query.all<{ uid: string; platform_rank: number | null; final_rank: number; score: number; is_unrated_participant: number }>();
+  return results.map((r) => ({
+    uid: r.uid,
+    platformRank: r.platform_rank,
+    finalRank: r.final_rank,
+    score: r.score,
+    isUnratedParticipant: !!r.is_unrated_participant,
+  }));
 }
 
 function toBreakdownRow(contest: RunforceContestSummary, row: StoredResultRow): RunforceMemberBreakdownRow {
@@ -484,6 +574,7 @@ function toBreakdownRow(contest: RunforceContestSummary, row: StoredResultRow): 
     finalRank: row.finalRank,
     participantCount: contest.participantCount,
     score: row.score,
+    isUnratedParticipant: row.isUnratedParticipant,
   };
 }
 

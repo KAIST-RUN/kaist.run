@@ -35,8 +35,10 @@ const MOCK_MEMBER: CurrentUser = {
       finalRank: 1,
       participantCount: 24,
       score: 245000,
+      isUnratedParticipant: false,
     },
     {
+      // unrated 참가(레이팅 상한 초과) 케이스 UI 미리보기용.
       contestId: "mock-contest-1",
       platform: "codeforces",
       contestName: "Codeforces Round 950 (Div. 2)",
@@ -44,6 +46,7 @@ const MOCK_MEMBER: CurrentUser = {
       finalRank: 5,
       participantCount: 24,
       score: 88000,
+      isUnratedParticipant: true,
     },
   ],
 };

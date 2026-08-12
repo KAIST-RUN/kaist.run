@@ -186,7 +186,8 @@ function RunforceRow({ user }: { user: CurrentUser }) {
                 <span className="opacity-60">[{PLATFORM_LABEL[b.platform]}]</span> {b.contestName}
               </span>
               <span className="whitespace-nowrap opacity-70">
-                {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })} · {formatRunforceDisplay(b.score)}
+                {t("rankOf", { rank: b.finalRank + 1, total: b.participantCount })}
+                {b.isUnratedParticipant ? ` ${t("unratedNote")}` : ""} · {formatRunforceDisplay(b.score)}
                 {t("pointsSuffix")}
               </span>
             </li>

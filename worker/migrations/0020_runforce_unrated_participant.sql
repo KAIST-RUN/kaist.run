@@ -1,0 +1,12 @@
+-- 단독 Div.2 라운드에서, 레이팅이 상한(예: 2100) 이상이라 unrated 처리된 채로 실시간
+-- 참가한 회원을 위한 플래그입니다. Codeforces contest.standings API는 익명 요청으로는
+-- unofficial 참가자를 안 보여줘서(showUnofficial 파라미터가 비인증 요청엔 막혀있음),
+-- 대신 각 회원의 user.status 제출 기록에서 이 대회 제출의 author.participantType이
+-- OUT_OF_COMPETITION인지로 판정합니다(worker/src/lib/codeforces.ts::
+-- isCodeforcesOutOfCompetitionParticipant) — virtual/practice 참가는 여기 안 잡힙니다.
+--
+-- 이 플래그가 1인 행은 platform_rank가 여전히 NULL(진짜 CF 순위를 알 방법이 없음)이지만
+-- "미참가자"와 달리 score가 무작위 동점 그룹의 최하위권이 아니라 별도 규칙(rated 참가자가
+-- 없으면 1등 점수, 있으면 rated 참가자 점수의 중앙값)으로 직접 계산됩니다
+-- (worker/src/lib/runforce.ts::computeContestRanking).
+ALTER TABLE runforce_results ADD COLUMN is_unrated_participant INTEGER NOT NULL DEFAULT 0;

@@ -2828,7 +2828,7 @@ export function renderRunforceContestDetail(contest: RunforceContestDetail, erro
         <td class="num">${r.finalRank + 1}</td>
         <td>${escapeHtml(r.name || "(이름 없음)")}</td>
         <td>${r.handle ? escapeHtml(r.handle) : `<span class="bs-note">미등록</span>`}</td>
-        <td class="num">${r.platformRank ?? "미참가"}</td>
+        <td class="num">${r.platformRank ?? (r.isUnratedParticipant ? `<span class="bs-note">unrated 참가</span>` : "미참가")}</td>
         <td class="num">${formatRunforceDisplay(r.score)}</td>
       </tr>`,
     )

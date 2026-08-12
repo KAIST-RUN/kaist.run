@@ -237,7 +237,8 @@
         "showBreakdown": "대회별 내역 보기",
         "hideBreakdown": "대회별 내역 접기",
         "rankOf": "{total}명 중 {rank}위",
-        "pointsSuffix": "점"
+        "pointsSuffix": "점",
+        "unratedNote": "(unrated 참가)"
       }
     },
     "menu": {

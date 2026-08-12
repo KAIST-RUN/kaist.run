@@ -81,5 +81,6 @@ export type CurrentUser = {
     finalRank: number; // 0-indexed
     participantCount: number;
     score: number;
+    isUnratedParticipant: boolean;
   }[];
 };
