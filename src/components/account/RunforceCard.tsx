@@ -24,7 +24,7 @@ export default function RunforceCard({ user }: { user: CurrentUser }) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-fit text-xs underline opacity-60 transition-opacity hover:opacity-100"
+        className="w-fit cursor-pointer text-xs underline opacity-60 transition-opacity hover:opacity-100"
       >
         {expanded ? t("hideBreakdown") : t("showBreakdown")}
       </button>
