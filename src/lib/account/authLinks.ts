@@ -27,6 +27,10 @@ export function getUpdateHandlesEndpoint(): string {
   return `${getApiBase()}/api/me/handles`;
 }
 
+export function getUpdateNicknameEndpoint(): string {
+  return `${getApiBase()}/api/me/nickname`;
+}
+
 // 회원 전용 게시판 — /api/content/*(공개, 빌드 시점 fetch)와 달리 로그인 세션이
 // 있어야만 응답합니다. src/lib/board/api.ts가 credentials:"include"로 호출합니다.
 export function getBoardListEndpoint(locale: Locale): string {

@@ -1,5 +1,5 @@
 import type { CurrentUserState } from "@/types/account";
-import { getLogoutEndpoint, getMeEndpoint, getUpdateHandlesEndpoint } from "./authLinks";
+import { getLogoutEndpoint, getMeEndpoint, getUpdateHandlesEndpoint, getUpdateNicknameEndpoint } from "./authLinks";
 
 // -----------------------------------------------------------------------------
 // 개발 중 mock 사용법 (프로덕션 빌드에는 영향 없음)
@@ -79,6 +79,29 @@ export async function updateHandles(handles: HandlesInput): Promise<boolean> {
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+// 닉네임 저장 — 서버가 문자 규칙 위반을 400 + { error }로 알려주므로, 성공/실패만이 아니라
+// 사유 문자열까지 돌려줍니다(화면에 그대로 보여주기 위해).
+export async function updateNickname(nickname: string): Promise<{ ok: true } | { ok: false; message: string | null }> {
+  if (isUseMockEnabled()) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return { ok: true };
+  }
+
+  try {
+    const res = await fetch(getUpdateNicknameEndpoint(), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname }),
+    });
+    if (res.ok) return { ok: true };
+    const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+    return { ok: false, message: typeof body?.error === "string" ? body.error : null };
+  } catch {
+    return { ok: false, message: null };
   }
 }
 

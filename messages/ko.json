@@ -206,6 +206,15 @@
       "inactive": "휴회원"
     },
     "adminBadge": "관리자",
+    "nickname": {
+      "empty": "(닉네임 없음)",
+      "edit": "닉네임 수정",
+      "placeholder": "닉네임 입력 (비우면 닉네임 없음)",
+      "save": "저장",
+      "cancel": "취소",
+      "saving": "저장 중...",
+      "saveError": "저장하지 못했습니다. 다시 시도해 주세요."
+    },
     "memberInfo": {
       "title": "회원 정보",
       "name": "이름",

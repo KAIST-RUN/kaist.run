@@ -1207,7 +1207,7 @@ function memberPagerLink(q: string, page: number, label: string): string {
 }
 
 function renderMemberRow(user: UserRecord): string {
-  const metaParts = [user.studentId, user.email, `Discord ${user.discordId}`].filter((v): v is string => Boolean(v));
+  const metaParts = [user.nickname, user.studentId, user.email, `Discord ${user.discordId}`].filter((v): v is string => Boolean(v));
 
   return `<li>
     <a class="bs-member-link" href="/members/${encodeURIComponent(user.uid)}/edit">
@@ -1273,6 +1273,7 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage, noti
 export type UserFormData = {
   uid: string; // 새 유저면 ""
   discordId: string;
+  nickname: string; // '' = 닉네임 없음(새 유저 폼에서 비워두면 Discord 표시 이름을 기본값으로 씀)
   name: string;
   email: string;
   studentId: string;
@@ -1288,6 +1289,7 @@ export function userRowToFormData(user: UserRecord): UserFormData {
   return {
     uid: user.uid,
     discordId: user.discordId,
+    nickname: user.nickname ?? "",
     name: user.name ?? "",
     email: user.email ?? "",
     studentId: user.studentId ?? "",
@@ -1320,6 +1322,11 @@ export function renderUserForm(mode: "new" | "edit", data: UserFormData, semeste
           <input type="text" name="discordId" value="${escapeHtml(data.discordId)}" required />
         </div>
         <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>닉네임</label>
+            <input type="text" name="nickname" value="${escapeHtml(data.nickname)}" maxlength="32" />
+            <span class="hint">${mode === "new" ? "비워두면 Discord 표시 이름을 가져옵니다." : "비우면 '닉네임 없음'이 됩니다."}</span>
+          </div>
           <div class="bs-field">
             <label>이름</label>
             <input type="text" name="name" value="${escapeHtml(data.name)}" />

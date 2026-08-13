@@ -52,7 +52,17 @@ export async function exchangeDiscordCode(env: Env, code: string, redirectUri: s
 // 계정)이라는 확정적인 의미입니다. 일시적 실패(레이트리밋 소진, 5xx 등)는
 // 대신 예외를 던져서, 호출부(members.ts)가 이전에 캐싱해둔 아바타를 함부로
 // null로 덮어쓰지 않고 그대로 유지할 수 있게 구분해줍니다.
-export async function fetchDiscordAvatarUrl(botToken: string, discordId: string): Promise<string | null> {
+export type DiscordUserProfile = {
+  avatarUrl: string | null; // 기본 아바타뿐이면 null
+  displayName: string; // global_name(표시 이름) 우선, 없으면 username
+};
+
+// 봇 토큰으로 GET /users/{id}를 한 번 호출해서 아바타와 표시 이름을 같이 가져옵니다.
+// 신규 가입 시 아바타와 닉네임 기본값이 둘 다 필요한데, 같은 응답에 들어있어서 한 번만
+// 부르면 됩니다. 반환값 null은 "탈퇴/존재하지 않는 계정"이라는 확정적인 의미이고,
+// 일시적 실패(레이트리밋 소진, 5xx 등)는 예외를 던져서 호출부가 구분할 수 있게 합니다
+// (기존에 저장해둔 값을 함부로 지우지 않도록).
+export async function fetchDiscordUserProfile(botToken: string, discordId: string): Promise<DiscordUserProfile | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await fetch(`https://discord.com/api/v10/users/${discordId}`, {
       headers: { Authorization: `Bot ${botToken}` },
@@ -65,15 +75,24 @@ export async function fetchDiscordAvatarUrl(botToken: string, discordId: string)
       await new Promise((resolve) => setTimeout(resolve, retryAfterSec * 1000));
       continue;
     }
-    if (res.status === 404) return null; // 탈퇴/존재하지 않는 계정 — 아바타 없음 확정
-    if (!res.ok) throw new Error(`Discord avatar fetch failed: ${res.status} ${await res.text()}`);
+    if (res.status === 404) return null; // 탈퇴/존재하지 않는 계정
+    if (!res.ok) throw new Error(`Discord user fetch failed: ${res.status} ${await res.text()}`);
 
-    const data = (await res.json()) as { id: string; avatar: string | null };
-    if (!data.avatar) return null; // 기본 아바타뿐 — 아바타 없음 확정
-    const ext = data.avatar.startsWith("a_") ? "gif" : "png";
-    return `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.${ext}`;
+    const data = (await res.json()) as { id: string; username: string; global_name: string | null; avatar: string | null };
+    const ext = data.avatar?.startsWith("a_") ? "gif" : "png";
+    return {
+      avatarUrl: data.avatar ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.${ext}` : null,
+      displayName: data.global_name || data.username,
+    };
   }
-  throw new Error(`Discord avatar fetch rate-limited after retry: ${discordId}`);
+  throw new Error(`Discord user fetch rate-limited after retry: ${discordId}`);
+}
+
+// 아바타만 필요한 호출부(프로필 사진 일괄 갱신)를 위한 얇은 래퍼 — 반환값 규약은
+// 위와 같습니다(null = 아바타 없음 확정, 예외 = 일시적 실패).
+export async function fetchDiscordAvatarUrl(botToken: string, discordId: string): Promise<string | null> {
+  const profile = await fetchDiscordUserProfile(botToken, discordId);
+  return profile?.avatarUrl ?? null;
 }
 
 export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser> {

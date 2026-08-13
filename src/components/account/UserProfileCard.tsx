@@ -1,6 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { CurrentUser } from "@/types/account";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { updateNickname } from "@/lib/account/api";
 import { splitRunforceDisplay } from "@/lib/account/runforce";
+import PencilIcon from "./PencilIcon";
 
 function Avatar({ user }: { user: CurrentUser }) {
   const initial = (user.name ?? user.discordDisplayName ?? user.discordUsername)
@@ -65,13 +71,97 @@ function RunforceStat({ user }: { user: CurrentUser }) {
   );
 }
 
+// 실명 바로 아래 줄 — 예전엔 Discord 계정을 보여줬지만(회원 정보 카드에 이미 있어서 중복),
+// 이제 닉네임 자리입니다. 연필 아이콘으로 바로 고칠 수 있고(HandlesRow와 같은 관례),
+// 저장에 성공하면 refetch()로 공유 상태를 최신화합니다. 빈 문자열도 유효한 값이라
+// 지우고 저장하면 "(닉네임 없음)"이 됩니다.
+function NicknameRow({ user }: { user: CurrentUser }) {
+  const t = useTranslations("account.nickname");
+  const { refetch } = useCurrentUser();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(user.nickname ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function startEdit() {
+    setValue(user.nickname ?? "");
+    setError(null);
+    setEditing(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    const result = await updateNickname(value);
+    setSaving(false);
+    if (!result.ok) {
+      setError(result.message ?? t("saveError"));
+      return;
+    }
+    setEditing(false);
+    refetch();
+  }
+
+  if (editing) {
+    return (
+      <form
+        className="flex flex-col items-center gap-1.5 sm:items-start"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSave();
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={value}
+            maxLength={32}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={t("placeholder")}
+            disabled={saving}
+            aria-label={t("edit")}
+            className="min-w-0 rounded-lg border border-black/10 bg-transparent px-2.5 py-1 text-sm outline-none focus:border-black/30 disabled:opacity-50 dark:border-white/15 dark:focus:border-white/40"
+          />
+          <button
+            type="submit"
+            disabled={saving}
+            className="shrink-0 cursor-pointer rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 disabled:opacity-50"
+          >
+            {saving ? t("saving") : t("save")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            disabled={saving}
+            className="shrink-0 cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs font-semibold transition-opacity hover:opacity-70 disabled:opacity-50 dark:border-white/15"
+          >
+            {t("cancel")}
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <p className={`text-sm ${user.nickname ? "opacity-60" : "opacity-40 italic"}`}>{user.nickname || t("empty")}</p>
+      <button
+        type="button"
+        onClick={startEdit}
+        aria-label={t("edit")}
+        className="shrink-0 cursor-pointer rounded-full p-1 opacity-50 transition-opacity hover:opacity-100"
+      >
+        <PencilIcon />
+      </button>
+    </div>
+  );
+}
+
 export default function UserProfileCard({ user }: { user: CurrentUser }) {
   const t = useTranslations("account");
 
   const displayName = user.name ?? user.discordDisplayName ?? `@${user.discordUsername}`;
-  const discordHandle = user.discordDisplayName
-    ? `${user.discordDisplayName} (@${user.discordUsername})`
-    : `@${user.discordUsername}`;
 
   return (
     <div className="flex flex-col items-center gap-4 rounded-2xl border border-black/10 p-6 text-center sm:flex-row sm:gap-6 sm:p-8 sm:text-left dark:border-white/15">
@@ -79,7 +169,7 @@ export default function UserProfileCard({ user }: { user: CurrentUser }) {
       <div className="flex flex-col items-center gap-2 sm:items-start">
         <div className="flex flex-col items-center gap-1 sm:items-start">
           <h2 className="text-xl font-bold sm:text-2xl">{displayName}</h2>
-          <p className="text-sm opacity-60">{discordHandle}</p>
+          <NicknameRow user={user} />
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
           <span className="rounded-full border border-black/10 px-3 py-1 text-xs font-semibold dark:border-white/15">

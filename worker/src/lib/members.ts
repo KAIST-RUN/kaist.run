@@ -1,5 +1,5 @@
 import type { Env } from "../types";
-import { fetchDiscordAvatarUrl } from "./discord";
+import { fetchDiscordAvatarUrl, fetchDiscordUserProfile } from "./discord";
 
 // 예전엔 구글 스프레드시트 → MEMBERS(KV) 캐시가 회원 데이터의 원천이었지만, 이제 D1의
 // users/admins/semester_membership 테이블이 원천입니다(0012_users.sql). uid는
@@ -8,6 +8,31 @@ import { fetchDiscordAvatarUrl } from "./discord";
 // 테이블(semester_membership, admins)이 참조하는 값이 안 흔들리도록.
 
 export class UserValidationError extends Error {}
+
+export const NICKNAME_MAX_LENGTH = 32;
+
+// 닉네임에서 막는 문자 — 출력은 어디서든 이스케이프되므로 XSS 목적이 아니라, 표시가
+// 깨지거나 남을 사칭하는 걸 막기 위한 제한입니다.
+//   \u0000-\u001F, \u007F-\u009F : 제어문자(줄바꿈·탭 포함) — 한 줄 표시가 깨짐
+//   \u200B-\u200F, \uFEFF        : 폭 없는 문자 — 눈에 안 보여서 같은 이름처럼 위장 가능
+//   \u202A-\u202E, \u2066-\u2069 : 양방향 제어문자 — 글자 순서를 뒤집어 위장 가능
+//   < > & " '                    : 마크업/따옴표 — CSV·디스코드 메시지 등 앞으로 늘어날
+//                                  출력 경로까지 감안한 보수적 차단
+const FORBIDDEN_NICKNAME_CHARS =
+  /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF<>&"']/;
+
+// 앞뒤 공백을 정리한 닉네임을 돌려줍니다. 빈 문자열은 "닉네임 없음"을 뜻하는 유효한
+// 값이라 그대로 통과시킵니다(공백만 입력한 경우도 여기로 수렴).
+export function normalizeNickname(raw: string): string {
+  const nickname = raw.trim();
+  if (nickname.length > NICKNAME_MAX_LENGTH) {
+    throw new UserValidationError(`닉네임은 ${NICKNAME_MAX_LENGTH}자를 넘을 수 없습니다.`);
+  }
+  if (FORBIDDEN_NICKNAME_CHARS.test(nickname)) {
+    throw new UserValidationError(`닉네임에 사용할 수 없는 문자가 있습니다 (< > & " ' 및 보이지 않는 특수문자).`);
+  }
+  return nickname;
+}
 
 type RawUserRow = {
   uid: string;
@@ -20,6 +45,7 @@ type RawUserRow = {
   codeforces: string | null;
   atcoder: string | null;
   avatar_url: string | null;
+  nickname: string | null;
   created_at: string;
   updated_at: string;
   is_admin: number;
@@ -39,6 +65,10 @@ export type UserRecord = {
   codeforces: string | null;
   atcoder: string | null;
   avatarUrl: string | null;
+  // 실명(name)과 별개인 표시용 닉네임. NULL(아직 정해진 적 없음)과 ''(회원이 명시적으로
+  // 비움)를 구분해서 저장하지만, 화면에는 둘 다 "닉네임 없음"으로 똑같이 보입니다
+  // (0026_users_nickname.sql 참고). 회원 간 중복 허용.
+  nickname: string | null;
   // 셋 다 저장 컬럼이 아니라 조회 시점에 admins/honorary_members/semester_membership을
   // 보고 계산합니다(별도 컬럼으로 두면 그 테이블들과 값이 어긋날 수 있어서) — 아래
   // USER_SELECT 참고. role/status와 달리 isHonoraryMember는 admins처럼 독립된
@@ -79,6 +109,7 @@ function toUserRecord(row: RawUserRow): UserRecord {
     codeforces: row.codeforces,
     atcoder: row.atcoder,
     avatarUrl: row.avatar_url,
+    nickname: row.nickname,
     role: row.is_admin ? "admin" : "member",
     status: row.is_current_member ? "member" : row.has_ever_approved ? "alumni" : "applicant",
     isHonoraryMember: !!row.is_honorary,
@@ -118,6 +149,8 @@ export type UserInput = {
   codeforces?: string | null;
   atcoder?: string | null;
   avatarUrl?: string | null;
+  // 생략(undefined)하면 Discord 표시 이름으로 채우고, ''를 명시하면 "닉네임 없음"으로 둡니다.
+  nickname?: string | null;
 };
 
 // backstage "새 유저" 수동 등록용 — 이미 있는 discordId면 명확한 에러로 거부합니다
@@ -127,23 +160,39 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
   const existing = await getUserByDiscordId(env, input.discordId);
   if (existing) throw new UserValidationError("이미 등록된 Discord 계정입니다.");
 
-  // 아바타가 안 넘어왔으면 봇 토큰으로 한 번 조회해서 채웁니다 — 그래야 backstage에서
-  // 방금 만든 유저도 명단에 프로필 사진이 바로 뜹니다(그 사람이 아직 로그인한 적 없어도).
-  // 실패해도 등록 자체는 막지 않고 사진만 비워둡니다(다음 로그인 때 touchUserAvatar가 채움).
+  // 아바타나 닉네임이 안 넘어왔으면 봇 토큰으로 Discord 프로필을 한 번 조회해서 채웁니다
+  // (둘 다 같은 응답에 들어있어서 호출은 한 번). 그래야 backstage에서 방금 만든 유저도
+  // 명단에 사진과 닉네임이 바로 뜹니다(그 사람이 아직 로그인한 적 없어도).
+  // 실패해도 등록 자체는 막지 않고 해당 값만 비워둡니다.
+  // 닉네임은 undefined일 때만 기본값을 채웁니다 — ''는 "닉네임 없음"을 명시적으로 고른
+  // 것이라 Discord 이름으로 덮어쓰면 안 됩니다.
   // 봇 가입 경로(upsertUserByDiscordId)도 이 함수를 거치므로 두 경로가 같은 동작을 합니다.
   let avatarUrl = input.avatarUrl ?? null;
-  if (avatarUrl === null) {
+  let nickname = input.nickname === undefined ? null : normalizeNickname(input.nickname ?? "");
+  if (avatarUrl === null || input.nickname === undefined) {
     try {
-      avatarUrl = await fetchDiscordAvatarUrl(env.DISCORD_BOT_TOKEN, input.discordId);
+      const profile = await fetchDiscordUserProfile(env.DISCORD_BOT_TOKEN, input.discordId);
+      if (profile) {
+        if (avatarUrl === null) avatarUrl = profile.avatarUrl;
+        if (input.nickname === undefined) {
+          // Discord 표시 이름이 우리 규칙에 안 맞으면(제어문자/따옴표 등) 기본값을 포기하고
+          // 비워둡니다 — 가입 자체를 막을 이유는 없습니다.
+          try {
+            nickname = normalizeNickname(profile.displayName);
+          } catch {
+            nickname = null;
+          }
+        }
+      }
     } catch (err) {
-      console.error(`Failed to fetch Discord avatar for new user ${input.discordId}`, err);
+      console.error(`Failed to fetch Discord profile for new user ${input.discordId}`, err);
     }
   }
 
   const uid = crypto.randomUUID();
   await env.CONTENT_DB.prepare(
-    `INSERT INTO users (uid, discord_id, name, email, student_id, phone, solved_ac, codeforces, atcoder, avatar_url)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+    `INSERT INTO users (uid, discord_id, name, email, student_id, phone, solved_ac, codeforces, atcoder, avatar_url, nickname)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
   )
     .bind(
       uid,
@@ -156,6 +205,7 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
       input.codeforces ?? null,
       input.atcoder ?? null,
       avatarUrl,
+      nickname,
     )
     .run();
 
@@ -240,6 +290,7 @@ export async function refreshAllUserAvatars(env: Env): Promise<AvatarRefreshResu
 
 export type UserUpdateInput = {
   discordId: string;
+  nickname: string; // '' = 닉네임 없음
   name: string | null;
   email: string | null;
   studentId: string | null;
@@ -258,11 +309,29 @@ export async function updateUser(env: Env, uid: string, input: UserUpdateInput):
   }
 
   await env.CONTENT_DB.prepare(
-    `UPDATE users SET discord_id=?2, name=?3, email=?4, student_id=?5, phone=?6, solved_ac=?7, codeforces=?8, atcoder=?9, updated_at=datetime('now')
+    `UPDATE users SET discord_id=?2, name=?3, email=?4, student_id=?5, phone=?6, solved_ac=?7, codeforces=?8, atcoder=?9, nickname=?10, updated_at=datetime('now')
      WHERE uid=?1`,
   )
-    .bind(uid, input.discordId, input.name, input.email, input.studentId, input.phone, input.solvedAc, input.codeforces, input.atcoder)
+    .bind(
+      uid,
+      input.discordId,
+      input.name,
+      input.email,
+      input.studentId,
+      input.phone,
+      input.solvedAc,
+      input.codeforces,
+      input.atcoder,
+      normalizeNickname(input.nickname),
+    )
     .run();
+}
+
+// 마이페이지 본인 수정용 — 세션으로 확인된 본인 uid에 대해 닉네임 하나만 고칩니다.
+// 빈 문자열도 유효한 값("닉네임 없음")이라 그대로 저장합니다.
+export async function updateUserNickname(env: Env, uid: string, rawNickname: string): Promise<void> {
+  const nickname = normalizeNickname(rawNickname);
+  await env.CONTENT_DB.prepare("UPDATE users SET nickname=?2, updated_at=datetime('now') WHERE uid=?1").bind(uid, nickname).run();
 }
 
 export type OwnHandlesInput = { solvedAc: string | null; codeforces: string | null; atcoder: string | null };
@@ -349,6 +418,18 @@ export async function listHonoraryMembers(env: Env): Promise<UserRecord[]> {
 // 긁어올 때 씁니다(worker/src/routes/bot.ts). 핸들은 별도 테이블이 아니라 users의
 // 컬럼 하나씩입니다 — 사이트당 핸들 하나면 충분하고(같은 사람이 여러 계정을 등록할
 // 일이 거의 없음), backstage 유저 수정 페이지에서 이미 이 컬럼들을 직접 편집합니다.
+export type BotMemberRosterEntry = { discordId: string; studentId: string | null; name: string | null; nickname: string | null };
+
+// 디스코드 봇이 주기적으로 전체 회원을 훑을 때 쓰는 최소 명단(worker/src/routes/bot.ts).
+// 이메일·전화번호 같은 민감 정보는 굳이 안 내보냅니다 — 봇이 필요한 건 신원 매칭용
+// 디스코드 UID와 표시용 학번/이름/닉네임뿐입니다.
+export async function listBotMemberRoster(env: Env): Promise<BotMemberRosterEntry[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    "SELECT discord_id, student_id, name, nickname FROM users ORDER BY created_at ASC",
+  ).all<{ discord_id: string; student_id: string | null; name: string | null; nickname: string | null }>();
+  return results.map((r) => ({ discordId: r.discord_id, studentId: r.student_id, name: r.name, nickname: r.nickname }));
+}
+
 export type HandleSite = "solvedAc" | "codeforces" | "atcoder";
 export type HandleEntry = { discordId: string; handle: string };
 

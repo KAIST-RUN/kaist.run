@@ -206,6 +206,15 @@
       "inactive": "Inactive member"
     },
     "adminBadge": "Admin",
+    "nickname": {
+      "empty": "(no nickname)",
+      "edit": "Edit nickname",
+      "placeholder": "Enter a nickname (leave blank for none)",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "saveError": "Couldn't save. Please try again."
+    },
     "memberInfo": {
       "title": "Member Information",
       "name": "Name",

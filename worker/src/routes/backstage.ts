@@ -524,7 +524,7 @@ function paginateMembers(c: { req: { query(key: string): string | undefined } },
   const page = Math.max(0, Number.parseInt(c.req.query("page") ?? "0", 10) || 0);
 
   const filtered = q
-    ? users.filter((u) => [u.name, u.studentId, u.email, u.discordId].some((v) => v?.toLowerCase().includes(q)))
+    ? users.filter((u) => [u.nickname, u.name, u.studentId, u.email, u.discordId].some((v) => v?.toLowerCase().includes(q)))
     : users;
   const start = page * MEMBERS_PAGE_SIZE;
   const pageItems = filtered.slice(start, start + MEMBERS_PAGE_SIZE);
@@ -609,6 +609,7 @@ backstage.get("/members/new", async (c) => {
   const empty: UserFormData = {
     uid: "",
     discordId: "",
+    nickname: "",
     name: "",
     email: "",
     studentId: "",
@@ -625,6 +626,7 @@ backstage.get("/members/new", async (c) => {
 function readUserForm(get: (key: string) => string): Omit<UserFormData, "uid"> {
   return {
     discordId: get("discordId").trim(),
+    nickname: get("nickname").trim(),
     name: get("name").trim(),
     email: get("email").trim(),
     studentId: get("studentId").trim(),
@@ -647,6 +649,9 @@ backstage.post("/members/new", async (c) => {
   try {
     const created = await createUser(c.env, {
       discordId: input.discordId,
+      // 폼을 비워두면 Discord 표시 이름을 기본값으로 쓰도록 undefined를 넘깁니다
+      // (''를 넘기면 "닉네임 없음"으로 확정돼 버립니다 — members.ts::createUser 참고).
+      nickname: input.nickname || undefined,
       name: input.name || null,
       email: input.email || null,
       studentId: input.studentId || null,
@@ -687,6 +692,7 @@ backstage.post("/members/:uid/edit", async (c) => {
   try {
     await updateUser(c.env, uid, {
       discordId: input.discordId,
+      nickname: input.nickname,
       name: input.name || null,
       email: input.email || null,
       studentId: input.studentId || null,

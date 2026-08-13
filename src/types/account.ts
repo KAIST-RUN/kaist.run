@@ -8,6 +8,10 @@ export type CurrentUser = {
   avatarUrl: string | null;
 
   name: string | null;
+  // 실명과 별개인 표시용 닉네임 — 마이페이지에서 본인이 언제든 고칠 수 있습니다
+  // (POST /api/me/nickname). null(아직 정해진 적 없음)과 ""(명시적으로 비움) 둘 다
+  // 화면에는 "닉네임 없음"으로 보입니다. 회원 간 중복 허용.
+  nickname: string | null;
   email: string | null;
   studentId: string | null;
 

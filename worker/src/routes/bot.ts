@@ -9,6 +9,7 @@ import {
   UserValidationError,
   listAllTimeHandles,
   listCurrentSemesterHandles,
+  listBotMemberRoster,
   type HandleSite,
 } from "../lib/members";
 import { requestSemesterMembership, getUserSemesters, listAllSemesterDiscordIds, SemesterError } from "../lib/semesters";
@@ -61,6 +62,10 @@ bot.post("/users", async (c) => {
 
   try {
     const result = await upsertUserByDiscordId(c.env, b.discordId as string, {
+      // 생략하면 Discord 표시 이름을 기본값으로 씁니다. ''를 명시하면 "닉네임 없음"으로
+      // 확정됩니다(members.ts::createUser). str()이 undefined를 그대로 흘려보내므로
+      // 이 구분이 유지됩니다.
+      nickname: str(b.nickname),
       name: str(b.name),
       email: str(b.email),
       studentId: str(b.studentId),
@@ -146,6 +151,12 @@ bot.get("/handles/:site/current-semester", async (c) => {
   const site = parseSite(c);
   if (!site) return c.json({ error: "site는 solved-ac|codeforces|atcoder 중 하나여야 합니다." }, 400);
   return c.json(await listCurrentSemesterHandles(c.env, site));
+});
+
+// 봇이 주기적으로 전체 회원을 훑을 때 씁니다 — 디스코드 UID + 학번 + 이름 + 닉네임.
+// 닉네임은 아직 정해진 적 없으면(기존 회원) null, 회원이 명시적으로 비웠으면 ""입니다.
+bot.get("/members", async (c) => {
+  return c.json(await listBotMemberRoster(c.env));
 });
 
 // 모든(열린) 학기 각각의 소속(승인된) 디스코드 ID 목록.

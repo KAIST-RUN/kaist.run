@@ -5,26 +5,12 @@ import { useTranslations } from "next-intl";
 import type { CurrentUser } from "@/types/account";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { updateHandles } from "@/lib/account/api";
+import PencilIcon from "./PencilIcon";
 
 // 최신순 정렬 — season은 문자열이라 그냥 비교하면 "spring" > "fall"이라 같은 해
 // 안에서 순서가 뒤집히므로, 가을을 더 큰 값으로 취급해서 비교합니다.
 function seasonRank(season: "spring" | "fall"): number {
   return season === "fall" ? 1 : 0;
-}
-
-function PencilIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-4 w-4">
-      <path
-        d="M12.4 4.2l3.4 3.4-8.4 8.4-4 1 1-4 8-8.4z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <path d="M10.8 5.8l3.4 3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 type HandleKey = "solvedAc" | "codeforces" | "atcoder";

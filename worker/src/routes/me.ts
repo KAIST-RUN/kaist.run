@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { CurrentUser, Env } from "../types";
 import { requireSession } from "../lib/authGuard";
 import { getUserSemesters } from "../lib/semesters";
-import { updateUserHandles } from "../lib/members";
+import { updateUserHandles, updateUserNickname, UserValidationError } from "../lib/members";
 import { getMemberRunforce, getRunforceConfig, effectiveRunforceRange } from "../lib/runforce";
 
 export const me = new Hono<{ Bindings: Env }>();
@@ -31,6 +31,7 @@ me.get("/", async (c) => {
     discordDisplayName: session.discordDisplayName,
     avatarUrl: session.avatarUrl,
     name: member.name,
+    nickname: member.nickname,
     email: member.email,
     studentId: member.studentId,
     status: member.status,
@@ -50,6 +51,26 @@ me.get("/", async (c) => {
   };
 
   return c.json(user);
+});
+
+// 마이페이지에서 본인이 닉네임을 고칠 때 씁니다. 빈 문자열도 유효한 값("닉네임 없음")이라
+// 그대로 저장하고, 규칙에 안 맞는 문자가 있으면 400으로 알려줍니다.
+me.post("/nickname", async (c) => {
+  const auth = await requireSession(c);
+  if (!auth.ok) return c.json({ error: auth.reason }, auth.reason === "forbidden" ? 403 : 401);
+
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object") return c.json({ error: "invalid body" }, 400);
+  const nickname = (body as Record<string, unknown>).nickname;
+  if (typeof nickname !== "string") return c.json({ error: "nickname은 문자열이어야 합니다." }, 400);
+
+  try {
+    await updateUserNickname(c.env, auth.member.uid, nickname);
+  } catch (err) {
+    if (err instanceof UserValidationError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+  return c.json({ ok: true });
 });
 
 // 마이페이지에서 본인이 solved.ac/Codeforces/AtCoder 핸들을 직접 고칠 때 씁니다
