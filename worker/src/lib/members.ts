@@ -1,5 +1,7 @@
 import type { Env } from "../types";
 import { fetchDiscordAvatarUrl, fetchDiscordUserProfile } from "./discord";
+import type { Season } from "./content";
+import type { UserSemesterEntry } from "./semesters";
 
 // 예전엔 구글 스프레드시트 → MEMBERS(KV) 캐시가 회원 데이터의 원천이었지만, 이제 D1의
 // users/admins/semester_membership 테이블이 원천입니다(0012_users.sql). uid는
@@ -422,16 +424,58 @@ export async function listHonoraryMembers(env: Env): Promise<UserRecord[]> {
 // 긁어올 때 씁니다(worker/src/routes/bot.ts). 핸들은 별도 테이블이 아니라 users의
 // 컬럼 하나씩입니다 — 사이트당 핸들 하나면 충분하고(같은 사람이 여러 계정을 등록할
 // 일이 거의 없음), backstage 유저 수정 페이지에서 이미 이 컬럼들을 직접 편집합니다.
-export type BotMemberRosterEntry = { discordId: string; studentId: string | null; name: string | null; nickname: string | null };
+export type BotMemberRosterEntry = {
+  discordId: string;
+  studentId: string | null;
+  name: string | null;
+  nickname: string | null;
+  // 신청만 하고 아직 승인 안 된 학기(status: 'pending')도 함께 나옵니다 — /api/me와 같은
+  // 모양입니다(semesters.ts::UserSemesterEntry). 봇이 학기 역할을 부여할 땐 반드시
+  // status === 'approved'만 거르세요. 최신 학기가 먼저 옵니다.
+  semesters: UserSemesterEntry[];
+};
 
 // 디스코드 봇이 주기적으로 전체 회원을 훑을 때 쓰는 최소 명단(worker/src/routes/bot.ts).
 // 이메일·전화번호 같은 민감 정보는 굳이 안 내보냅니다 — 봇이 필요한 건 신원 매칭용
-// 디스코드 UID와 표시용 학번/이름/닉네임뿐입니다.
+// 디스코드 UID와 표시용 학번/이름/닉네임, 그리고 학기 역할 동기화용 소속 학기뿐입니다.
+//
+// 학기는 유저마다 따로 조회하지 않고(회원 수만큼 쿼리가 늘어남) LEFT JOIN 한 방으로
+// 가져와서 메모리에서 묶습니다 — listAllSemesterDiscordIds와 같은 방식입니다. LEFT JOIN이라
+// 소속 학기가 하나도 없는 회원도 semesters: []로 빠짐없이 나옵니다.
 export async function listBotMemberRoster(env: Env): Promise<BotMemberRosterEntry[]> {
   const { results } = await env.CONTENT_DB.prepare(
-    "SELECT discord_id, student_id, name, nickname FROM users ORDER BY created_at ASC",
-  ).all<{ discord_id: string; student_id: string | null; name: string | null; nickname: string | null }>();
-  return results.map((r) => ({ discordId: r.discord_id, studentId: r.student_id, name: r.name, nickname: r.nickname }));
+    `SELECT u.discord_id, u.student_id, u.name, u.nickname, sm.year, sm.season, sm.status
+     FROM users u
+     LEFT JOIN semester_membership sm ON sm.uid = u.uid
+     ORDER BY u.created_at ASC, sm.year DESC, (CASE sm.season WHEN 'fall' THEN 1 ELSE 0 END) DESC`,
+  ).all<{
+    discord_id: string;
+    student_id: string | null;
+    name: string | null;
+    nickname: string | null;
+    year: number | null;
+    season: Season | null;
+    status: "pending" | "approved" | null;
+  }>();
+
+  const byDiscordId = new Map<string, BotMemberRosterEntry>();
+  for (const r of results) {
+    if (!byDiscordId.has(r.discord_id)) {
+      byDiscordId.set(r.discord_id, {
+        discordId: r.discord_id,
+        studentId: r.student_id,
+        name: r.name,
+        nickname: r.nickname,
+        semesters: [],
+      });
+    }
+    // 소속 학기가 없는 회원은 학기 컬럼이 전부 NULL인 행 하나로 옵니다(LEFT JOIN).
+    if (r.year !== null && r.season !== null && r.status !== null) {
+      byDiscordId.get(r.discord_id)!.semesters.push({ year: r.year, season: r.season, status: r.status });
+    }
+  }
+  // Map은 삽입 순서를 유지하므로 위 SQL의 created_at ASC(가입 순)가 그대로 나갑니다.
+  return [...byDiscordId.values()];
 }
 
 export type HandleSite = "solvedAc" | "codeforces" | "atcoder";
