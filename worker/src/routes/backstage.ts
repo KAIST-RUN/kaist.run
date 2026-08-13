@@ -41,6 +41,7 @@ import {
   grantHonoraryMember,
   revokeHonoraryMember,
   listHonoraryMembers,
+  refreshAllUserAvatars,
   UserValidationError,
 } from "../lib/members";
 import {
@@ -547,6 +548,26 @@ backstage.get("/members", async (c) => {
   const users = await listUsers(c.env);
   const { pageItems, meta } = paginateMembers(c, users);
   return c.html(renderMemberList(pageItems, meta));
+});
+
+// 전체 유저의 Discord 프로필 사진을 다시 읽어옵니다. 평소엔 로그인할 때마다 공짜로
+// 갱신되지만(auth.ts), 한 번도 로그인한 적 없는 회원은 등록 시점 사진에 머물러 있어서
+// 관리자가 수동으로 한 번에 돌릴 수 있게 둡니다.
+//
+// 회원 수만큼 Discord API를 호출하므로 몇 초 걸릴 수 있습니다(동시 5건으로 제한 —
+// members.ts::refreshAllUserAvatars). 리다이렉트 대신 결과를 안내문에 담아 목록을 바로
+// 그려줍니다(RUNFORCE 대회 수동 추가와 같은 방식) — 몇 명이 갱신됐는지 바로 보이도록.
+backstage.post("/members/refresh-avatars", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const result = await refreshAllUserAvatars(c.env);
+  const parts = [`총 ${result.total}명 중 ${result.updated}명 갱신`, `${result.unchanged}명 변화 없음`];
+  if (result.failed > 0) parts.push(`${result.failed}명 실패(기존 사진 유지)`);
+
+  const users = await listUsers(c.env);
+  const { pageItems, meta } = paginateMembers(c, users);
+  return c.html(renderMemberList(pageItems, meta, parts.join(" · ")));
 });
 
 backstage.get("/members/export.csv", async (c) => {

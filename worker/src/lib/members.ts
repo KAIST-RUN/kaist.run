@@ -127,6 +127,19 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
   const existing = await getUserByDiscordId(env, input.discordId);
   if (existing) throw new UserValidationError("이미 등록된 Discord 계정입니다.");
 
+  // 아바타가 안 넘어왔으면 봇 토큰으로 한 번 조회해서 채웁니다 — 그래야 backstage에서
+  // 방금 만든 유저도 명단에 프로필 사진이 바로 뜹니다(그 사람이 아직 로그인한 적 없어도).
+  // 실패해도 등록 자체는 막지 않고 사진만 비워둡니다(다음 로그인 때 touchUserAvatar가 채움).
+  // 봇 가입 경로(upsertUserByDiscordId)도 이 함수를 거치므로 두 경로가 같은 동작을 합니다.
+  let avatarUrl = input.avatarUrl ?? null;
+  if (avatarUrl === null) {
+    try {
+      avatarUrl = await fetchDiscordAvatarUrl(env.DISCORD_BOT_TOKEN, input.discordId);
+    } catch (err) {
+      console.error(`Failed to fetch Discord avatar for new user ${input.discordId}`, err);
+    }
+  }
+
   const uid = crypto.randomUUID();
   await env.CONTENT_DB.prepare(
     `INSERT INTO users (uid, discord_id, name, email, student_id, phone, solved_ac, codeforces, atcoder, avatar_url)
@@ -142,7 +155,7 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
       input.solvedAc ?? null,
       input.codeforces ?? null,
       input.atcoder ?? null,
-      input.avatarUrl ?? null,
+      avatarUrl,
     )
     .run();
 
@@ -152,10 +165,8 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
 }
 
 // 디스코드 봇의 "신규 회원가입"용 — discordId 기준으로 있으면 갱신, 없으면 새로 만듭니다
-// (재실행해도 안전한 upsert). 넘어오지 않은(undefined) 필드는 기존 값을 그대로
-// 두고, 아바타가 없는 신규 유저는 봇 토큰으로 한 번 best-effort 조회를 시도합니다
-// (로그인 전에도 backstage 명단에서 프로필 사진이 보이도록 — 실패해도 등록 자체는
-// 막지 않습니다).
+// (재실행해도 안전한 upsert). 넘어오지 않은(undefined) 필드는 기존 값을 그대로 둡니다.
+// 신규 유저의 아바타 조회는 createUser가 담당합니다(backstage 수동 등록과 동일한 동작).
 export async function upsertUserByDiscordId(
   env: Env,
   discordId: string,
@@ -164,15 +175,8 @@ export async function upsertUserByDiscordId(
   const existing = await getUserByDiscordId(env, discordId);
 
   if (!existing) {
-    let avatarUrl = input.avatarUrl ?? null;
-    if (avatarUrl === null) {
-      try {
-        avatarUrl = await fetchDiscordAvatarUrl(env.DISCORD_BOT_TOKEN, discordId);
-      } catch (err) {
-        console.error(`Failed to fetch Discord avatar for new user ${discordId}`, err);
-      }
-    }
-    const created = await createUser(env, { discordId, ...input, avatarUrl });
+    // 아바타 조회는 createUser가 알아서 합니다(안 넘기면 봇 토큰으로 채움).
+    const created = await createUser(env, { discordId, ...input });
     return { uid: created.uid, created: true };
   }
 
@@ -192,6 +196,46 @@ export async function upsertUserByDiscordId(
     .bind(existing.uid, next.name, next.email, next.studentId, next.phone, next.solvedAc, next.codeforces, next.atcoder)
     .run();
   return { uid: existing.uid, created: false };
+}
+
+export type AvatarRefreshResult = { total: number; updated: number; unchanged: number; failed: number };
+
+// 한 번에 띄우는 Discord API 요청 수. 회원이 수백 명으로 늘어도 한 번의 클릭으로 끝나되,
+// Discord 레이트리밋(전역 초당 수십 건)에 여유를 두는 정도로 잡았습니다. fetchDiscordAvatarUrl
+// 자체도 429면 Retry-After만큼 기다렸다 한 번 재시도합니다.
+const AVATAR_REFRESH_CONCURRENCY = 5;
+
+// backstage 회원 명단의 "프로필 사진 갱신" 버튼 — 전체 유저의 아바타를 Discord에서 다시
+// 읽어옵니다. 평소엔 로그인할 때마다 공짜로 갱신되지만(auth.ts::touchUserAvatar), 한 번도
+// 로그인한 적 없는 회원은 등록 시점 사진에 머물러 있어서 이 수동 갱신이 필요합니다.
+//
+// 실패한 사람은 기존 사진을 그대로 둡니다 — fetchDiscordAvatarUrl은 "확인해보니 사진 없음"을
+// null로, 일시적 실패(레이트리밋/5xx)는 예외로 구분해서 알려주므로(discord.ts 참고), 예외인
+// 경우까지 null로 덮어쓰면 멀쩡한 사진이 사라집니다.
+export async function refreshAllUserAvatars(env: Env): Promise<AvatarRefreshResult> {
+  const users = await listUsers(env);
+  const result: AvatarRefreshResult = { total: users.length, updated: 0, unchanged: 0, failed: 0 };
+
+  for (let i = 0; i < users.length; i += AVATAR_REFRESH_CONCURRENCY) {
+    const batch = users.slice(i, i + AVATAR_REFRESH_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (user) => {
+        try {
+          const avatarUrl = await fetchDiscordAvatarUrl(env.DISCORD_BOT_TOKEN, user.discordId);
+          if (avatarUrl === user.avatarUrl) {
+            result.unchanged++;
+            return;
+          }
+          await touchUserAvatar(env, user.discordId, avatarUrl);
+          result.updated++;
+        } catch (err) {
+          console.error(`아바타 갱신 실패 (discordId=${user.discordId})`, err);
+          result.failed++;
+        }
+      }),
+    );
+  }
+  return result;
 }
 
 export type UserUpdateInput = {

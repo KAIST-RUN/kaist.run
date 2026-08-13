@@ -1224,7 +1224,7 @@ function renderMemberRow(user: UserRecord): string {
   </li>`;
 }
 
-export function renderMemberList(users: UserRecord[], meta: MemberListPage): string {
+export function renderMemberList(users: UserRecord[], meta: MemberListPage, notice?: string): string {
   const body =
     users.length === 0
       ? `<p class="empty">${meta.q ? "검색 결과가 없습니다." : "등록된 유저가 없습니다. 위에서 새로 등록해 주세요."}</p>`
@@ -1249,10 +1249,14 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage): str
     <h1>회원 명단</h1>
     ${memberSubnav("list")}
     <p class="bs-note" style="margin-bottom:16px">D1에 저장된 전체 유저 명단이에요.</p>
+    ${notice ? `<p class="bs-note" style="margin-bottom:16px">${escapeHtml(notice)}</p>` : ""}
 
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       <a class="bs-new" href="/members/new" style="margin-bottom:0">+ 새 유저</a>
       <a class="bs-new bs-new-outline" href="/members/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+      <form method="post" action="/members/refresh-avatars" style="margin:0;">
+        <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0;">프로필 사진 갱신</button>
+      </form>
     </div>
 
     <form class="bs-search" method="get" action="/members">
