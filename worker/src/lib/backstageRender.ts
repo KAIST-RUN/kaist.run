@@ -566,6 +566,7 @@ const FORM_STYLE = `
   .bs-table th, .bs-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(128,128,128,.18); white-space: nowrap; }
   .bs-table th { font-weight: 700; opacity: .6; font-size: 0.75rem; text-transform: uppercase; }
   .bs-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bs-table th.center, .bs-table td.center { text-align: center; }
   .bs-table tr:hover td { background: rgba(128,128,128,.05); }
 `;
 
@@ -3153,8 +3154,8 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
       (e, idx) => `<tr>
         <td class="num">${idx + 1}</td>
         <td>${escapeHtml(e.name || "(이름 없음)")}</td>
-        <td class="num">${formatRunforceDisplay(e.totalScore)}</td>
-        <td class="num">${e.contestsCounted}</td>
+        <td class="num center">${formatRunforceDisplay(e.totalScore)}</td>
+        <td class="num center">${e.contestsCounted}</td>
       </tr>`,
     )
     .join("\n");
@@ -3176,7 +3177,7 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
         ? `<p class="empty">이번 학기 활동회원이 없습니다.</p>`
         : `<div class="bs-table-wrap">
       <table class="bs-table">
-        <thead><tr><th>순위</th><th>이름</th><th>총점</th><th>참가 대회 수</th></tr></thead>
+        <thead><tr><th>순위</th><th>이름</th><th class="center">총점</th><th class="center">참가 대회 수</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`
