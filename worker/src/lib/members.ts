@@ -231,6 +231,10 @@ export async function upsertUserByDiscordId(
   }
 
   const next = {
+    // 다른 필드와 같은 규칙 — 안 보내면(undefined) 회원이 마이페이지에서 정한 닉네임을
+    // 그대로 둡니다. 봇이 동기화할 때마다 디스코드 이름을 실어 보내면 본인이 고른 닉네임을
+    // 덮어쓰게 되니, 바꿀 의도가 있을 때만 nickname을 넣어 보내세요(isAdmin과 같은 주의점).
+    nickname: input.nickname !== undefined ? normalizeNickname(input.nickname ?? "") : existing.nickname,
     name: input.name !== undefined ? input.name : existing.name,
     email: input.email !== undefined ? input.email : existing.email,
     studentId: input.studentId !== undefined ? input.studentId : existing.studentId,
@@ -240,10 +244,10 @@ export async function upsertUserByDiscordId(
     atcoder: input.atcoder !== undefined ? input.atcoder : existing.atcoder,
   };
   await env.CONTENT_DB.prepare(
-    `UPDATE users SET name=?2, email=?3, student_id=?4, phone=?5, solved_ac=?6, codeforces=?7, atcoder=?8, updated_at=datetime('now')
+    `UPDATE users SET name=?2, email=?3, student_id=?4, phone=?5, solved_ac=?6, codeforces=?7, atcoder=?8, nickname=?9, updated_at=datetime('now')
      WHERE uid=?1`,
   )
-    .bind(existing.uid, next.name, next.email, next.studentId, next.phone, next.solvedAc, next.codeforces, next.atcoder)
+    .bind(existing.uid, next.name, next.email, next.studentId, next.phone, next.solvedAc, next.codeforces, next.atcoder, next.nickname)
     .run();
   return { uid: existing.uid, created: false };
 }
