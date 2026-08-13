@@ -915,6 +915,7 @@ backstage.post("/runforce/config", async (c) => {
       autoDiscoveryEnabled: get("autoDiscoveryEnabled") === "1",
       rangeStartDate: get("rangeStartDate") || null,
       rangeEndDate: get("rangeEndDate") || null,
+      rangeEndAuto: get("rangeEndAuto") === "1",
     });
 
     // 저장 즉시 큐에 새 후보를 채우고, 첫 배치도 바로 한 번 처리합니다 — 1분 크론을

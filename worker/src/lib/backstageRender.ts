@@ -2925,7 +2925,17 @@ export function renderRunforceSettings(
         </div>
         <div class="bs-field">
           <label>종료일</label>
-          <input type="date" name="rangeEndDate" value="${escapeHtml(config.rangeEndDate ?? "")}" />
+          <div style="position:relative;">
+            <input type="date" id="rangeEndDate" name="rangeEndDate" value="${escapeHtml(config.rangeEndDate ?? "")}" />
+            <div
+              id="rangeEndDateMask"
+              style="position:absolute;inset:0;border-radius:8px;background:rgba(0,0,0,.45);cursor:not-allowed;display:${config.rangeEndAuto ? "block" : "none"};"
+            ></div>
+          </div>
+          <label class="bs-check" style="flex-direction:row;margin-top:6px;font-weight:400;">
+            <input type="checkbox" id="rangeEndAuto" name="rangeEndAuto" value="1" ${config.rangeEndAuto ? "checked" : ""} />
+            <span>항상 오늘 날짜로 자동 설정</span>
+          </label>
         </div>
         <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;">
           <input type="checkbox" id="autoDiscoveryEnabled" name="autoDiscoveryEnabled" value="1" ${config.autoDiscoveryEnabled ? "checked" : ""} />
@@ -2939,7 +2949,19 @@ export function renderRunforceSettings(
         저장하면 매시 정각 갱신을 기다리지 않고 바로 한 번 수집합니다(수집은 백그라운드로 돌아가니,
         잠시 뒤 새로고침하면 아래 목록에 반영됩니다). 이미 등록된 대회는 다시 계산되지 않고 —
         새로 열린 rated 대회만 추가됩니다. 기간은 최대 6개월까지 설정할 수 있습니다.
+        "항상 오늘 날짜로 자동 설정"을 켜면 종료일 입력값은 그대로 저장은 되지만(꺼두면 되돌아옵니다)
+        실제 탐색에는 매번 오늘 날짜가 쓰입니다.
       </p>
+      <script>
+        (function () {
+          var chk = document.getElementById("rangeEndAuto");
+          var mask = document.getElementById("rangeEndDateMask");
+          if (!chk || !mask) return;
+          chk.addEventListener("change", function () {
+            mask.style.display = chk.checked ? "block" : "none";
+          });
+        })();
+      </script>
     </div>
 
     <div class="bs-card">
