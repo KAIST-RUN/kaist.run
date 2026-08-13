@@ -790,6 +790,9 @@ export type RunforceMemberBreakdownRow = {
   participantCount: number;
   score: number;
   isUnratedParticipant: boolean;
+  // 활동회원이면 미참가여도(0.2배로 감점된) 행이 저장되므로, "참가 대회 수" 같은 걸
+  // 세려면 이 필드로 걸러야 합니다 — rows.length는 그냥 "대상 대회 수"가 됩니다.
+  participated: boolean;
 };
 
 // ---------- 합산(총점) 계산 — Div1/Div2 페어링 반영 ----------
@@ -840,6 +843,7 @@ function toBreakdownRow(contest: RunforceContestSummary, row: StoredResultRow): 
     participantCount: contest.participantCount,
     score: applyRunforceWeight(row.score, contest.weightMultiplier, isNonParticipant(row)),
     isUnratedParticipant: row.isUnratedParticipant,
+    participated: !isNonParticipant(row),
   };
 }
 
@@ -950,7 +954,7 @@ export async function getRunforceLeaderboard(env: Env): Promise<RunforceLeaderbo
       name: u.name,
       avatarUrl: u.avatar_url,
       totalScore: rows.reduce((sum, r) => sum + r.score, 0),
-      contestsCounted: rows.length,
+      contestsCounted: rows.filter((r) => r.participated).length,
     };
   });
   entries.sort((a, b) => b.totalScore - a.totalScore);
