@@ -19,6 +19,7 @@ import {
   formatRunforceDisplay,
   groupContests,
   runforceMaxScoreFor,
+  runforceWeightMultiplier,
   type AtCoderPendingEntry,
   type RunforceDiscoveryQueueEntry,
   type ContestGroup,
@@ -2747,10 +2748,13 @@ export function renderUploadList(files: UploadedFile[], meta: UploadListPage, er
 
 const PLATFORM_LABEL: Record<RunforcePlatform, string> = { codeforces: "Codeforces", atcoder: "AtCoder" };
 
-// "3번째 · 만점 330.750" — 이 대회가 몇 번째로 집계됐고 그래서 만점이 얼마인지. 점수 표시와
-// 같은 단위(1000으로 나눈 값)로 보여줘야 표 안의 점수들과 바로 비교됩니다.
+// "3번째 개최 · ×1.103 · 만점 330.750" — 지금 등록된 대회들을 개최 순서로 줄 세웠을 때
+// 몇 번째인지와 그에 따른 가중치/만점. 만점은 점수 표시와 같은 단위(1000으로 나눈 값)로
+// 보여줘야 표 안의 점수들과 바로 비교됩니다. 이 번호는 고정값이 아니라, 나중에 더 이른
+// 대회가 등록되면 뒤로 밀립니다.
 function runforceWeightLabel(weightIndex: number): string {
-  return `${weightIndex}번째 · 만점 ${formatRunforceDisplay(runforceMaxScoreFor(weightIndex))}`;
+  const multiplier = runforceWeightMultiplier(weightIndex).toFixed(3);
+  return `${weightIndex}번째 개최 · ×${multiplier} · 만점 ${formatRunforceDisplay(runforceMaxScoreFor(weightIndex))}`;
 }
 
 function runforceSubnav(active: "targets" | "leaderboard"): string {
