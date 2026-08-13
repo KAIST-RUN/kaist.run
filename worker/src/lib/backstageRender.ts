@@ -18,6 +18,7 @@ import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyF
 import {
   formatRunforceDisplay,
   groupContests,
+  runforceMaxScoreFor,
   type AtCoderPendingEntry,
   type RunforceDiscoveryQueueEntry,
   type ContestGroup,
@@ -2746,6 +2747,12 @@ export function renderUploadList(files: UploadedFile[], meta: UploadListPage, er
 
 const PLATFORM_LABEL: Record<RunforcePlatform, string> = { codeforces: "Codeforces", atcoder: "AtCoder" };
 
+// "3번째 · 만점 330.750" — 이 대회가 몇 번째로 집계됐고 그래서 만점이 얼마인지. 점수 표시와
+// 같은 단위(1000으로 나눈 값)로 보여줘야 표 안의 점수들과 바로 비교됩니다.
+function runforceWeightLabel(weightIndex: number): string {
+  return `${weightIndex}번째 · 만점 ${formatRunforceDisplay(runforceMaxScoreFor(weightIndex))}`;
+}
+
 function runforceSubnav(active: "targets" | "leaderboard"): string {
   return `<div class="bs-subnav">
     <a href="/runforce"${active === "targets" ? ' class="active"' : ""}>대상 대회</a>
@@ -2761,7 +2768,7 @@ function runforceContestRow(contest: RunforceContestSummary): string {
     <a class="bs-upload-open" href="/runforce/${encodeURIComponent(contest.id)}">
       <div class="info">
         <div class="name">[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</div>
-        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} · 참가대상 ${contest.participantCount}명</div>
+        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} · 참가대상 ${contest.participantCount}명 · ${runforceWeightLabel(contest.weightIndex)}</div>
       </div>
     </a>
     <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('이 대회를 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
@@ -2784,7 +2791,7 @@ function runforceContestPairSubRow(contest: RunforceContestSummary, label: strin
     <div class="bs-upload-open-static">
       <div class="info">
         <div class="name"><span class="bs-runforce-dot">•</span>${label}</div>
-        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명</div>
+        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명 · ${runforceWeightLabel(contest.weightIndex)}</div>
       </div>
     </div>
     <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('${label} 쪽을 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
@@ -2804,7 +2811,7 @@ function runforceContestPairRow(div1: RunforceContestSummary, div2: RunforceCont
       <a class="bs-upload-open" href="/runforce/${encodeURIComponent(div1.id)}">
         <div class="info">
           <div class="name">[${PLATFORM_LABEL[div1.platform]}] ${escapeHtml(stripDivisionSuffix(div1.contestName))}</div>
-          <div class="meta">${escapeHtml(formatKstDateTime(div1.startTimeMs))} · 참가대상 ${div1.participantCount}명</div>
+          <div class="meta">${escapeHtml(formatKstDateTime(div1.startTimeMs))} · 참가대상 ${div1.participantCount}명 · ${runforceWeightLabel(div1.weightIndex)}</div>
         </div>
       </a>
       <button type="button" class="bs-runforce-pair-toggle" aria-label="펼치기" aria-expanded="false">▾</button>
@@ -3040,7 +3047,7 @@ function runforceContestSection(contest: RunforceContestDetail, label: string): 
       <a class="bs-new bs-new-outline" href="/runforce/${encodeURIComponent(contest.id)}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
     </div>
     <p class="bs-note" style="margin-bottom:12px">
-      ${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명
+      ${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명 · ${runforceWeightLabel(contest.weightIndex)}
     </p>
     ${runforceResultsTable(contest.rows)}
     <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('[${label}] ${escapeHtml(contest.contestName)}을(를) 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')" style="margin-top:12px;">
@@ -3093,7 +3100,8 @@ export function renderRunforceContestDetail(
     <p class="bs-note" style="margin-bottom:16px">
       <a href="/runforce">← 대상 대회 목록</a> ·
       ${escapeHtml(contest.contestId)} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} ·
-      ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명
+      ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명 ·
+      ${runforceWeightLabel(contest.weightIndex)}
     </p>
 
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">

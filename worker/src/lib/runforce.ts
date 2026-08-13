@@ -131,6 +131,9 @@ export type RunforceContestSummary = {
   // AtCoder거나 판별 불가/합쳐진 라운드면 division은 항상 null.
   division: RunforceDivision | null;
   pairedContestId: string | null; // 짝지어진 다른 runforce_contests.id, 없으면 null
+  // 등록 순서(1부터). 이 대회의 만점 = runforceMaxScoreFor(weightIndex). Div1/Div2 짝은
+  // 한 라운드이므로 같은 번호를 공유합니다.
+  weightIndex: number;
 };
 
 type RawContestRow = {
@@ -145,6 +148,7 @@ type RawContestRow = {
   participant_count_snapshot: number;
   division: RunforceDivision | null;
   paired_contest_id: string | null;
+  weight_index: number;
 };
 
 function toContestSummary(row: RawContestRow): RunforceContestSummary {
@@ -160,11 +164,12 @@ function toContestSummary(row: RawContestRow): RunforceContestSummary {
     participantCount: row.participant_count_snapshot,
     division: row.division,
     pairedContestId: row.paired_contest_id,
+    weightIndex: row.weight_index,
   };
 }
 
 const CONTEST_ROW_SELECT =
-  "SELECT id, platform, contest_id, contest_name, start_time_ms, source, added_by_name, added_at, participant_count_snapshot, division, paired_contest_id FROM runforce_contests";
+  "SELECT id, platform, contest_id, contest_name, start_time_ms, source, added_by_name, added_at, participant_count_snapshot, division, paired_contest_id, weight_index FROM runforce_contests";
 
 export async function listTargetContests(env: Env): Promise<RunforceContestSummary[]> {
   const { results } = await env.CONTENT_DB.prepare(`${CONTEST_ROW_SELECT} ORDER BY start_time_ms DESC`).all<RawContestRow>();
@@ -190,14 +195,33 @@ function sigmoid(z: number): number {
 const SIGMOID_5 = sigmoid(5);
 const SIGMOID_NEG5 = sigmoid(-5);
 
-// score(x) = 300000 * (sigmoid(10*(x-0.5)) - sigmoid(-5)) / (sigmoid(5) - sigmoid(-5))
-// x=1(1등)이면 정확히 300000점, x→0(최하위)이면 0에 가깝지만 음수는 없음.
+// ---------- 대회별 가중치(만점) ----------
+// 후반 대회일수록 만점이 점진적으로 커집니다: i번째로 집계된 대회의 만점은
+// BASE_MAX_SCORE * WEIGHT_GROWTH^(i-1). i는 "등록된 순서"(runforce_contests.weight_index)로,
+// 등록 시점에 확정되고 그 뒤로 안 바뀝니다 — 0023 마이그레이션 주석 참고.
+const BASE_MAX_SCORE = 300000;
+const WEIGHT_GROWTH = 1.05;
+
+export function runforceMaxScoreFor(weightIndex: number): number {
+  return BASE_MAX_SCORE * WEIGHT_GROWTH ** (weightIndex - 1);
+}
+
+// 다음에 등록될 대회가 받을 번호 — 지금까지 쓰인 가장 큰 번호 + 1. COUNT(*)가 아니라
+// MAX를 쓰는 이유는 Div1/Div2 짝이 같은 번호를 공유해서 "행 개수 ≠ 번호"이기 때문이고,
+// 대회를 삭제해도 남은 번호가 당겨지지 않게(=기존 점수와 어긋나지 않게) 하기 위해서입니다.
+async function getNextWeightIndex(env: Env): Promise<number> {
+  const row = await env.CONTENT_DB.prepare("SELECT MAX(weight_index) AS maxIndex FROM runforce_contests").first<{ maxIndex: number | null }>();
+  return (row?.maxIndex ?? 0) + 1;
+}
+
+// score(x) = maxScore * (sigmoid(10*(x-0.5)) - sigmoid(-5)) / (sigmoid(5) - sigmoid(-5))
+// x=1(1등)이면 정확히 maxScore, x→0(최하위)이면 0에 가깝지만 음수는 없음.
 // 반환값은 아직 내림 전 원시값입니다 — 대회별로 실제 적용(저장)되는 값은
 // computeContestRanking에서 이 값을 내림한 정수입니다.
-export function computeRunforceScore(x: number): number {
+export function computeRunforceScore(x: number, maxScore: number = BASE_MAX_SCORE): number {
   const numerator = sigmoid(10 * (x - 0.5)) - SIGMOID_NEG5;
   const denominator = SIGMOID_5 - SIGMOID_NEG5;
-  return 300000 * (numerator / denominator);
+  return maxScore * (numerator / denominator);
 }
 
 // 화면/CSV에 RUNFORCE 점수를 보여줄 때 공통으로 쓰는 표시 변환입니다. 저장/합산되는
@@ -262,20 +286,24 @@ export type RunforceRankedRow = {
 //     건 "실시간으로 실제 참가했다"는 사실이 아예 미참가보다는 낫다고 보는 게 자연스러워서
 //     — participants 각자의 final_rank/score 계산에는 영향 없습니다(항상 맨 앞 블록이라
 //     unratedGroup/nonParticipants가 몇 명이든 무관).
-//  5) participants/nonParticipants: x = 1 - finalRank/total; score = floor(computeRunforceScore(x)).
+//  5) participants/nonParticipants: x = 1 - finalRank/total; score = floor(computeRunforceScore(x, maxScore)).
 //     unratedGroup: score는 공식으로 안 구하고 직접 대입합니다 — rated 참가자(=participants)가
-//     한 명도 없으면 1등에 해당하는 점수(300000), 있으면 rated 참가자들의 score(이미 위
-//     공식으로 계산된 값) 중 중앙값(개수가 짝수면 두 중앙값의 평균, 그 결과를 다시 내림)을
-//     그대로 적용합니다. x는 표시상 의미만 있고(디버깅/기록용) 실제 score와 무관하게
-//     자기 위치 기준 그대로 둡니다.
+//     한 명도 없으면 1등에 해당하는 점수(=maxScore, 즉 이 대회의 가중치가 그대로 반영된 값),
+//     있으면 rated 참가자들의 score(이미 위 공식으로 계산된 값) 중 중앙값(개수가 짝수면 두
+//     중앙값의 평균, 그 결과를 다시 내림)을 그대로 적용합니다. x는 표시상 의미만 있고
+//     (디버깅/기록용) 실제 score와 무관하게 자기 위치 기준 그대로 둡니다.
 //     총점은 대회마다 이렇게 내림/직접대입된 정수들의 합이지, 합산 후 한 번에 내림하는 게
 //     아닙니다 — getRunforceLeaderboard/getMemberRunforce의 SUM이 이미 이 정수들을 더하는
 //     것이므로 자연히 그렇게 됩니다.
+//
+// maxScore: 이 대회의 만점(가중치). 등록 순서에 따라 runforceMaxScoreFor(weightIndex)로
+// 계산해서 넘깁니다 — 생략하면 기존과 같은 300000.
 export function computeContestRanking(
   members: RunforceRankInput[],
   platformRanks: Map<string, number>,
   rng: () => number = defaultRng,
   unratedParticipantUids?: Set<string>,
+  maxScore: number = BASE_MAX_SCORE,
 ): RunforceRankedRow[] {
   const total = members.length;
   if (total === 0) throw new RunforceError("활동회원이 없어 랭킹을 계산할 수 없습니다.");
@@ -317,9 +345,13 @@ export function computeContestRanking(
   let unratedOverrideScore = 0;
   if (shuffledUnratedGroup.length > 0) {
     if (orderedParticipants.length === 0) {
-      unratedOverrideScore = 300000;
+      // rated 참가자가 없으면 1등에 해당하는 점수 — 이 대회의 가중치가 반영된 만점입니다
+      // (내림해서 다른 점수들과 같은 정수 단위로 맞춤).
+      unratedOverrideScore = Math.floor(maxScore);
     } else {
-      const ratedScores = orderedParticipants.map((w, idx) => Math.floor(computeRunforceScore(1 - idx / total))).sort((a, b) => a - b);
+      const ratedScores = orderedParticipants
+        .map((w, idx) => Math.floor(computeRunforceScore(1 - idx / total, maxScore)))
+        .sort((a, b) => a - b);
       const mid = Math.floor(ratedScores.length / 2);
       const median = ratedScores.length % 2 === 0 ? (ratedScores[mid - 1] + ratedScores[mid]) / 2 : ratedScores[mid];
       unratedOverrideScore = Math.floor(median);
@@ -328,7 +360,7 @@ export function computeContestRanking(
 
   return finalOrder.map((w, idx) => {
     const x = 1 - idx / total;
-    const score = w.isUnratedParticipant ? unratedOverrideScore : Math.floor(computeRunforceScore(x));
+    const score = w.isUnratedParticipant ? unratedOverrideScore : Math.floor(computeRunforceScore(x, maxScore));
     return {
       uid: w.uid,
       name: w.name,
@@ -399,6 +431,19 @@ export async function addTargetContest(
   const division = platform === "codeforces" ? detectCodeforcesDivision(meta.name) : null;
   const rowId = crypto.randomUUID();
 
+  // 짝이 될 수 있는 반대 division 대회를 미리 찾아둡니다 — 아래 두 군데서 씁니다:
+  //  (1) 가중치: 짝지어질 상대가 있으면 같은 weight_index를 공유합니다(한 라운드 = 한 칸).
+  //  (2) unrated 검사 건너뛰기(Div.2에 짝지어질 Div.1이 있는 경우).
+  // 실제 페어링(paired_contest_id 갱신)은 아래 tryAutoPairCodeforcesDivisions가 합니다.
+  const pairPartner = division
+    ? await findUnpairedCodeforcesPartner(env, division === "div1" ? "div2" : "div1", meta.startTimeMs, rowId)
+    : null;
+
+  // i번째로 집계된 대회의 만점 = 300000 * 1.05^(i-1). i(weight_index)는 등록 순서이며
+  // 여기서 확정된 뒤 절대 안 바뀝니다. 짝이 있으면 그 짝의 번호를 그대로 씁니다.
+  const weightIndex = pairPartner ? pairPartner.weightIndex : await getNextWeightIndex(env);
+  const maxScore = runforceMaxScoreFor(weightIndex);
+
   const members = await listActiveMembersWithHandle(env, platform);
 
   // 레이팅 상한이 있는 라운드(Div.2/Div.3/Div.4 — isCodeforcesRatingCappedRound 참고)에서
@@ -409,7 +454,7 @@ export async function addTargetContest(
   // Div.3/Div.4는 애초에 짝 개념이 없어서 항상 검사합니다.
   let unratedParticipantUids: Set<string> | undefined;
   if (platform === "codeforces" && isCodeforcesRatingCappedRound(meta.name)) {
-    const div1Partner = division === "div2" ? await findUnpairedCodeforcesPartner(env, "div1", meta.startTimeMs, rowId) : null;
+    const div1Partner = division === "div2" ? pairPartner : null;
     if (!div1Partner) {
       const candidates = members.filter((m) => m.handle && !platformRanks.has(m.handle.trim().toLowerCase()));
       if (candidates.length > 0) {
@@ -429,14 +474,14 @@ export async function addTargetContest(
     }
   }
 
-  const ranked = computeContestRanking(members, platformRanks, undefined, unratedParticipantUids);
+  const ranked = computeContestRanking(members, platformRanks, undefined, unratedParticipantUids, maxScore);
 
   const statements = [
     env.CONTENT_DB.prepare(
       `INSERT INTO runforce_contests
-         (id, platform, contest_id, contest_name, start_time_ms, source, added_by_uid, added_by_name, participant_count_snapshot, division)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
-    ).bind(rowId, platform, contestId, meta.name, meta.startTimeMs, source, addedBy.uid, addedBy.name, ranked.length, division),
+         (id, platform, contest_id, contest_name, start_time_ms, source, added_by_uid, added_by_name, participant_count_snapshot, division, weight_index)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+    ).bind(rowId, platform, contestId, meta.name, meta.startTimeMs, source, addedBy.uid, addedBy.name, ranked.length, division, weightIndex),
     ...ranked.map((r) =>
       env.CONTENT_DB.prepare(
         `INSERT INTO runforce_results (contest_id, uid, handle_snapshot, platform_rank, final_rank, x, score, is_unrated_participant)
@@ -540,14 +585,14 @@ async function findUnpairedCodeforcesPartner(
   wantedDivision: RunforceDivision,
   startTimeMs: number,
   excludeContestId: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; weightIndex: number } | null> {
   const candidate = await env.CONTENT_DB.prepare(
-    `SELECT id FROM runforce_contests
+    `SELECT id, weight_index AS weightIndex FROM runforce_contests
      WHERE platform='codeforces' AND division=?1 AND start_time_ms=?2 AND paired_contest_id IS NULL AND id != ?3
      LIMIT 1`,
   )
     .bind(wantedDivision, startTimeMs, excludeContestId)
-    .first<{ id: string }>();
+    .first<{ id: string; weightIndex: number }>();
   return candidate ?? null;
 }
 
