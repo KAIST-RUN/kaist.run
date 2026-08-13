@@ -83,4 +83,9 @@ export type CurrentUser = {
     score: number;
     isUnratedParticipant: boolean;
   }[];
+
+  // RUNFORCE 시즌 표시용(집계에는 관여 안 함) — backstage RUNFORCE 탭에서 지정합니다.
+  // name이 비어 있으면 마이페이지에서 시즌 줄을 안 그립니다. endDate는 "항상 오늘" 설정이
+  // 켜져 있으면 오늘 날짜로 해석된 값입니다.
+  runforceSeason: { name: string | null; startDate: string | null; endDate: string | null };
 };

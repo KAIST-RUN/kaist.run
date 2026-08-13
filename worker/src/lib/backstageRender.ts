@@ -2920,6 +2920,11 @@ export function renderRunforceSettings(
     <div class="bs-card">
       <p class="bs-card-title">날짜범위 자동 탐색</p>
       <form method="post" action="/runforce/config" class="bs-row2">
+        <div class="bs-field" style="grid-column:1/-1;">
+          <label>현재 시즌 이름</label>
+          <input type="text" name="seasonName" value="${escapeHtml(config.seasonName ?? "")}" placeholder="예: Beta Season (비우면 마이페이지에 안 보임)" />
+          <span class="hint">마이페이지 RUNFORCE 카드에 이 이름과 아래 기간이 함께 표시됩니다. 집계에는 영향을 주지 않습니다.</span>
+        </div>
         <div class="bs-field">
           <label>시작일</label>
           <input type="date" name="rangeStartDate" value="${escapeHtml(config.rangeStartDate ?? "")}" />

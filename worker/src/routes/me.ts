@@ -3,7 +3,7 @@ import type { CurrentUser, Env } from "../types";
 import { requireSession } from "../lib/authGuard";
 import { getUserSemesters } from "../lib/semesters";
 import { updateUserHandles } from "../lib/members";
-import { getMemberRunforce } from "../lib/runforce";
+import { getMemberRunforce, getRunforceConfig, effectiveRunforceRange } from "../lib/runforce";
 
 export const me = new Hono<{ Bindings: Env }>();
 
@@ -18,7 +18,13 @@ me.get("/", async (c) => {
   }
 
   const { session, member } = auth;
-  const [semesters, runforce] = await Promise.all([getUserSemesters(c.env, member.uid), getMemberRunforce(c.env, member.uid)]);
+  const [semesters, runforce, runforceConfig] = await Promise.all([
+    getUserSemesters(c.env, member.uid),
+    getMemberRunforce(c.env, member.uid),
+    getRunforceConfig(c.env),
+  ]);
+  // 시즌 이름/기간은 표시 전용입니다 — 기간은 "항상 오늘" 설정까지 반영된 실제 적용값.
+  const runforceRange = effectiveRunforceRange(runforceConfig);
   const user: CurrentUser = {
     discordId: session.discordId,
     discordUsername: session.discordUsername,
@@ -36,6 +42,11 @@ me.get("/", async (c) => {
     atcoder: member.atcoder,
     runforceTotal: runforce.total,
     runforceBreakdown: runforce.breakdown,
+    runforceSeason: {
+      name: runforceConfig.seasonName,
+      startDate: runforceRange.startDate,
+      endDate: runforceRange.endDate,
+    },
   };
 
   return c.json(user);

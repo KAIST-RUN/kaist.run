@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import type { CurrentUser } from "@/types/account";
 import { formatRunforceDisplay } from "@/lib/account/runforce";
 
-// RUNFORCE 대회별 내역 카드 — 회원 정보 카드 아래에 독립 카드로 놓습니다. 총점 자체는
-// 프로필 카드(UserProfileCard의 RunforceStat)가 크게 보여주므로 여기선 안 반복하고,
-// 펼치면 집계된 대회 전체 목록을 보여줍니다. 읽기 전용이라 별도 fetch 없이 이미
-// /api/me 페이로드에 실려 온 값만 씁니다.
+// RUNFORCE 카드 — 회원 정보 카드 아래에 독립 카드로 놓습니다. 시즌 이름/적용 기간(둘 다
+// backstage에서 지정, 안 채워져 있으면 해당 줄을 통째로 생략)과 총점을 보여주고, 펼치면
+// 집계된 대회 전체 목록이 나옵니다. 읽기 전용이라 별도 fetch 없이 이미 /api/me 페이로드에
+// 실려 온 값만 씁니다.
 export default function RunforceCard({ user }: { user: CurrentUser }) {
   const t = useTranslations("account.runforce");
   const [expanded, setExpanded] = useState(false);
@@ -17,9 +17,25 @@ export default function RunforceCard({ user }: { user: CurrentUser }) {
   // 펼쳤을 때 "대상 대회가 아직 없다"는 안내를 보여줍니다.
   const breakdown = [...user.runforceBreakdown].sort((a, b) => b.startTimeMs - a.startTimeMs);
 
+  const { name: seasonName, startDate, endDate } = user.runforceSeason;
+  // 기간은 양쪽 날짜가 다 있을 때만 — 한쪽만 있으면 "~ 2026-08-26"처럼 어정쩡해집니다.
+  const period = startDate && endDate ? `${startDate} ~ ${endDate}` : null;
+
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-black/10 p-6 sm:p-8 dark:border-white/15">
       <h2 className="text-lg font-bold sm:text-xl">{t("title")}</h2>
+
+      {(seasonName || period) && (
+        <div className="flex flex-col gap-0.5">
+          {seasonName && <span className="text-base font-bold sm:text-lg">{seasonName}</span>}
+          {period && <span className="text-xs tabular-nums opacity-60 sm:text-sm">{period}</span>}
+        </div>
+      )}
+
+      <span className="text-sm sm:text-base">
+        <span className="font-bold opacity-60">{t("label")}</span>{" "}
+        <span className="font-bold tabular-nums">{formatRunforceDisplay(user.runforceTotal)}</span>
+      </span>
 
       <button
         type="button"

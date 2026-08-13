@@ -59,6 +59,7 @@ export type RunforceConfig = {
   rangeStartDate: string | null; // 'YYYY-MM-DD'
   rangeEndDate: string | null; // rangeEndAuto가 켜져 있어도 마지막으로 입력한 값이 그대로 보존됨(꺼졌을 때 되돌릴 값)
   rangeEndAuto: boolean; // 켜져 있으면 rangeEndDate 대신 매번 "오늘"을 씀
+  seasonName: string | null; // 마이페이지에 보여줄 현재 시즌 이름(표시 전용 — 집계에는 관여 안 함)
   updatedAt: string;
 };
 
@@ -67,22 +68,24 @@ type RawConfigRow = {
   range_start_date: string | null;
   range_end_date: string | null;
   range_end_auto: number;
+  season_name: string | null;
   updated_at: string;
 };
 
 export async function getRunforceConfig(env: Env): Promise<RunforceConfig> {
   const row = await env.CONTENT_DB.prepare(
-    "SELECT auto_discovery_enabled, range_start_date, range_end_date, range_end_auto, updated_at FROM runforce_config WHERE id = 1",
+    "SELECT auto_discovery_enabled, range_start_date, range_end_date, range_end_auto, season_name, updated_at FROM runforce_config WHERE id = 1",
   ).first<RawConfigRow>();
   // 마이그레이션이 싱글턴 행을 미리 넣어두므로 이 시점엔 항상 있어야 하지만, 방어적으로 기본값을 둡니다.
   if (!row) {
-    return { autoDiscoveryEnabled: false, rangeStartDate: null, rangeEndDate: null, rangeEndAuto: false, updatedAt: new Date().toISOString() };
+    return { autoDiscoveryEnabled: false, rangeStartDate: null, rangeEndDate: null, rangeEndAuto: false, seasonName: null, updatedAt: new Date().toISOString() };
   }
   return {
     autoDiscoveryEnabled: !!row.auto_discovery_enabled,
     rangeStartDate: row.range_start_date,
     rangeEndDate: row.range_end_date,
     rangeEndAuto: !!row.range_end_auto,
+    seasonName: row.season_name,
     updatedAt: row.updated_at,
   };
 }
@@ -106,9 +109,18 @@ function todayKstDateString(): string {
   return new Date(kstMs).toISOString().slice(0, 10);
 }
 
+// 실제로 적용되는 기간 — rangeEndAuto가 켜져 있으면 종료일이 "오늘"입니다. 자동 탐색이
+// 어떤 대회를 주워오는지와 마이페이지에 보여줄 기간이 항상 같은 값이 되도록 여기로 모읍니다.
+export function effectiveRunforceRange(config: RunforceConfig): { startDate: string | null; endDate: string | null } {
+  return {
+    startDate: config.rangeStartDate,
+    endDate: config.rangeEndAuto ? todayKstDateString() : config.rangeEndDate,
+  };
+}
+
 export async function setRunforceConfig(
   env: Env,
-  input: { autoDiscoveryEnabled: boolean; rangeStartDate: string | null; rangeEndDate: string | null; rangeEndAuto: boolean },
+  input: { autoDiscoveryEnabled: boolean; rangeStartDate: string | null; rangeEndDate: string | null; rangeEndAuto: boolean; seasonName: string | null },
 ): Promise<void> {
   if (input.autoDiscoveryEnabled && !input.rangeStartDate) {
     throw new RunforceError("자동 탐색을 켜려면 시작일을 입력해야 합니다.");
@@ -135,9 +147,9 @@ export async function setRunforceConfig(
     }
   }
   await env.CONTENT_DB.prepare(
-    `UPDATE runforce_config SET auto_discovery_enabled=?1, range_start_date=?2, range_end_date=?3, range_end_auto=?4, updated_at=datetime('now') WHERE id=1`,
+    `UPDATE runforce_config SET auto_discovery_enabled=?1, range_start_date=?2, range_end_date=?3, range_end_auto=?4, season_name=?5, updated_at=datetime('now') WHERE id=1`,
   )
-    .bind(input.autoDiscoveryEnabled ? 1 : 0, input.rangeStartDate, input.rangeEndDate, input.rangeEndAuto ? 1 : 0)
+    .bind(input.autoDiscoveryEnabled ? 1 : 0, input.rangeStartDate, input.rangeEndDate, input.rangeEndAuto ? 1 : 0, input.seasonName)
     .run();
 }
 

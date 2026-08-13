@@ -49,6 +49,7 @@ const MOCK_MEMBER: CurrentUser = {
       isUnratedParticipant: true,
     },
   ],
+  runforceSeason: { name: "Beta Season", startDate: "2026-06-22", endDate: "2026-08-26" },
 };
 
 const MOCK_ADMIN: CurrentUser = {
@@ -72,6 +73,7 @@ const MOCK_ALUMNI: CurrentUser = {
   // 비어있는 상태(집계된 대회가 하나도 없는 경우) UI 확인용.
   runforceTotal: 0,
   runforceBreakdown: [],
+  runforceSeason: { name: null, startDate: null, endDate: null },
 };
 
 // 명예회원 — 이번 학기 소속 여부와 무관하게 상태 배지가 항상 "명예회원"으로 뜨는지
@@ -103,6 +105,7 @@ const MOCK_APPLICANT_WITH_NULLS: CurrentUser = {
   atcoder: null,
   runforceTotal: 0,
   runforceBreakdown: [],
+  runforceSeason: { name: null, startDate: null, endDate: null },
 };
 
 // loading 상태를 계속 유지하는 fixture 용 — 절대 resolve되지 않는 Promise.
