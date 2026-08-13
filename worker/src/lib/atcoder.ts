@@ -52,6 +52,22 @@ async function listAllKenkoooContests(): Promise<KenkoooContestEntry[]> {
 // start_epoch_second가 [startDate 00:00 KST, endDate 23:59:59 KST] 범위 안이고,
 // rate_change !== "-"(unrated 제외 — AHC 등 마라톤형 대회는 대개 이걸로 걸러짐)이고,
 // 이미 끝난(종료 시각이 현재보다 과거) 대회만 남깁니다.
+// AHC(AtCoder Heuristic Contest)는 RUNFORCE 산정 대상이 아닙니다 — 알고리즘 레이팅과
+// 완전히 별개인 휴리스틱 레이팅 대회이고, 보통 1~2주짜리 마라톤이라 "대회 한 판의 상대
+// 등수"라는 이 시스템의 전제와도 안 맞습니다.
+//
+// ⚠️ rate_change로는 못 거릅니다: 실측(2026-08) 결과 AHC 69개가 전부 rate_change="All"이라
+// unrated 필터를 그대로 통과합니다(예전 주석이 "AHC는 대개 '-'라 걸러진다"고 했는데 틀렸음).
+// id 접두사와 제목 둘 중 하나만 맞아도 제외합니다 — 실측상 69개 전부 두 조건을 동시에
+// 만족하지만, 둘 다 봐야 한쪽 표기가 바뀌어도 안전합니다.
+// (참고: AHC 명명 이전의 마라톤 대회 몇 개 — future-contest-*, rcl-contest-*-long 등 —
+//  는 이 패턴에 안 걸리지만 전부 2021~2023년 대회라, 자동 탐색 기간이 최대 6개월인 지금
+//  구조에서는 사실상 범위에 들어올 일이 없습니다.)
+export function isAtCoderHeuristicContest(contestId: string, title?: string): boolean {
+  if (/^ahc\d/i.test(contestId.trim())) return true;
+  return title !== undefined && /atcoder heuristic contest/i.test(title);
+}
+
 export async function listAtCoderContestsInRange(startDate: string, endDate: string): Promise<AtCoderContestSummary[]> {
   const contests = await listAllKenkoooContests();
   const rangeStartSec = Date.parse(`${startDate}T00:00:00+09:00`) / 1000;
@@ -60,6 +76,7 @@ export async function listAtCoderContestsInRange(startDate: string, endDate: str
 
   return contests
     .filter((c) => c.rate_change !== "-")
+    .filter((c) => !isAtCoderHeuristicContest(c.id, c.title))
     .filter((c) => c.start_epoch_second >= rangeStartSec && c.start_epoch_second <= rangeEndSec)
     .filter((c) => c.start_epoch_second + c.duration_second <= nowSec)
     .map((c) => ({ id: c.id, name: c.title, startTimeMs: c.start_epoch_second * 1000 }));

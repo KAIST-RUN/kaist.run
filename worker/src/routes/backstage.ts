@@ -55,6 +55,7 @@ import {
   getUserSemesters,
 } from "../lib/semesters";
 import { toCsvDocument } from "../lib/csv";
+import { isAtCoderHeuristicContest } from "../lib/atcoder";
 import {
   getRunforceConfig,
   setRunforceConfig,
@@ -949,6 +950,16 @@ backstage.post("/runforce/contests/add", async (c) => {
     // 주석 참고) 바로 계산하지 않고 대기열에 등록만 합니다 — runBot이 폴링해서 순위표를
     // 채우면 자동으로 계산되어 아래 목록에 나타납니다.
     if (platform === "atcoder") {
+      // AHC는 산정 대상이 아니므로 큐에 들어가기 전에 막습니다(atcoder.ts 참고). 여기서
+      // 안 막고 addTargetContest 쪽에서 거절하면, completeAtCoderContest가 성공했을 때만
+      // 대기열 행을 지우는 구조라 봇이 같은 대회를 영원히 재시도하게 됩니다.
+      if (isAtCoderHeuristicContest(contestId)) {
+        const [config, contests] = await Promise.all([getRunforceConfig(c.env), listTargetContests(c.env)]);
+        return c.html(
+          renderRunforceSettings(config, contests, "AHC(AtCoder Heuristic Contest)는 RUNFORCE 산정 대상이 아닙니다."),
+          400,
+        );
+      }
       await enqueueAtCoderPending(c.env, contestId, { uid: gate.member.uid, name: gate.member.name }, "manual");
       const [config, contests] = await Promise.all([getRunforceConfig(c.env), listTargetContests(c.env)]);
       return c.html(
