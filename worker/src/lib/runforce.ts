@@ -746,7 +746,7 @@ export async function getTargetContestDetail(env: Env, contestRowId: string): Pr
     finalRank: r.final_rank,
     x: r.x,
     // 표에 보이는 점수도 가중치가 반영된 값이어야 리더보드/마이페이지와 아귀가 맞습니다.
-    score: applyRunforceWeight(r.score, contest.weightMultiplier),
+    score: applyRunforceWeight(r.score, contest.weightMultiplier, isNonParticipant({ platformRank: r.platform_rank, isUnratedParticipant: !!r.is_unrated_participant })),
     isUnratedParticipant: !!r.is_unrated_participant,
   }));
 
@@ -787,11 +787,21 @@ async function getContestResultRows(env: Env, contestId: string, uid?: string): 
   }));
 }
 
-// 저장값(만점 300000 기준)에 개최 순서 가중치를 곱한 값이 실제 반영 점수입니다. 대회마다
-// 곱한 뒤 내림해서 정수로 맞추고, 총점은 그 정수들의 합입니다 — 기존 "대회별로 내림 후
-// 합산" 규칙 그대로라 표시(1000으로 나눠 소수점 3자리)도 정확히 떨어집니다.
-export function applyRunforceWeight(baseScore: number, weightMultiplier: number): number {
-  return Math.floor(baseScore * weightMultiplier);
+// 미참가 인원은 집계할 때 0.2배만 반영합니다. "미참가"는 platform_rank가 없고 unrated
+// 참가자도 아닌 경우 — 즉 핸들이 없거나, 핸들은 있지만 그 대회에 아예 참가하지 않은 회원
+// 입니다. unrated 참가자는 (레이팅이 안 붙었을 뿐) 실시간으로 실제 참가한 사람이라 여기
+// 해당하지 않고 감점 없이 그대로 반영됩니다.
+const NON_PARTICIPANT_MULTIPLIER = 0.2;
+
+function isNonParticipant(row: { platformRank: number | null; isUnratedParticipant: boolean }): boolean {
+  return row.platformRank === null && !row.isUnratedParticipant;
+}
+
+// 저장값(만점 300000 기준)에 개최 순서 가중치와 미참가 감점을 곱한 값이 실제 반영 점수입니다.
+// 대회마다 곱한 뒤 내림해서 정수로 맞추고, 총점은 그 정수들의 합입니다 — 기존 "대회별로
+// 내림 후 합산" 규칙 그대로라 표시(1000으로 나눠 소수점 3자리)도 정확히 떨어집니다.
+export function applyRunforceWeight(baseScore: number, weightMultiplier: number, nonParticipant: boolean): number {
+  return Math.floor(baseScore * weightMultiplier * (nonParticipant ? NON_PARTICIPANT_MULTIPLIER : 1));
 }
 
 function toBreakdownRow(contest: RunforceContestSummary, row: StoredResultRow): RunforceMemberBreakdownRow {
@@ -802,7 +812,7 @@ function toBreakdownRow(contest: RunforceContestSummary, row: StoredResultRow): 
     startTimeMs: contest.startTimeMs,
     finalRank: row.finalRank,
     participantCount: contest.participantCount,
-    score: applyRunforceWeight(row.score, contest.weightMultiplier),
+    score: applyRunforceWeight(row.score, contest.weightMultiplier, isNonParticipant(row)),
     isUnratedParticipant: row.isUnratedParticipant,
   };
 }
