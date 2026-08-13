@@ -192,9 +192,17 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
   }
 
   const uid = crypto.randomUUID();
-  await env.CONTENT_DB.prepare(
+  // ON CONFLICT DO NOTHING: 위의 "이미 있나" 확인과 이 INSERT 사이에는 Discord 프로필
+  // 조회(외부 HTTP, 429면 수 초)가 끼어 있어서, 같은 사람의 가입 요청이 동시에 오면
+  // (모집 기간 봇 재시도 등) 둘 다 확인을 통과하고 둘 다 INSERT에 도달할 수 있습니다.
+  // 유니크 인덱스(idx_users_discord_id) 덕에 중복 행은 어차피 못 생기지만, 예전엔 진 쪽이
+  // constraint 에러(=500)로 터졌습니다. 이제 조용히 0행 삽입이 되고, 아래에서 확인 시점과
+  // 같은 에러로 바꿔 던집니다 — upsertUserByDiscordId가 이 에러를 받아 갱신 경로로
+  // 넘어갑니다(race에서 진 쪽도 결국 성공 응답).
+  const result = await env.CONTENT_DB.prepare(
     `INSERT INTO users (uid, discord_id, name, email, student_id, phone, solved_ac, codeforces, atcoder, avatar_url, nickname)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+     ON CONFLICT (discord_id) DO NOTHING`,
   )
     .bind(
       uid,
@@ -210,6 +218,7 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
       nickname,
     )
     .run();
+  if (result.meta.changes === 0) throw new UserValidationError("이미 등록된 Discord 계정입니다.");
 
   const created = await getUserByUid(env, uid);
   if (!created) throw new Error("Failed to read back just-created user");
@@ -224,33 +233,51 @@ export async function upsertUserByDiscordId(
   discordId: string,
   input: Omit<UserInput, "discordId">,
 ): Promise<{ uid: string; created: boolean }> {
-  const existing = await getUserByDiscordId(env, discordId);
+  let existing = await getUserByDiscordId(env, discordId);
 
   if (!existing) {
     // 아바타 조회는 createUser가 알아서 합니다(안 넘기면 봇 토큰으로 채움).
-    const created = await createUser(env, { discordId, ...input });
-    return { uid: created.uid, created: true };
+    try {
+      const created = await createUser(env, { discordId, ...input });
+      return { uid: created.uid, created: true };
+    } catch (err) {
+      if (!(err instanceof UserValidationError)) throw err;
+      // "이미 등록된 계정" — 우리 확인 이후에 동시 요청이 먼저 만든 경우입니다. 그 행을
+      // 다시 읽어 갱신 경로로 넘어가면 race에서 진 쪽도 정상 응답이 됩니다. 재조회해도
+      // 없다면 race가 아니라 진짜 검증 실패(닉네임 규칙 위반 등)이므로 그대로 던집니다.
+      existing = await getUserByDiscordId(env, discordId);
+      if (!existing) throw err;
+    }
   }
 
-  const next = {
-    // 다른 필드와 같은 규칙 — 안 보내면(undefined) 회원이 마이페이지에서 정한 닉네임을
-    // 그대로 둡니다. 봇이 동기화할 때마다 디스코드 이름을 실어 보내면 본인이 고른 닉네임을
-    // 덮어쓰게 되니, 바꿀 의도가 있을 때만 nickname을 넣어 보내세요(isAdmin과 같은 주의점).
-    nickname: input.nickname !== undefined ? normalizeNickname(input.nickname ?? "") : existing.nickname,
-    name: input.name !== undefined ? input.name : existing.name,
-    email: input.email !== undefined ? input.email : existing.email,
-    studentId: input.studentId !== undefined ? input.studentId : existing.studentId,
-    phone: input.phone !== undefined ? input.phone : existing.phone,
-    solvedAc: input.solvedAc !== undefined ? input.solvedAc : existing.solvedAc,
-    codeforces: input.codeforces !== undefined ? input.codeforces : existing.codeforces,
-    atcoder: input.atcoder !== undefined ? input.atcoder : existing.atcoder,
+  // 보낸(defined) 필드의 컬럼만 SET 합니다. 예전엔 existing을 읽어 메모리에서 병합한 뒤
+  // 전 컬럼을 다시 썼는데, 그 사이(읽기~쓰기)에 회원이 마이페이지에서 닉네임/핸들을
+  // 고치면 봇의 갱신이 그 값을 읽기 시점의 옛 값으로 조용히 되돌렸습니다(lost update).
+  // 안 보낸 컬럼을 아예 안 건드리면 그 창 자체가 없습니다 — 같은 필드를 동시에 고치는
+  // 경우만 남고, 그건 어느 쪽이 이기든 의도된 last-write-wins입니다.
+  const sets: string[] = [];
+  const binds: (string | null)[] = [existing.uid];
+  const add = (column: string, value: string | null) => {
+    binds.push(value);
+    sets.push(`${column}=?${binds.length}`);
   };
-  await env.CONTENT_DB.prepare(
-    `UPDATE users SET name=?2, email=?3, student_id=?4, phone=?5, solved_ac=?6, codeforces=?7, atcoder=?8, nickname=?9, updated_at=datetime('now')
-     WHERE uid=?1`,
-  )
-    .bind(existing.uid, next.name, next.email, next.studentId, next.phone, next.solvedAc, next.codeforces, next.atcoder, next.nickname)
-    .run();
+  // 안 보내면(undefined) 회원이 마이페이지에서 정한 닉네임을 그대로 둡니다. 봇이 동기화할
+  // 때마다 디스코드 이름을 실어 보내면 본인이 고른 닉네임을 덮어쓰게 되니, 바꿀 의도가
+  // 있을 때만 nickname을 넣어 보내세요(isAdmin과 같은 주의점).
+  if (input.nickname !== undefined) add("nickname", normalizeNickname(input.nickname ?? ""));
+  if (input.name !== undefined) add("name", input.name);
+  if (input.email !== undefined) add("email", input.email);
+  if (input.studentId !== undefined) add("student_id", input.studentId);
+  if (input.phone !== undefined) add("phone", input.phone);
+  if (input.solvedAc !== undefined) add("solved_ac", input.solvedAc);
+  if (input.codeforces !== undefined) add("codeforces", input.codeforces);
+  if (input.atcoder !== undefined) add("atcoder", input.atcoder);
+
+  if (sets.length > 0) {
+    await env.CONTENT_DB.prepare(`UPDATE users SET ${sets.join(", ")}, updated_at=datetime('now') WHERE uid=?1`)
+      .bind(...binds)
+      .run();
+  }
   return { uid: existing.uid, created: false };
 }
 

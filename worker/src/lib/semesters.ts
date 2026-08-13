@@ -83,9 +83,32 @@ export async function requestSemesterMembership(env: Env, uid: string, year?: nu
     .first<{ status: "pending" | "approved" }>();
   if (existing) return { status: existing.status === "approved" ? "already_approved" : "already_pending" };
 
-  await env.CONTENT_DB.prepare("INSERT INTO semester_membership (uid, year, season, status) VALUES (?1, ?2, ?3, 'pending')")
+  // ON CONFLICT DO NOTHING: 위 확인과 이 INSERT 사이에 같은 사람의 요청이 동시에 끼면
+  // (모집 기간 봇 재시도 등) 둘 다 확인을 통과합니다. PK(uid, year, season) 덕에 중복 행은
+  // 어차피 못 생기지만, 예전엔 진 쪽이 constraint 에러(=500)로 터졌습니다. 이제 0행
+  // 삽입이 되고, 그 경우 상대가 만든 행의 상태를 다시 읽어 정상 응답으로 돌려줍니다.
+  const result = await env.CONTENT_DB.prepare(
+    `INSERT INTO semester_membership (uid, year, season, status) VALUES (?1, ?2, ?3, 'pending')
+     ON CONFLICT (uid, year, season) DO NOTHING`,
+  )
     .bind(uid, targetYear, targetSeason)
     .run();
+  if (result.meta.changes === 0) {
+    const raced = await env.CONTENT_DB.prepare("SELECT status FROM semester_membership WHERE uid = ?1 AND year = ?2 AND season = ?3")
+      .bind(uid, targetYear, targetSeason)
+      .first<{ status: "pending" | "approved" }>();
+    if (raced) return { status: raced.status === "approved" ? "already_approved" : "already_pending" };
+    // 충돌이 났는데 재조회하니 행이 없다 = 그 찰나에 관리자가 거부/취소로 지운 경우.
+    // "요청했다"고 답해놓고 실제로는 아무 행도 없으면 안 되니 한 번만 다시 삽입합니다.
+    // 이것도 충돌하면 그새 또 다른 요청이 만든 것이므로 already_pending이 맞습니다.
+    const retry = await env.CONTENT_DB.prepare(
+      `INSERT INTO semester_membership (uid, year, season, status) VALUES (?1, ?2, ?3, 'pending')
+       ON CONFLICT (uid, year, season) DO NOTHING`,
+    )
+      .bind(uid, targetYear, targetSeason)
+      .run();
+    if (retry.meta.changes === 0) return { status: "already_pending" };
+  }
   return { status: "pending" };
 }
 
