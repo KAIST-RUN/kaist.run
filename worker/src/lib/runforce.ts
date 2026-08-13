@@ -839,13 +839,27 @@ export async function getMemberRunforce(env: Env, uid: string): Promise<{ total:
   return { total, breakdown };
 }
 
-// ---------- 자동탐색 (크론이 호출) ----------
+// ---------- 자동탐색 큐 (크론이 호출) ----------
+// "후보 목록 조회"(가벼움 — 플랫폼당 API 호출 한 번)와 "실제 계산"(무거움 — rated
+// 확인·순위표 조회·unrated 참가자 확인까지 대회당 여러 API 호출)을 분리합니다.
+// enqueueDiscoveredContests(매시 정각 + 저장 직후)가 후보를 찾자마자 전부
+// runforce_discovery_queue에 넣고, processDiscoveryQueue(1분 간격 크론)가 큐에서 몇 개씩
+// 꺼내 실제로 계산합니다 — 예전엔 한 틱에 최대 5개만 처리해서 밀린 대회가 많으면 다
+// 채워지기까지 몇 시간씩 걸렸는데, 이제 몇 분이면 끝납니다.
 
-// 한 번의 cron tick에서 처리할 "새로 추가되는" 대회 수 상한 — 첫 활성화 직후처럼 범위
-// 안에 밀린 대회가 많아도 한 틱이 오래 걸리지 않게 합니다. 나머지는 다음 시간에 이어서 처리.
-const MAX_NEW_CONTESTS_PER_TICK = 5;
+export type RunforceDiscoveryQueueEntry = {
+  id: string;
+  platform: RunforcePlatform;
+  contestId: string;
+  contestName: string;
+  startTimeMs: number;
+  queuedAt: string;
+};
 
-export async function refreshAutoDiscoveredContests(env: Env): Promise<void> {
+// 한 번에 큐에서 꺼내 처리하는 개수 — 1분 안에 무리 없이 끝나도록 작게 잡습니다.
+const QUEUE_BATCH_SIZE = 3;
+
+export async function enqueueDiscoveredContests(env: Env): Promise<void> {
   const config = await getRunforceConfig(env);
   if (!config.autoDiscoveryEnabled || !config.rangeStartDate || !config.rangeEndDate) return;
 
@@ -860,36 +874,68 @@ export async function refreshAutoDiscoveredContests(env: Env): Promise<void> {
     }),
   ]);
 
-  const candidates: { platform: RunforcePlatform; contestId: string; startTimeMs: number }[] = [
-    ...cfCandidates.map((c) => ({ platform: "codeforces" as const, contestId: c.id, startTimeMs: c.startTimeMs })),
-    ...acCandidates.map((c) => ({ platform: "atcoder" as const, contestId: c.id, startTimeMs: c.startTimeMs })),
+  const candidates: { platform: RunforcePlatform; contestId: string; contestName: string; startTimeMs: number }[] = [
+    ...cfCandidates.map((c) => ({ platform: "codeforces" as const, contestId: c.id, contestName: c.name, startTimeMs: c.startTimeMs })),
+    ...acCandidates.map((c) => ({ platform: "atcoder" as const, contestId: c.id, contestName: c.name, startTimeMs: c.startTimeMs })),
   ];
-  candidates.sort((a, b) => a.startTimeMs - b.startTimeMs);
 
-  // AtCoder는 이 Worker에서 직접 계산할 수 없으므로(addTargetContest 주석 참고) 이미
-  // 대기열에 올라간 것들은 건너뜁니다 — 안 그러면 봇이 아직 못 채운 매 틱마다 다시
-  // enqueue를 부르느라 진짜 새 후보들이 MAX_NEW_CONTESTS_PER_TICK에 밀려날 수 있습니다.
+  // AtCoder는 이미 봇 대기열(runforce_atcoder_pending)에 올라간 것도 건너뜁니다 — 안 그러면
+  // 매번 이 큐에도 새로 들어가서 processDiscoveryQueue가 같은 걸 계속 재확인하게 됩니다.
   const alreadyPendingIds = new Set((await listPendingAtCoderContests(env)).map((p) => p.contestId));
 
-  let processed = 0;
-  for (const candidate of candidates) {
-    if (processed >= MAX_NEW_CONTESTS_PER_TICK) break;
-    if (candidate.platform === "atcoder" && alreadyPendingIds.has(candidate.contestId)) continue;
-    const existing = await getTargetContestByPlatformId(env, candidate.platform, candidate.contestId);
+  for (const c of candidates) {
+    if (c.platform === "atcoder" && alreadyPendingIds.has(c.contestId)) continue;
+    const existing = await getTargetContestByPlatformId(env, c.platform, c.contestId);
     if (existing) continue; // 이미 등록됨 — 재계산 금지, 스킵
 
+    await env.CONTENT_DB.prepare(
+      `INSERT INTO runforce_discovery_queue (id, platform, contest_id, contest_name, start_time_ms)
+       VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT (platform, contest_id) DO NOTHING`,
+    )
+      .bind(crypto.randomUUID(), c.platform, c.contestId, c.contestName, c.startTimeMs)
+      .run();
+  }
+}
+
+// 1분 크론이 부릅니다 — 큐에서 오래된 순으로 몇 개 꺼내 실제로 계산합니다. 먼저 큐에서
+// 지운 뒤 계산하므로, 계산이 실패해도 이 항목이 큐에 무한히 남아 매분 재시도되진
+// 않습니다(대신 다음 enqueueDiscoveredContests 때 아직 없으면 다시 큐에 들어옵니다).
+export async function processDiscoveryQueue(env: Env): Promise<void> {
+  const { results } = await env.CONTENT_DB.prepare(
+    "SELECT id, platform, contest_id FROM runforce_discovery_queue ORDER BY queued_at ASC LIMIT ?1",
+  )
+    .bind(QUEUE_BATCH_SIZE)
+    .all<{ id: string; platform: RunforcePlatform; contest_id: string }>();
+
+  for (const row of results) {
+    await env.CONTENT_DB.prepare("DELETE FROM runforce_discovery_queue WHERE id=?1").bind(row.id).run();
+
+    const existing = await getTargetContestByPlatformId(env, row.platform, row.contest_id);
+    if (existing) continue;
+
     try {
-      if (candidate.platform === "atcoder") {
-        await enqueueAtCoderPending(env, candidate.contestId, { uid: null, name: null }, "auto");
+      if (row.platform === "atcoder") {
+        await enqueueAtCoderPending(env, row.contest_id, { uid: null, name: null }, "auto");
       } else {
-        await addTargetContest(env, candidate.platform, candidate.contestId, { uid: null, name: null }, "auto");
+        await addTargetContest(env, row.platform, row.contest_id, { uid: null, name: null }, "auto");
       }
     } catch (err) {
-      // 하나 실패해도 나머지는 계속 진행 — 실패한 건 다음 시간에 자동으로 재시도됨
-      // (existing 체크에서 여전히 없을 것이므로).
-      console.error(`RUNFORCE: 자동탐색 대회 추가 실패 (${candidate.platform}:${candidate.contestId})`, err);
-      continue;
+      console.error(`RUNFORCE: 큐 처리 실패 (${row.platform}:${row.contest_id})`, err);
     }
-    processed++;
   }
+}
+
+export async function listDiscoveryQueue(env: Env): Promise<RunforceDiscoveryQueueEntry[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    "SELECT id, platform, contest_id, contest_name, start_time_ms, queued_at FROM runforce_discovery_queue ORDER BY queued_at ASC",
+  ).all<{ id: string; platform: RunforcePlatform; contest_id: string; contest_name: string; start_time_ms: number; queued_at: string }>();
+  return results.map((r) => ({
+    id: r.id,
+    platform: r.platform,
+    contestId: r.contest_id,
+    contestName: r.contest_name,
+    startTimeMs: r.start_time_ms,
+    queuedAt: r.queued_at,
+  }));
 }

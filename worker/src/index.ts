@@ -15,7 +15,7 @@ import { storeRawEmail } from "./lib/emailStore";
 import { indexEmail } from "./lib/emailIndex";
 import { formatAddress, formatAddressList } from "./lib/emailRender";
 import { ALLOWED_ORIGINS } from "./lib/constants";
-import { refreshAutoDiscoveredContests } from "./lib/runforce";
+import { enqueueDiscoveredContests, processDiscoveryQueue } from "./lib/runforce";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -84,14 +84,26 @@ export default {
     await message.forward(env.EMAIL_FORWARD_TO, headers);
   },
 
-  // wrangler.jsonc의 triggers.crons("0 * * * *")가 매시 정각마다 호출합니다. 설정이
-  // 꺼져 있으면 refreshAutoDiscoveredContests가 즉시 반환하므로 평소엔 가벼운 조회 한 번뿐.
+  // wrangler.jsonc의 triggers.crons에 두 스케줄이 있습니다 — event.cron으로 구분합니다:
+  //   "0 * * * *" (매시 정각) — enqueueDiscoveredContests: 새 후보를 찾아 큐에 넣기만
+  //     합니다(가벼움). 설정이 꺼져 있으면 즉시 반환.
+  //   "* * * * *" (매분) — processDiscoveryQueue: 큐에서 몇 개씩 꺼내 실제로 계산합니다
+  //     (무거움 — 대회당 API 호출 여러 번). 이렇게 나눠야 밀린 대회가 많아도 몇 분 안에
+  //     다 처리되면서, 한 번의 실행이 너무 오래 걸리지 않습니다.
   // ctx.waitUntil로 감싸서 이 함수가 리턴한 뒤에도 실제 작업이 끝날 시간을 확보합니다
   // (email() 핸들러가 storeRawEmail을 감싸는 것과 같은 이유).
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    if (event.cron === "* * * * *") {
+      ctx.waitUntil(
+        processDiscoveryQueue(env).catch((err) => {
+          console.error("RUNFORCE 큐 처리 실패", err);
+        }),
+      );
+      return;
+    }
     ctx.waitUntil(
-      refreshAutoDiscoveredContests(env).catch((err) => {
-        console.error("RUNFORCE 자동탐색 새로고침 실패", err);
+      enqueueDiscoveredContests(env).catch((err) => {
+        console.error("RUNFORCE 자동탐색 큐 등록 실패", err);
       }),
     );
   },

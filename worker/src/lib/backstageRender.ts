@@ -18,6 +18,8 @@ import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyF
 import {
   formatRunforceDisplay,
   groupContests,
+  type AtCoderPendingEntry,
+  type RunforceDiscoveryQueueEntry,
   type ContestGroup,
   type RunforceConfig,
   type RunforceContestDetail,
@@ -2759,7 +2761,7 @@ function runforceContestRow(contest: RunforceContestSummary): string {
     <a class="bs-upload-open" href="/runforce/${encodeURIComponent(contest.id)}">
       <div class="info">
         <div class="name">[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</div>
-        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · 참가대상 ${contest.participantCount}명</div>
+        <div class="meta">${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동" : "자동"} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} · 참가대상 ${contest.participantCount}명</div>
       </div>
     </a>
     <form method="post" action="/runforce/${encodeURIComponent(contest.id)}/delete" onsubmit="return confirm('이 대회를 산정 대상에서 삭제할까요? 다시 추가하면 동점 처리 결과가 새로 섞입니다.')">
@@ -2802,7 +2804,7 @@ function runforceContestPairRow(div1: RunforceContestSummary, div2: RunforceCont
       <a class="bs-upload-open" href="/runforce/${encodeURIComponent(div1.id)}">
         <div class="info">
           <div class="name">[${PLATFORM_LABEL[div1.platform]}] ${escapeHtml(stripDivisionSuffix(div1.contestName))}</div>
-          <div class="meta">${escapeHtml(formatKstDateTime(div1.startTimeMs))}</div>
+          <div class="meta">${escapeHtml(formatKstDateTime(div1.startTimeMs))} · 참가대상 ${div1.participantCount}명</div>
         </div>
       </a>
       <button type="button" class="bs-runforce-pair-toggle" aria-label="펼치기" aria-expanded="false">▾</button>
@@ -2830,12 +2832,69 @@ function renderRunforceContestGroup(group: ContestGroup): string {
   return "single" in group ? runforceContestRow(group.single) : runforceContestPairRow(group.div1, group.div2);
 }
 
-export function renderRunforceSettings(config: RunforceConfig, contests: RunforceContestSummary[], error?: string): string {
+function runforceAtCoderPendingRow(entry: AtCoderPendingEntry): string {
+  return `<li>
+    <div class="info">
+      <div class="name">[AtCoder] ${escapeHtml(entry.contestId)}</div>
+      <div class="meta">
+        ${entry.source === "manual" ? "수동" : "자동"}
+        ${entry.addedByName ? ` · ${escapeHtml(entry.addedByName)}` : ""}
+        · ${escapeHtml(formatKstDateTime(new Date(entry.requestedAt.replace(" ", "T") + "Z").getTime()))} 요청
+      </div>
+    </div>
+  </li>`;
+}
+
+function runforceDiscoveryQueueRow(entry: RunforceDiscoveryQueueEntry): string {
+  return `<li>
+    <div class="info">
+      <div class="name">[${PLATFORM_LABEL[entry.platform]}] ${escapeHtml(entry.contestName)}</div>
+      <div class="meta">
+        ${escapeHtml(entry.contestId)} · ${escapeHtml(formatKstDateTime(entry.startTimeMs))} ·
+        ${escapeHtml(formatKstDateTime(new Date(entry.queuedAt.replace(" ", "T") + "Z").getTime()))} 큐 등록
+      </div>
+    </div>
+  </li>`;
+}
+
+export function renderRunforceSettings(
+  config: RunforceConfig,
+  contests: RunforceContestSummary[],
+  error?: string,
+  atcoderPending: AtCoderPendingEntry[] = [],
+  discoveryQueue: RunforceDiscoveryQueueEntry[] = [],
+): string {
   const groups = groupContests(contests);
   const list =
     groups.length === 0
       ? `<p class="empty">등록된 대회가 없습니다. 아래에서 수동으로 추가하거나, 자동 탐색을 켜주세요.</p>`
       : `<ul class="bs-upload-list">${groups.map(renderRunforceContestGroup).join("\n")}</ul>`;
+
+  const pendingCard =
+    atcoderPending.length === 0
+      ? ""
+      : `<div class="bs-card">
+          <p class="bs-card-title">AtCoder 순위표 대기 중 (${atcoderPending.length})</p>
+          <p class="bs-note" style="margin-bottom:12px">
+            atcoder.jp 순위표를 이 Worker에서 직접 못 가져와서(도메인 전체 차단), runBot이 대신 가져와
+            넘겨줄 때까지 대기 중인 대회들입니다. 봇이 순위표를 넘기면 자동으로 계산되어 위 목록에
+            나타나고, 여기서는 사라집니다.
+          </p>
+          <ul class="bs-upload-list">${atcoderPending.map(runforceAtCoderPendingRow).join("\n")}</ul>
+        </div>`;
+
+  const queueCard =
+    discoveryQueue.length === 0
+      ? ""
+      : `<details class="bs-card">
+          <summary class="bs-card-title" style="cursor:pointer;">자동탐색 큐 (${discoveryQueue.length})</summary>
+          <p class="bs-note" style="margin:12px 0">
+            방금 목록에서 찾았지만 아직 계산 안 된 후보들입니다 — 1분마다 도는 크론이 오래된 순으로
+            몇 개씩 꺼내 실제로 계산합니다(대회당 API 호출이 여러 번이라 한 번에 다 처리하진 않습니다).
+            보통 몇 분 안에 다 빠집니다.
+          </p>
+          <ul class="bs-upload-list">${discoveryQueue.map(runforceDiscoveryQueueRow).join("\n")}</ul>
+        </details>`;
 
   return shell(
     "RUNFORCE",
@@ -2892,12 +2951,16 @@ export function renderRunforceSettings(config: RunforceConfig, contests: Runforc
       <p class="bs-note" style="margin-top:8px">rated 대회만 추가할 수 있습니다 — 대회 종료 후 레이팅이 반영된 뒤 추가해 주세요.</p>
     </div>
 
+    ${pendingCard}
+
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       <a class="bs-new bs-new-outline" href="/runforce/leaderboard/export.csv" style="margin-bottom:0">리더보드 CSV 다운로드</a>
     </div>
 
     <p class="bs-card-title" style="margin-top:24px">산정 대상 대회 (${contests.length})</p>
     ${list}
+
+    ${queueCard}
 
     <div class="bs-danger-zone">
       <p class="bs-card-title">전체 초기화</p>
