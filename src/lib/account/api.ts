@@ -38,9 +38,14 @@ export async function fetchCurrentUser(): Promise<CurrentUserState> {
   }
 
   try {
+    // 타임아웃이 없으면 연결이 조용히 걸린 경우(중간 네트워크 문제 등) 화면이 스켈레톤인
+    // 채로 몇 분씩 방치될 수 있습니다. 15초면 정상 응답에는 넉넉하고, 초과 시 error
+    // 상태로 넘어가 "다시 시도" 버튼이 뜹니다(캐시로 signed-in을 보여주는 중이면
+    // CurrentUserProvider가 화면을 유지합니다).
     const res = await fetch(getMeEndpoint(), {
       credentials: "include",
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     });
 
     if (res.status === 401) return { status: "signed-out" };

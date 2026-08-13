@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import PostalMime from "postal-mime";
 import type { Env } from "./types";
+import { purgeExpiredSessions } from "./lib/session";
 import { auth } from "./routes/auth";
 import { me } from "./routes/me";
 import { admin } from "./routes/admin";
@@ -104,6 +105,13 @@ export default {
     ctx.waitUntil(
       enqueueDiscoveredContests(env).catch((err) => {
         console.error("RUNFORCE 자동탐색 큐 등록 실패", err);
+      }),
+    );
+    // 만료된 로그인 세션 정리(D1 sessions 테이블) — 정확성은 getSession의 expires_at
+    // 필터가 이미 보장하므로, 여기선 테이블이 무한히 크지 않게만 하면 됩니다.
+    ctx.waitUntil(
+      purgeExpiredSessions(env).catch((err) => {
+        console.error("만료 세션 정리 실패", err);
       }),
     );
   },
