@@ -3153,7 +3153,7 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
     .map(
       (e, idx) => `<tr>
         <td class="num center">${idx + 1}</td>
-        <td>${escapeHtml(e.name || "(이름 없음)")}</td>
+        <td class="center">${escapeHtml(e.name || "(이름 없음)")}</td>
         <td class="num center">${formatRunforceDisplay(e.totalScore)}</td>
         <td class="num center">${e.contestsCounted}</td>
       </tr>`,
@@ -3177,7 +3177,7 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
         ? `<p class="empty">이번 학기 활동회원이 없습니다.</p>`
         : `<div class="bs-table-wrap">
       <table class="bs-table">
-        <thead><tr><th class="center">순위</th><th>이름</th><th class="center">총점</th><th class="center">참가 대회 수</th></tr></thead>
+        <thead><tr><th class="center">순위</th><th class="center">이름</th><th class="center">총점</th><th class="center">참가 대회 수</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`
