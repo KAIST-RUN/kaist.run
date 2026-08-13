@@ -188,14 +188,16 @@ auth.get("/discord/callback", async (c) => {
   }
 
   // 로그인마다 아바타를 최신으로 맞춥니다 — OAuth 응답에 이미 들어있는 값이라 추가
-  // API 호출 없이 공짜로 갱신됩니다(members.ts::touchUserAvatar 참고). 실패해도
-  // 로그인 자체를 막을 이유는 없어서 fire-and-forget이 아니라 그냥 await만 하고
-  // 에러는 무시하지 않되(로그만) 흐름은 계속 진행합니다.
-  try {
-    await touchUserAvatar(c.env, discordUser.discordId, discordUser.avatarUrl);
-  } catch (err) {
-    console.error("Failed to refresh avatar on login", err);
-  }
+  // API 호출 없이 공짜로 갱신됩니다(members.ts::touchUserAvatar 참고). 리다이렉트 응답에는
+  // 필요 없는 부수 작업인데 예전엔 await로 응답을 붙잡았습니다 — D1 primary가 먼 리전에
+  // 있으면 이 UPDATE 하나가 로그인 리다이렉트를 왕복 하나만큼(수백 ms) 지연시킵니다.
+  // waitUntil은 응답을 보낸 뒤에도 작업을 끝까지 실행해 주므로(중간에 죽지 않음) 갱신은
+  // 그대로 되고, 실패 로그도 그대로 남습니다.
+  c.executionCtx.waitUntil(
+    touchUserAvatar(c.env, discordUser.discordId, discordUser.avatarUrl).catch((err) => {
+      console.error("Failed to refresh avatar on login", err);
+    }),
+  );
 
   const sessionId = await createSession(c.env, {
     discordId: discordUser.discordId,

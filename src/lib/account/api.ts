@@ -27,7 +27,8 @@ async function fetchCurrentUserMock(): Promise<CurrentUserState> {
   return state;
 }
 
-function isUseMockEnabled(): boolean {
+// CurrentUserProvider가 localStorage 캐시(meCache.ts)를 mock 경로와 분리하기 위해 씁니다.
+export function isUseMockEnabled(): boolean {
   return process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_MOCK_ME === "1";
 }
 

@@ -1,14 +1,11 @@
 import type { Metadata } from "next";
-import { Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import ThemeCookieSync from "@/components/layout/ThemeCookieSync";
-import "pretendard/dist/web/variable/pretendardvariable.css";
+// dynamic-subset: 2.0MB 단일 woff2 대신 unicode-range로 쪼갠 서브셋들을 선언만 해두고,
+// 브라우저가 화면에 실제로 등장한 글리프 범위의 파일만 내려받게 합니다. 첫 화면 기준
+// 폰트 전송량이 수십 KB로 줄어 JS 청크와의 대역폭 경쟁(→ 하이드레이션 지연)이 사라집니다.
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "RUN — KAIST Algorithmic Problem Solving Club",
@@ -21,11 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="ko"
-      suppressHydrationWarning
-      className={`${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="ko" suppressHydrationWarning className="h-full antialiased">
       <body className="flex h-dvh flex-col overflow-hidden">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <ThemeCookieSync />

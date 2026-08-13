@@ -814,18 +814,38 @@ export type RunforceMemberBreakdownRow = {
 
 type StoredResultRow = { uid: string; platformRank: number | null; finalRank: number; score: number; isUnratedParticipant: boolean };
 
-async function getContestResultRows(env: Env, contestId: string, uid?: string): Promise<StoredResultRow[]> {
-  const query = uid
-    ? env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score, is_unrated_participant FROM runforce_results WHERE contest_id=?1 AND uid=?2").bind(contestId, uid)
-    : env.CONTENT_DB.prepare("SELECT uid, platform_rank, final_rank, score, is_unrated_participant FROM runforce_results WHERE contest_id=?1").bind(contestId);
-  const { results } = await query.all<{ uid: string; platform_rank: number | null; final_rank: number; score: number; is_unrated_participant: number }>();
-  return results.map((r) => ({
-    uid: r.uid,
-    platformRank: r.platform_rank,
-    finalRank: r.final_rank,
-    score: r.score,
-    isUnratedParticipant: !!r.is_unrated_participant,
-  }));
+// 전 대회의 결과 행을 D1 왕복 "한 번"에 가져와 contest_id별로 묶습니다. 예전엔 대회
+// 그룹마다 쿼리를 따로 날렸는데(computeEffectiveBreakdown의 루프 안에서 순차 await),
+// 쿼리 하나하나는 인덱스 정확 조회라 가벼워도 왕복 횟수가 대회 수에 비례해 늘어나서
+// /api/me가 시즌이 진행될수록 선형으로 느려졌습니다. 행 수는 대회 수 × 활동회원 수
+// (수천 행 규모)라 한 번에 다 읽어도 D1 1쿼리가 항상 더 쌉니다.
+// filterUid를 주면(마이페이지) idx_runforce_results_uid로 그 회원 행만 읽습니다.
+async function getResultRowsByContest(env: Env, filterUid?: string): Promise<Map<string, StoredResultRow[]>> {
+  const sql = "SELECT contest_id, uid, platform_rank, final_rank, score, is_unrated_participant FROM runforce_results";
+  const query = filterUid ? env.CONTENT_DB.prepare(`${sql} WHERE uid=?1`).bind(filterUid) : env.CONTENT_DB.prepare(sql);
+  const { results } = await query.all<{
+    contest_id: string;
+    uid: string;
+    platform_rank: number | null;
+    final_rank: number;
+    score: number;
+    is_unrated_participant: number;
+  }>();
+
+  const byContest = new Map<string, StoredResultRow[]>();
+  for (const r of results) {
+    const row: StoredResultRow = {
+      uid: r.uid,
+      platformRank: r.platform_rank,
+      finalRank: r.final_rank,
+      score: r.score,
+      isUnratedParticipant: !!r.is_unrated_participant,
+    };
+    const arr = byContest.get(r.contest_id);
+    if (arr) arr.push(row);
+    else byContest.set(r.contest_id, [row]);
+  }
+  return byContest;
 }
 
 // 미참가 인원은 집계할 때 0.2배만 반영합니다. "미참가"는 platform_rank가 없고 unrated
@@ -893,8 +913,11 @@ export function groupContests<T extends PairableContest>(contests: T[]): Contest
 // uid를 지정하면(마이페이지 등 회원 한 명만 필요할 때) 그 회원 행만 조회해서 훨씬
 // 가볍게 계산합니다. 생략하면(리더보드용) 전체 회원의 breakdown을 한 번에 계산합니다.
 async function computeEffectiveBreakdown(env: Env, filterUid?: string): Promise<Map<string, RunforceMemberBreakdownRow[]>> {
-  const contests = await listTargetContests(env);
+  // 대회 목록과 결과 행은 서로 독립이라 병렬로 가져옵니다. 대상 목록에 없는 대회의 행이
+  // 결과에 섞여 있어도(그럴 일은 없지만) 아래 루프가 groups 기준으로만 읽으므로 무시됩니다.
+  const [contests, rowsByContest] = await Promise.all([listTargetContests(env), getResultRowsByContest(env, filterUid)]);
   const groups = groupContests(contests);
+  const resultsOf = (contestId: string): StoredResultRow[] => rowsByContest.get(contestId) ?? [];
   const breakdownByUid = new Map<string, RunforceMemberBreakdownRow[]>();
   const addRow = (uid: string, row: RunforceMemberBreakdownRow) => {
     if (!breakdownByUid.has(uid)) breakdownByUid.set(uid, []);
@@ -903,16 +926,13 @@ async function computeEffectiveBreakdown(env: Env, filterUid?: string): Promise<
 
   for (const group of groups) {
     if ("single" in group) {
-      const rows = await getContestResultRows(env, group.single.id, filterUid);
-      for (const r of rows) addRow(r.uid, toBreakdownRow(group.single, r));
+      for (const r of resultsOf(group.single.id)) addRow(r.uid, toBreakdownRow(group.single, r));
       continue;
     }
 
     const { div1, div2 } = group;
-    const [div1Rows, div2Rows] = await Promise.all([
-      getContestResultRows(env, div1.id, filterUid),
-      getContestResultRows(env, div2.id, filterUid),
-    ]);
+    const div1Rows = resultsOf(div1.id);
+    const div2Rows = resultsOf(div2.id);
     const div2ByUid = new Map(div2Rows.map((r) => [r.uid, r]));
     const seenUids = new Set<string>();
 

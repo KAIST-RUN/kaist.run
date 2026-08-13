@@ -137,8 +137,10 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
         <div className="reveal order-1 flex items-center justify-center lg:order-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/cenix.png"
+            src="/images/cenix.webp"
             alt={study.imageAlt}
+            loading="lazy"
+            decoding="async"
             className="aspect-square w-full max-w-sm object-contain"
           />
         </div>
@@ -152,8 +154,10 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
         <div className="reveal overflow-hidden rounded-2xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/contest_photo2.jpg"
+            src="/images/contest_photo2.webp"
             alt={contests.photoAlt}
+            loading="lazy"
+            decoding="async"
             className="h-auto w-full"
           />
         </div>
@@ -242,8 +246,10 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
         <div className="reveal overflow-hidden rounded-2xl border border-black/10 dark:border-white/15">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/contest_photo.jpg"
+            src="/images/contest_photo.webp"
             alt={hosting.photoAlt}
+            loading="lazy"
+            decoding="async"
             className="aspect-[21/9] w-full object-cover"
           />
         </div>

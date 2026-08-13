@@ -73,7 +73,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: "Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+  /* font-mono 사용처가 아직 없어 next/font(Geist Mono) 로드는 제거했습니다.
+     나중에 코드 블록 등에 쓰게 되면 시스템 모노 스택이 바로 동작합니다. */
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
 body {

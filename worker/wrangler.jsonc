@@ -102,5 +102,20 @@
 	// 즉시 반환하므로 평소엔 가벼운 조회 한두 번뿐입니다.
 	"triggers": {
 		"crons": ["0 * * * *", "* * * * *"]
+	},
+	// D1 primary가 APAC 리전에 있는데(wrangler d1 info로 확인 가능) 이 Worker는 기본적으로
+	// 사용자 최근접 PoP에서 실행됩니다. 한국 사용자 트래픽이 KT↔Cloudflare 피어링 사정으로
+	// LAX로 라우팅되는 상황에서는 D1 쿼리 하나하나가 태평양 왕복(~150ms)이 되어, 쿼리를
+	// 여러 번 하는 /api/me 같은 경로가 크게 느려집니다. Smart Placement는 서브리퀘스트
+	// 패턴을 보고 Worker 실행 위치를 D1 근처로 옮겨서 이 왕복을 없애줍니다.
+	// - 배포 직후엔 효과가 없고, 트래픽이 좀 쌓여야 발동합니다(응답 헤더 cf-placement로 확인).
+	// - scheduled(cron)·email 핸들러는 placement 대상이 아니라 기존과 동일하게 동작합니다.
+	"placement": {
+		"mode": "smart"
+	},
+	// 대시보드(Workers → 이 Worker → Observability)에서 요청별 지연/로그를 보기 위한 설정.
+	// 성능 개선의 효과 측정과 이후 회귀 감지에 씁니다.
+	"observability": {
+		"enabled": true
 	}
 }

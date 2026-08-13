@@ -106,20 +106,15 @@ export default function MyPageContent() {
         </div>
       )}
 
+      {/* 카드별 순차 delay(60~240ms)를 없앴습니다 — fade-in-up이 fill-mode:both라 delay
+          동안 opacity:0으로 고정되어, /api/me 응답이 온 뒤에도 그만큼 화면이 비어 보였습니다.
+          이제 네 카드가 같은 0.6s 페이드로 동시에 등장합니다. */}
       {state.status === "signed-in" && (
-        <div className="flex flex-col gap-6">
-          <div className="animate-fade-in-up" style={{ animationDelay: "60ms" }}>
-            <UserProfileCard user={state.user} />
-          </div>
-          <div className="animate-fade-in-up" style={{ animationDelay: "120ms" }}>
-            <UserInfoCard user={state.user} />
-          </div>
-          <div className="animate-fade-in-up" style={{ animationDelay: "180ms" }}>
-            <RunforceCard user={state.user} />
-          </div>
-          <div className="animate-fade-in-up" style={{ animationDelay: "240ms" }}>
-            <AccountMenu user={state.user} />
-          </div>
+        <div className="animate-fade-in-up flex flex-col gap-6">
+          <UserProfileCard user={state.user} />
+          <UserInfoCard user={state.user} />
+          <RunforceCard user={state.user} />
+          <AccountMenu user={state.user} />
         </div>
       )}
     </main>
