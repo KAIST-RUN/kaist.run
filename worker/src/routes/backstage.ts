@@ -60,6 +60,7 @@ import {
   setRunforceConfig,
   listTargetContests,
   addTargetContest,
+  enqueueAtCoderPending,
   removeTargetContest,
   getTargetContestDetail,
   getRunforceLeaderboard,
@@ -935,6 +936,21 @@ backstage.post("/runforce/contests/add", async (c) => {
   if (!isRunforcePlatform(platform)) return c.notFound();
 
   try {
+    // AtCoder는 이 Worker에서 순위표를 직접 못 가져오므로(runforce.ts::addTargetContest
+    // 주석 참고) 바로 계산하지 않고 대기열에 등록만 합니다 — runBot이 폴링해서 순위표를
+    // 채우면 자동으로 계산되어 아래 목록에 나타납니다.
+    if (platform === "atcoder") {
+      await enqueueAtCoderPending(c.env, contestId, { uid: gate.member.uid, name: gate.member.name }, "manual");
+      const [config, contests] = await Promise.all([getRunforceConfig(c.env), listTargetContests(c.env)]);
+      return c.html(
+        renderRunforceSettings(
+          config,
+          contests,
+          `AtCoder 대회 "${contestId}"를 대기열에 등록했습니다 — 봇이 순위표를 가져오면 자동으로 계산되어 아래 목록에 나타납니다.`,
+        ),
+      );
+    }
+
     const contest = await addTargetContest(c.env, platform, contestId, { uid: gate.member.uid, name: gate.member.name }, "manual");
     return c.redirect(`/runforce/${encodeURIComponent(contest.id)}`);
   } catch (err) {

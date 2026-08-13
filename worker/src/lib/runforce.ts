@@ -7,7 +7,12 @@ import {
   isCodeforcesOutOfCompetitionParticipant,
   listCodeforcesContestsInRange,
 } from "./codeforces";
-import { fetchAtCoderContestMeta, fetchAtCoderStandings, isAtCoderContestRated, listAtCoderContestsInRange } from "./atcoder";
+import {
+  fetchAtCoderContestMeta,
+  isAtCoderContestRated,
+  listAtCoderContestsInRange,
+  type AtCoderRankEntry,
+} from "./atcoder";
 
 // RUNFORCE: 활동회원의 Codeforces/AtCoder 대회 성적을 다른 활동회원과 상대평가해 포인트로
 // 환산하는 기능입니다 (worker/migrations/0018_runforce.sql 참고). 핵심 불변식은 "한 번
@@ -343,12 +348,20 @@ export function computeContestRanking(
 // 수동 추가(backstage POST)와 자동탐색(cron)이 공유하는 단일 원자적 흐름입니다. 이미
 // 등록된 대회는 manual이면 에러, auto면 조용히 기존 값을 반환(재계산 절대 금지 —
 // UNIQUE(platform, contest_id) 인덱스와 함께 이중 안전장치).
+//
+// prefetchedAtCoderStandings: atcoder.jp/contests/{id}/results/json은 이 Worker(Cloudflare)
+// 발신 IP에서 403으로 막혀 있어(atcoder.ts 상단 주석) platform==='atcoder'일 땐 이 Worker가
+// 직접 순위표를 못 가져옵니다. 그래서 순위표는 항상 runBot이 대신 가져와 넘겨준 값을 씁니다
+// — 값이 없으면 이 함수를 부르지 말고 enqueueAtCoderPending으로 대기열에 넣으세요
+// (completeAtCoderContest가 그 값을 채워 이 함수를 호출하는 유일한 경로입니다).
+// Codeforces는 지금처럼 이 함수 안에서 직접 fetch합니다(막혀있지 않으므로).
 export async function addTargetContest(
   env: Env,
   platform: RunforcePlatform,
   contestIdRaw: string,
   addedBy: { uid: string | null; name: string | null },
   source: "manual" | "auto",
+  prefetchedAtCoderStandings?: AtCoderRankEntry[],
 ): Promise<RunforceContestSummary> {
   const contestId = contestIdRaw.trim();
   if (!contestId) throw new RunforceError("대회 ID를 입력해 주세요.");
@@ -365,8 +378,15 @@ export async function addTargetContest(
   const meta = platform === "codeforces" ? await fetchCodeforcesContestMeta(contestId) : await fetchAtCoderContestMeta(contestId);
   if (!meta) throw new RunforceError("대회 정보를 찾을 수 없습니다. 대회 ID를 확인해 주세요.");
 
-  const rankEntries =
-    platform === "codeforces" ? await fetchCodeforcesContestRatingChanges(contestId) : await fetchAtCoderStandings(contestId);
+  let rankEntries: AtCoderRankEntry[];
+  if (platform === "codeforces") {
+    rankEntries = await fetchCodeforcesContestRatingChanges(contestId);
+  } else {
+    if (!prefetchedAtCoderStandings) {
+      throw new RunforceError("AtCoder 순위표가 아직 없습니다 — enqueueAtCoderPending으로 대기열에 등록하세요.");
+    }
+    rankEntries = prefetchedAtCoderStandings;
+  }
   const platformRanks = new Map<string, number>();
   for (const entry of rankEntries) {
     const key = entry.handle.trim().toLowerCase();
@@ -436,6 +456,77 @@ export async function addTargetContest(
   const created = await getTargetContestById(env, rowId);
   if (!created) throw new Error("Failed to read back just-created RUNFORCE contest");
   return created;
+}
+
+// ---------- AtCoder 순위표 대기열 (봇 중계) ----------
+// atcoder.jp 순위표 fetch가 이 Worker에서 막혀 있어(addTargetContest 주석 참고), AtCoder
+// 대회는 바로 계산하는 대신 여기 대기열에 등록만 해두고 runBot이 폴링해서 채웁니다.
+// 대회 메타는 저장하지 않습니다 — kenkoooo.com 쪽은 안 막혀 있어서 필요할 때(완료 시점)
+// addTargetContest가 다시 가져오면 그만이라, 대기 중에 따로 캐싱해 둘 이유가 없습니다.
+
+export type AtCoderPendingEntry = {
+  contestId: string;
+  source: "manual" | "auto";
+  addedByUid: string | null;
+  addedByName: string | null;
+  requestedAt: string;
+};
+
+// 멱등 — 이미 대기 중이면 조용히 무시합니다(ON CONFLICT DO NOTHING). 이미 runforce_contests에
+// 있는 대회를 여기 넣는 것도 딱히 해롭진 않지만(완료 시점에 addTargetContest의 existing 체크가
+// 잡아냄), 호출부(backstage 라우트/cron)가 먼저 그쪽을 확인하는 게 정상 경로입니다.
+export async function enqueueAtCoderPending(
+  env: Env,
+  contestIdRaw: string,
+  addedBy: { uid: string | null; name: string | null },
+  source: "manual" | "auto",
+): Promise<void> {
+  const contestId = contestIdRaw.trim();
+  if (!contestId) throw new RunforceError("대회 ID를 입력해 주세요.");
+
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO runforce_atcoder_pending (contest_id, source, added_by_uid, added_by_name)
+     VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT (contest_id) DO NOTHING`,
+  )
+    .bind(contestId, source, addedBy.uid, addedBy.name)
+    .run();
+}
+
+export async function listPendingAtCoderContests(env: Env): Promise<AtCoderPendingEntry[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    "SELECT contest_id, source, added_by_uid, added_by_name, requested_at FROM runforce_atcoder_pending ORDER BY requested_at ASC",
+  ).all<{ contest_id: string; source: "manual" | "auto"; added_by_uid: string | null; added_by_name: string | null; requested_at: string }>();
+  return results.map((r) => ({
+    contestId: r.contest_id,
+    source: r.source,
+    addedByUid: r.added_by_uid,
+    addedByName: r.added_by_name,
+    requestedAt: r.requested_at,
+  }));
+}
+
+// 봇이 대기열의 한 건을 채워서 넘겨줄 때 부르는 함수 — addTargetContest에 실제 계산을
+// 맡기고, 성공하면 대기열에서 지웁니다. 대기열에 없는 contestId로 불려도(레이스 등) 그냥
+// source='auto'/addedBy=null로 처리합니다 — 계산 자체는 막을 이유가 없습니다.
+export async function completeAtCoderContest(
+  env: Env,
+  contestIdRaw: string,
+  entries: AtCoderRankEntry[],
+): Promise<RunforceContestSummary> {
+  const contestId = contestIdRaw.trim();
+  const pending = await env.CONTENT_DB.prepare(
+    "SELECT source, added_by_uid, added_by_name FROM runforce_atcoder_pending WHERE contest_id=?1",
+  )
+    .bind(contestId)
+    .first<{ source: "manual" | "auto"; added_by_uid: string | null; added_by_name: string | null }>();
+
+  const source = pending?.source ?? "auto";
+  const addedBy = { uid: pending?.added_by_uid ?? null, name: pending?.added_by_name ?? null };
+
+  const contest = await addTargetContest(env, "atcoder", contestId, addedBy, source, entries);
+  await env.CONTENT_DB.prepare("DELETE FROM runforce_atcoder_pending WHERE contest_id=?1").bind(contestId).run();
+  return contest;
 }
 
 // ---------- Div1/Div2 페어링 ----------
@@ -775,14 +866,24 @@ export async function refreshAutoDiscoveredContests(env: Env): Promise<void> {
   ];
   candidates.sort((a, b) => a.startTimeMs - b.startTimeMs);
 
+  // AtCoder는 이 Worker에서 직접 계산할 수 없으므로(addTargetContest 주석 참고) 이미
+  // 대기열에 올라간 것들은 건너뜁니다 — 안 그러면 봇이 아직 못 채운 매 틱마다 다시
+  // enqueue를 부르느라 진짜 새 후보들이 MAX_NEW_CONTESTS_PER_TICK에 밀려날 수 있습니다.
+  const alreadyPendingIds = new Set((await listPendingAtCoderContests(env)).map((p) => p.contestId));
+
   let processed = 0;
   for (const candidate of candidates) {
     if (processed >= MAX_NEW_CONTESTS_PER_TICK) break;
+    if (candidate.platform === "atcoder" && alreadyPendingIds.has(candidate.contestId)) continue;
     const existing = await getTargetContestByPlatformId(env, candidate.platform, candidate.contestId);
     if (existing) continue; // 이미 등록됨 — 재계산 금지, 스킵
 
     try {
-      await addTargetContest(env, candidate.platform, candidate.contestId, { uid: null, name: null }, "auto");
+      if (candidate.platform === "atcoder") {
+        await enqueueAtCoderPending(env, candidate.contestId, { uid: null, name: null }, "auto");
+      } else {
+        await addTargetContest(env, candidate.platform, candidate.contestId, { uid: null, name: null }, "auto");
+      }
     } catch (err) {
       // 하나 실패해도 나머지는 계속 진행 — 실패한 건 다음 시간에 자동으로 재시도됨
       // (existing 체크에서 여전히 없을 것이므로).

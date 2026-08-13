@@ -12,6 +12,7 @@ import {
   type HandleSite,
 } from "../lib/members";
 import { requestSemesterMembership, getUserSemesters, listAllSemesterDiscordIds, SemesterError } from "../lib/semesters";
+import { completeAtCoderContest, listPendingAtCoderContests, RunforceError, type AtCoderPendingEntry } from "../lib/runforce";
 
 // 외부 디스코드 봇이 "신규 회원가입"/"학기별 활동회원 등록"을 처리할 때 부르는 API입니다.
 // 봇은 지금까지 구글 스프레드시트를 직접 편집해왔는데, 이제 원천이 D1로 옮겨오면서
@@ -150,4 +151,47 @@ bot.get("/handles/:site/current-semester", async (c) => {
 // 모든(열린) 학기 각각의 소속(승인된) 디스코드 ID 목록.
 bot.get("/semesters", async (c) => {
   return c.json(await listAllSemesterDiscordIds(c.env));
+});
+
+// ---------- RUNFORCE: AtCoder 순위표 중계 ----------
+// atcoder.jp/contests/{id}/results/json이 이 Worker 발신 IP에서 403으로 막혀 있어서
+// (worker/src/lib/atcoder.ts 참고) RUNFORCE의 AtCoder 대회는 이 두 엔드포인트로 봇이
+// 대신 순위표를 가져와 넘겨줍니다. Codeforces는 이 중계가 필요 없습니다(막혀있지 않음).
+
+// 봇이 폴링용으로 부릅니다 — 아직 순위표를 못 받은 AtCoder contestId 목록.
+bot.get("/runforce/atcoder-pending", async (c) => {
+  const pending: AtCoderPendingEntry[] = await listPendingAtCoderContests(c.env);
+  return c.json(pending.map((p) => ({ contestId: p.contestId })));
+});
+
+// 봇이 atcoder.jp에서 직접 가져온 순위표를 넘겨서 RUNFORCE 계산을 완료합니다.
+// entries가 비어있는 것 자체는 에러가 아닙니다(그 대회에 클럽원이 아무도 없었을 수도
+// 있음 — 실제 0명 여부는 addTargetContest 쪽 회원 매칭이 알아서 처리) — contestId가
+// 대기열에 없어도(레이스 등) source='auto'로 처리해 계산 자체는 막지 않습니다.
+bot.post("/runforce/atcoder-standings", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object") return c.json({ error: "잘못된 요청 본문입니다." }, 400);
+  const b = body as Record<string, unknown>;
+
+  const contestId = typeof b.contestId === "string" ? b.contestId.trim() : "";
+  if (!contestId) return c.json({ error: "contestId가 필요합니다." }, 400);
+  if (!Array.isArray(b.entries)) return c.json({ error: "entries 배열이 필요합니다." }, 400);
+
+  const entries: { handle: string; rank: number }[] = [];
+  for (const raw of b.entries) {
+    if (!raw || typeof raw !== "object") return c.json({ error: "entries 형식이 올바르지 않습니다." }, 400);
+    const r = raw as Record<string, unknown>;
+    if (typeof r.handle !== "string" || typeof r.rank !== "number") {
+      return c.json({ error: "entries의 각 항목은 { handle: string, rank: number } 형식이어야 합니다." }, 400);
+    }
+    entries.push({ handle: r.handle, rank: r.rank });
+  }
+
+  try {
+    const contest = await completeAtCoderContest(c.env, contestId, entries);
+    return c.json({ id: contest.id, contestId: contest.contestId, participantCount: contest.participantCount });
+  } catch (err) {
+    if (err instanceof RunforceError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
 });
