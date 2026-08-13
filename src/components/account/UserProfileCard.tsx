@@ -5,14 +5,12 @@ import { useTranslations } from "next-intl";
 import type { CurrentUser } from "@/types/account";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { updateNickname } from "@/lib/account/api";
+import { avatarInitial } from "@/lib/account/display";
 import { splitRunforceDisplay } from "@/lib/account/runforce";
 import PencilIcon from "./PencilIcon";
 
 function Avatar({ user }: { user: CurrentUser }) {
-  const initial = (user.name ?? user.discordDisplayName ?? user.discordUsername)
-    .trim()
-    .charAt(0)
-    .toUpperCase();
+  const initial = avatarInitial(user);
 
   if (user.avatarUrl) {
     return (
@@ -30,7 +28,7 @@ function Avatar({ user }: { user: CurrentUser }) {
       aria-hidden="true"
       className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-black/10 bg-black/[.03] text-xl font-bold opacity-60 sm:h-20 sm:w-20 sm:text-2xl dark:border-white/15 dark:bg-white/[.05]"
     >
-      {initial || "?"}
+      {initial}
     </div>
   );
 }

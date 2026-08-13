@@ -7,9 +7,14 @@ import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getDiscordLoginHref } from "@/lib/account/authLinks";
+import { avatarInitial } from "@/lib/account/display";
+import DoorIcon from "./DoorIcon";
 
-const PILL_CLASS =
-  "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full border border-black/10 px-3 text-xs font-semibold transition-opacity hover:opacity-70 dark:border-white/10";
+// 헤더의 계정 자리는 로그인 여부와 상관없이 항상 같은 원입니다 — 로그인 상태면 프로필
+// 사진(없으면 이니셜), 비로그인 상태면 들어가기 아이콘. 로딩 스켈레톤까지 셋 다 지름이 같아서
+// /api/me 응답이 도착하는 순간에도 헤더가 가로로 밀리지 않습니다.
+const CIRCLE_CLASS =
+  "inline-flex h-9 w-9 shrink-0 animate-fade-in items-center justify-center overflow-hidden rounded-full border border-black/10 bg-black/[.03] transition-opacity hover:opacity-70 dark:border-white/10 dark:bg-white/[.05]";
 
 export default function AccountButton() {
   const t = useTranslations("account.header");
@@ -42,8 +47,8 @@ export default function AccountButton() {
   }, [open]);
 
   if (state.status === "loading") {
-    // 높이는 로그인/로그아웃 상태와 동일하게 고정해 헤더가 세로로 흔들리지 않게 합니다.
-    // 폭은 실제 라벨이 정해지면 바뀝니다.
+    // 로그인/비로그인 어느 쪽으로 확정되든 같은 크기의 원(CIRCLE_CLASS)이 되므로,
+    // 이 스켈레톤과 지름을 맞춰두면 /api/me 응답이 도착해도 헤더가 전혀 흔들리지 않습니다.
     return (
       <span
         aria-hidden="true"
@@ -53,9 +58,21 @@ export default function AccountButton() {
   }
 
   if (state.status === "signed-in") {
+    // 로그인 상태에서는 "마이페이지" 글자 대신 프로필 사진만 띄웁니다. 글자가 사라지므로
+    // 접근성 이름은 aria-label로 남겨야 합니다(스크린리더가 읽을 게 없어짐) — img의
+    // alt는 빈 문자열로 둬서 링크 이름이 두 번 읽히지 않게 합니다.
+    // 사진이 없는 회원은 마이페이지 프로필 카드와 똑같은 이니셜 원으로 대체합니다.
+    const { user } = state;
     return (
-      <Link href="/my" className={`${PILL_CLASS} animate-fade-in`}>
-        {t("myPage")}
+      <Link href="/my" aria-label={t("myPage")} title={t("myPage")} className={CIRCLE_CLASS}>
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span aria-hidden="true" className="text-xs font-bold opacity-60">
+            {avatarInitial(user)}
+          </span>
+        )}
       </Link>
     );
   }
@@ -68,9 +85,13 @@ export default function AccountButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`${PILL_CLASS} animate-fade-in`}
+        aria-label={t("joinOrSignIn")}
+        title={t("joinOrSignIn")}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={CIRCLE_CLASS}
       >
-        {t("joinOrSignIn")}
+        <DoorIcon />
       </button>
 
       {mounted &&
