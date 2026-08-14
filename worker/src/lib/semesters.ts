@@ -35,6 +35,16 @@ export async function listSemesters(env: Env): Promise<SemesterInfo[]> {
   return results.map((r) => ({ year: r.year, season: r.season, isCurrent: !!r.is_current, pendingCount: r.pending_count }));
 }
 
+// backstage 상단 nav의 "회원 명단" 탭에 승인 대기 뱃지(!)를 띄울지 결정하기 위한
+// 존재 여부 체크 — 학기를 막론하고 하나라도 있으면 true. COUNT 전체 집계 대신
+// EXISTS라 대기 건수가 아무리 많아도 첫 매치에서 바로 끝납니다.
+export async function hasPendingApprovals(env: Env): Promise<boolean> {
+  const row = await env.CONTENT_DB.prepare(
+    `SELECT EXISTS(SELECT 1 FROM semester_membership WHERE status = 'pending') AS has_pending`,
+  ).first<{ has_pending: number }>();
+  return !!row?.has_pending;
+}
+
 // 새 학기를 엽니다(이미 있으면 존재 확인만). makeCurrent면 기존 "현재 학기"를 내리고
 // 이 학기를 올립니다 — batch()로 한 트랜잭션에 묶어서, 항상 최대 하나만 현재 학기인
 // 상태(부분 유니크 인덱스가 최후 방어선)가 중간 상태 없이 유지되게 합니다.

@@ -5,11 +5,34 @@ import { requireSession } from "../lib/authGuard";
 import { getRawEmail } from "../lib/emailStore";
 import { listEmailIndex, listEmailNoteStates, getEmailNoteState, setEmailNoteState } from "../lib/emailIndex";
 import { renderEmailPage, renderEmailListPage, renderErrorPage, type EmailFilter } from "../lib/emailRender";
-import { renderBackstageEmailList, renderBackstageEmailPage } from "../lib/backstageRender";
+import { renderBackstageEmailList, renderBackstageEmailPage, PENDING_APPROVALS_BADGE_MARKER } from "../lib/backstageRender";
+import { hasPendingApprovals } from "../lib/semesters";
 
 export const email = new Hono<{ Bindings: Env }>();
 
 const LIST_PAGE_SIZE = 20;
+
+// backstage.ts::backstage.use("*", ...)와 같은 목적/같은 방식입니다 — shell()의
+// nav가 심어두는 자리표시자를 실제 승인 대기 여부로 바꿔치기합니다. /email은
+// backstage 서브앱(export const backstage)이 아니라 index.ts에 별도로 마운트되는
+// 라우트라 그 미들웨어를 안 타므로, 여기서도 한 번 더 걸어야 backstage.kaist.run/email
+// 페이지에서도 "회원 명단" 배지가 정확히 뜹니다.
+email.use("*", async (c, next) => {
+  await next();
+  const res = c.res;
+  if (res && (res.headers.get("content-type") ?? "").includes("text/html")) {
+    const html = await res.text();
+    if (html.includes(PENDING_APPROVALS_BADGE_MARKER)) {
+      const pending = await hasPendingApprovals(c.env);
+      const headers = new Headers(res.headers);
+      headers.delete("content-length");
+      c.res = new Response(
+        html.replace(PENDING_APPROVALS_BADGE_MARKER, pending ? '<span class="bs-nav-badge" title="승인 대기 중">!</span>' : ""),
+        { status: res.status, headers },
+      );
+    }
+  }
+});
 
 // backstage.kaist.run에서 접근하면 backstage 메뉴(nav)가 있는 셸로, kaist.run에서
 // 직접 접근하면(참고: wrangler.jsonc에 kaist.run/email(/*) 라우트도 따로 있음) 기존

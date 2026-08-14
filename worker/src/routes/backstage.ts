@@ -52,6 +52,7 @@ import {
   addSemesterMember,
   getUserSemesters,
   SEMESTER_EXPORT_COLUMNS,
+  hasPendingApprovals,
 } from "../lib/semesters";
 import { selectCsvColumns, toCsvDocumentFromColumns } from "../lib/csv";
 import { isAtCoderHeuristicContest } from "../lib/atcoder";
@@ -86,6 +87,7 @@ import {
 import { GoogleFormAccessError, GoogleFormParseError } from "../lib/googleForms";
 import {
   renderBackstageHome,
+  PENDING_APPROVALS_BADGE_MARKER,
   renderNoticeList,
   renderNoticeForm,
   renderArchiveList,
@@ -127,6 +129,23 @@ export const backstage = new Hono<{ Bindings: Env }>();
 backstage.use("*", async (c, next) => {
   await next();
   c.header("Cache-Control", "no-store");
+
+  // shell()이 항상 nav에 심어두는 자리표시자(PENDING_APPROVALS_BADGE_MARKER)를
+  // 실제 승인 대기 여부로 바꿔치기합니다 — HTML 응답에만, 그것도 마커가 실제로
+  // 있을 때만 DB를 봅니다(CSV 다운로드/리다이렉트 등은 content-type에서 바로 걸러짐).
+  const res = c.res;
+  if (res && (res.headers.get("content-type") ?? "").includes("text/html")) {
+    const html = await res.text();
+    if (html.includes(PENDING_APPROVALS_BADGE_MARKER)) {
+      const pending = await hasPendingApprovals(c.env);
+      const headers = new Headers(res.headers);
+      headers.delete("content-length");
+      c.res = new Response(
+        html.replace(PENDING_APPROVALS_BADGE_MARKER, pending ? '<span class="bs-nav-badge" title="승인 대기 중">!</span>' : ""),
+        { status: res.status, headers },
+      );
+    }
+  }
 });
 
 function isSeason(value: string | undefined): value is Season {
@@ -412,7 +431,7 @@ backstage.post("/archive/:season/:slug/delete", async (c) => {
 
 // ---------- members ----------
 
-const MEMBERS_PAGE_SIZE = 30;
+const MEMBERS_PAGE_SIZE = 10;
 
 function paginateMembers(c: { req: { query(key: string): string | undefined } }, users: Awaited<ReturnType<typeof listUsers>>) {
   const q = (c.req.query("q") ?? "").trim().toLowerCase();
@@ -432,6 +451,7 @@ function paginateMembers(c: { req: { query(key: string): string | undefined } },
       hasPrev: page > 0,
       hasNext: start + MEMBERS_PAGE_SIZE < filtered.length,
       total: filtered.length,
+      grandTotal: users.length,
     },
   };
 }

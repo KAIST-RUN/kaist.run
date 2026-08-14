@@ -62,6 +62,8 @@ const FORM_STYLE = `
   .bs-nav-links a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
   .bs-nav-links a:hover { opacity: 1; background: rgba(128,128,128,.1); }
   .bs-nav-links a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
+  /* 승인 대기 중일 때만 "회원 명단" 탭 옆에 붙는 느낌표 뱃지 — PENDING_APPROVALS_BADGE_MARKER 참고. */
+  .bs-nav-badge { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 5px; border-radius: 999px; background: var(--logo-accent); color: #fff; font-size: 0.7rem; font-weight: 800; line-height: 1; vertical-align: -2px; }
 
   /* 공지사항/게시판/대회 아카이브처럼 성격이 비슷한 항목들을 <details>로 묶은
      드롭다운입니다 — JS 없이 네이티브 disclosure로 동작합니다. */
@@ -102,6 +104,11 @@ const FORM_STYLE = `
   .bs-cancel-btn, .bs-add-row {
     font: inherit; font-weight: 700; font-size: 0.8125rem; padding: 8px 18px; border-radius: 999px; cursor: pointer;
     transition: opacity .15s, background .15s, border-color .15s, color .15s, transform .12s;
+    /* 전부 <a>였을 때는 필요 없었지만, CSV 내보내기 팝업 트리거처럼 <button>으로
+       쓰는 곳이 생기면서 Safari/Chrome 기본 버튼 크롬(흰 배경 그라데이션/테두리)이
+       background/border 지정과 별개로 비쳐 보이는 문제가 생겨 껐습니다. 테두리가
+       필요한 쪽(.bs-new-outline 등)은 각자 규칙에서 다시 지정합니다. */
+    -webkit-appearance: none; appearance: none; border: none;
   }
 
   /* 모바일 폭에서는 nav 링크들을 ☰ 버튼으로 여닫는 왼쪽 슬라이드 서랍(drawer)으로
@@ -141,6 +148,12 @@ const FORM_STYLE = `
     /* 검색창은 모바일에서 데스크톱용 상한(420px)을 풀어서 버튼과 함께 양옆
        끝까지 채웁니다. */
     .bs-search input[type="text"] { max-width: none; }
+
+    /* 회원 명단 툴바는 좁은 화면에서 PC용 한 줄 배치(검색 왼쪽 + 버튼 오른쪽 정렬)를
+       풀고 다시 세로로 쌓습니다 — 한 줄에 다 넣기엔 버튼이 너무 많습니다. */
+    .bs-list-toolbar { flex-direction: column; align-items: stretch; }
+    .bs-list-toolbar .bs-search { padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
+    .bs-list-toolbar-actions { margin-left: 0; }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
@@ -489,6 +502,13 @@ const FORM_STYLE = `
   .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
   .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex: 1 1 auto; min-width: 0; max-width: 420px; }
   .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
+
+  /* 회원 명단 상단 툴바 — PC에서는 검색창을 맨 왼쪽에 두고 + 새 유저/CSV/사진 갱신
+     버튼들이 같은 줄 오른쪽 끝에 몰리도록(margin-left:auto) 합니다. 좁은 화면에서는
+     아래 미디어 쿼리로 다시 세로로 쌓습니다. */
+  .bs-list-toolbar { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .bs-list-toolbar .bs-search { margin: 0; padding-top: 0; border-top: none; flex: 0 1 auto; }
+  .bs-list-toolbar-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
   .bs-cancel-btn { border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
@@ -660,6 +680,14 @@ const UPLOAD_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"
 const LINK_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8.3 11.7l3.4-3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><path d="M9.5 6.5l1.2-1.2a2.7 2.7 0 013.9 3.9L13.4 10.4M10.5 13.5l-1.2 1.2a2.7 2.7 0 01-3.9-3.9l1.2-1.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
 const TRASH_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /><path d="M8 6V4.6a.9.9 0 01.9-.9h2.2a.9.9 0 01.9.9V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M5.5 6l.8 9.3a1 1 0 001 .9h5.4a1 1 0 001-.9l.8-9.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M8.5 8.7v4.6M11.5 8.7v4.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>`;
 
+// shell()은 페이지 내용과 무관하게 항상 이 자리표시자를 nav의 "회원 명단" 링크
+// 안에 심어둡니다 — 실제로 승인 대기가 있는지는 DB를 봐야 알 수 있는데, shell()
+// 자신은 동기 함수라 여기서 직접 조회할 수 없습니다. 대신 backstage.ts/email.ts의
+// 공용 미들웨어가 응답을 다 그린 뒤 이 문자열을 찾아 뱃지로 바꿔치기(또는 삭제)
+// 합니다 — shell()을 부르는 23곳 전부에 "대기 건수"를 일일이 전달하지 않고도
+// nav 배지가 백스테이지 전 페이지에서 항상 정확하게 뜨는 이유입니다.
+export const PENDING_APPROVALS_BADGE_MARKER = "<!--bs-pending-badge-->";
+
 export function shell(title: string, active: string, bodyHtml: string): string {
   // 로고 옆(topbarNav)에 ☰ + nav 링크, 테마 토글 오른쪽(topbarEnd)에 로그아웃 —
   // 실제 배치는 emailRender.ts의 page()가 topbar 안에서 조립합니다. ☰는 모바일
@@ -691,7 +719,7 @@ export function shell(title: string, active: string, bodyHtml: string): string {
           ${navLink("/apply", "지원 폼", active === "apply")}
         </div>
       </details>
-      ${navLink("/members", "회원 명단", active === "members")}
+      <a href="/members"${active === "members" ? ' class="active"' : ""}>회원 명단${PENDING_APPROVALS_BADGE_MARKER}</a>
       ${navLink("/runforce", "RUNFORCE", active === "runforce")}
       ${navLink("/email", "이메일", active === "email")}
       ${drawerLogout}
@@ -1125,6 +1153,7 @@ export type MemberListPage = {
   hasPrev: boolean;
   hasNext: boolean;
   total: number;
+  grandTotal: number;
 };
 
 function memberPagerLink(q: string, page: number, label: string): string {
@@ -1177,22 +1206,24 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage, noti
     <p class="bs-eyebrow">Backstage</p>
     <h1>회원 명단</h1>
     ${memberSubnav("list")}
-    <p class="bs-note" style="margin-bottom:16px">D1에 저장된 전체 유저 명단이에요.</p>
+    <p class="bs-note" style="margin-bottom:16px">D1에 저장된 전체 유저 명단이에요 · 총 ${meta.grandTotal}명</p>
     ${notice ? `<p class="bs-note" style="margin-bottom:16px">${escapeHtml(notice)}</p>` : ""}
 
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-      <a class="bs-new" href="/members/new" style="margin-bottom:0">+ 새 유저</a>
-      ${renderCsvExportButton("csv-dialog-members", "/members/export.csv", "CSV 다운로드", MEMBER_EXPORT_COLUMNS)}
-      <form method="post" action="/members/refresh-avatars" style="margin:0;">
-        <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0;">프로필 사진 갱신</button>
+    <div class="bs-list-toolbar">
+      <form class="bs-search" method="get" action="/members">
+        <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="이름 · 학번 · 이메일 · Discord 검색" />
+        <button type="submit" class="bs-cancel-btn bs-icon-btn" aria-label="검색">${SEARCH_ICON_SVG}</button>
+        ${meta.q ? `<a href="/members" class="bs-cancel">지우기</a>` : ""}
       </form>
+      <div class="bs-list-toolbar-actions">
+        <a class="bs-new" href="/members/new" style="margin-bottom:0">+ 새 유저</a>
+        ${renderCsvExportButton("csv-dialog-members", "/members/export.csv", "CSV 다운로드", MEMBER_EXPORT_COLUMNS)}
+        <form method="post" action="/members/refresh-avatars" style="margin:0;">
+          <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0;">프로필 사진 갱신</button>
+        </form>
+      </div>
     </div>
 
-    <form class="bs-search" method="get" action="/members">
-      <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="이름 · 학번 · 이메일 · Discord 검색" />
-      <button type="submit" class="bs-cancel-btn bs-icon-btn" aria-label="검색">${SEARCH_ICON_SVG}</button>
-      ${meta.q ? `<a href="/members" class="bs-cancel">지우기</a>` : ""}
-    </form>
     ${body}
     ${pager}
   `,
