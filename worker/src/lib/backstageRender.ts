@@ -442,6 +442,9 @@ const FORM_STYLE = `
   .bs-check { flex-direction: row; align-items: center; gap: 8px; }
   .bs-check input { width: auto; accent-color: var(--logo-primary); }
   .bs-actions { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
+  /* 공지사항/게시판/대회 아카이브(콘텐츠) 편집 폼은 저장 버튼을 오른쪽 끝에 두고
+     "취소 | 저장" 순서로 놓습니다 — 다른 폼(회원/연락처/회칙/지원 폼)은 기존 그대로. */
+  .bs-actions-end { justify-content: flex-end; }
   .bs-submit { border: none; background: var(--logo-primary); color: var(--bg); }
   .bs-submit:hover { opacity: 0.88; }
   .bs-cancel { font-size: 0.875rem; opacity: 0.6; color: var(--fg); text-decoration: underline; transition: opacity .15s; }
@@ -801,9 +804,9 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
         });
       </script>
 
-      <div class="bs-actions">
-        <button type="submit" class="bs-submit">저장</button>
+      <div class="bs-actions bs-actions-end">
         <a href="/notices" class="bs-cancel">취소</a>
+        <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
     ${
@@ -923,9 +926,9 @@ export function renderBoardForm(mode: "new" | "edit", data: BoardFormData, error
         });
       </script>
 
-      <div class="bs-actions">
-        <button type="submit" class="bs-submit">저장</button>
+      <div class="bs-actions bs-actions-end">
         <a href="/board" class="bs-cancel">취소</a>
+        <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
     ${
@@ -1144,9 +1147,9 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
         </div>
       </div>
 
-      <div class="bs-actions">
-        <button type="submit" class="bs-submit">저장</button>
+      <div class="bs-actions bs-actions-end">
         <a href="/archive/${data.season}" class="bs-cancel">취소</a>
+        <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
     ${
@@ -1551,7 +1554,7 @@ export function renderSemesterRoster(
     <h1>회원 명단</h1>
     ${memberSubnav("semesters")}
     <p class="bs-note" style="margin-bottom:16px">
-      <a href="/members/semesters">← 학기 목록</a> ·
+      <a href="/members/semesters" class="bs-cancel">← 학기 목록</a> ·
       ${escapeHtml(semesterLabel(year, season))}${isCurrent ? " · <strong>현재 학기</strong>" : ""}
     </p>
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
@@ -1778,7 +1781,7 @@ export function renderContactForm(data: ContactFormData, error?: string): string
         </div>
       </div>
 
-      <div class="bs-actions">
+      <div class="bs-actions bs-actions-end">
         <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
@@ -2660,7 +2663,7 @@ export function renderApplyFormPage(config: ApplyFormConfig | null, options: App
     ${header}
     <form class="bs-form" id="apply-form" method="post" action="/apply">
       ${questionsHtml}
-      <div class="bs-actions">
+      <div class="bs-actions bs-actions-end">
         <button type="submit" class="bs-submit" id="apply-save" disabled>저장</button>
       </div>
     </form>
@@ -3126,7 +3129,7 @@ export function renderRunforceContestDetail(
       <h1>[${PLATFORM_LABEL[contest.platform]}] Div1 + Div2</h1>
       ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
       <p class="bs-note" style="margin-bottom:16px">
-        <a href="/runforce">← 대상 대회 목록</a> · ${escapeHtml(formatKstDateTime(contest.startTimeMs))}
+        <a href="/runforce" class="bs-cancel">← 대상 대회 목록</a> · ${escapeHtml(formatKstDateTime(contest.startTimeMs))}
       </p>
       <p class="bs-note" style="margin-bottom:16px">
         리더보드/마이페이지 총점 계산 시, Div1에 실제로 참가한 회원은 Div1 점수를, 그 외(Div2 참가 또는
@@ -3150,7 +3153,7 @@ export function renderRunforceContestDetail(
     <h1>[${PLATFORM_LABEL[contest.platform]}] ${escapeHtml(contest.contestName)}</h1>
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
     <p class="bs-note" style="margin-bottom:16px">
-      <a href="/runforce">← 대상 대회 목록</a> ·
+      <a href="/runforce" class="bs-cancel">← 대상 대회 목록</a> ·
       ${escapeHtml(contest.contestId)} · ${escapeHtml(formatKstDateTime(contest.startTimeMs))} ·
       ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명 ·
       ${runforceWeightLabel(contest.weightIndex)}

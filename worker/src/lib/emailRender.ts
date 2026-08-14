@@ -115,6 +115,8 @@ const PAGE_STYLE = `
   :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
   :root[data-theme="dark"] .theme-toggle .icon-moon { display: inline; }
   h1 { font-size: 1.25rem; margin: 0 0 16px; word-break: break-word; }
+  .back-link { display: inline-block; margin-bottom: 12px; font-size: 0.875rem; opacity: 0.6; color: var(--fg); text-decoration: underline; transition: opacity .15s; }
+  .back-link:hover { opacity: 1; }
   dl { display: grid; grid-template-columns: 5em 1fr; gap: 4px 12px; font-size: 0.875rem; opacity: 0.85; margin: 0 0 20px; }
   dt { font-weight: 600; }
   dd { margin: 0; word-break: break-word; }
@@ -143,7 +145,7 @@ const PAGE_STYLE = `
   .note-box strong { display: block; font-size: 0.8125rem; margin-bottom: 8px; }
   .note-box textarea {
     width: 100%; box-sizing: border-box; font: inherit; padding: 10px 12px; border-radius: 8px;
-    border: 1px solid rgba(128,128,128,.3); background: var(--bg); color: inherit; resize: vertical;
+    border: 1px solid rgba(128,128,128,.3); background: var(--bg); color: inherit; resize: none; overflow: hidden;
   }
   .note-box textarea:focus { outline: none; border-color: var(--logo-primary); }
   .note-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 10px; }
@@ -259,7 +261,7 @@ export function renderEmailPageBody(id: string, email: Email, state: EmailNoteSt
     <div class="note-box">
       <strong>메모</strong>
       <form method="post" action="/email/${safeId}/note">
-        <textarea name="note" rows="3" placeholder="이 메일에 대한 메모(회신 여부, 담당자 등)를 남겨두세요.">${escapeHtml(state.note)}</textarea>
+        <textarea name="note" id="note-textarea" rows="3" placeholder="이 메일에 대한 메모(회신 여부, 담당자 등)를 남겨두세요." oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(state.note)}</textarea>
         <div class="note-actions">
           <label class="note-handled">
             <input type="checkbox" name="handled" value="1" ${state.handled ? "checked" : ""} />
@@ -268,9 +270,16 @@ export function renderEmailPageBody(id: string, email: Email, state: EmailNoteSt
           <button type="submit">저장</button>
         </div>
       </form>
+      <script>
+        (function () {
+          var el = document.getElementById("note-textarea");
+          if (el) el.style.height = el.scrollHeight + "px";
+        })();
+      </script>
     </div>`;
 
   return `
+    <a href="/email" class="back-link">← 받은 메일함</a>
     <h1>${escapeHtml(subject)}</h1>
     <dl>
       <dt>보낸 사람</dt><dd>${escapeHtml(formatAddress(email.from))}</dd>
