@@ -62,8 +62,9 @@ const FORM_STYLE = `
   .bs-nav-links a { opacity: 0.65; color: inherit; text-decoration: none; padding: 6px 14px; border-radius: 999px; transition: opacity .15s, background .15s, color .15s; }
   .bs-nav-links a:hover { opacity: 1; background: rgba(128,128,128,.1); }
   .bs-nav-links a.active { opacity: 1; font-weight: 700; background: var(--logo-primary); color: var(--bg); }
-  /* 승인 대기 중일 때만 "회원 명단" 탭 옆에 붙는 느낌표 뱃지 — PENDING_APPROVALS_BADGE_MARKER 참고. */
-  .bs-nav-badge { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 5px; border-radius: 999px; background: var(--logo-accent); color: #fff; font-size: 0.7rem; font-weight: 800; line-height: 1; vertical-align: -2px; }
+  /* 승인 대기 중일 때만 "회원 명단" 탭 글자 오른쪽 위에 지수(위첨자)처럼 붙는
+     느낌표 뱃지 — PENDING_APPROVALS_BADGE_MARKER 참고. */
+  .bs-nav-badge { display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; margin-left: 1px; border-radius: 999px; background: var(--logo-accent); color: #fff; font-size: 0.6rem; font-weight: 800; line-height: 1; vertical-align: super; }
 
   /* 공지사항/게시판/대회 아카이브처럼 성격이 비슷한 항목들을 <details>로 묶은
      드롭다운입니다 — JS 없이 네이티브 disclosure로 동작합니다. */
@@ -1385,7 +1386,7 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
                 `<li>
                   <span>
                     <a class="title" href="/members/semesters/${s.year}/${s.season}">${escapeHtml(semesterLabel(s.year, s.season))}</a>
-                    ${s.pendingCount > 0 ? `<span class="bs-badge" style="background:var(--logo-accent);">승인 대기 ${s.pendingCount}</span>` : ""}
+                    ${s.pendingCount > 0 ? `<span class="bs-badge" style="background:var(--logo-accent);font-size:0.85rem;" title="승인 대기 중">${s.pendingCount}</span>` : ""}
                   </span>
                   ${s.isCurrent ? '<span class="bs-badge" style="font-size:0.9rem;padding:5px 16px;">현재 학기</span>' : ""}
                 </li>`,
