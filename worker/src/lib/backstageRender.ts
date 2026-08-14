@@ -502,16 +502,6 @@ const FORM_STYLE = `
   .bs-search input[type="text"] { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex: 1 1 auto; min-width: 0; max-width: 560px; }
   .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
 
-  /* 회원 명단 페이저 가운데의 "[현재]/전체" — 대괄호 안 숫자만 눌러서 입력칸으로
-     바뀝니다(renderMemberPageJump). overflow:hidden은 입력칸으로 바뀔 때 세로로
-     삐져나올 수 있는 기본 스핀 버튼/포커스 링을 정리합니다. */
-  .bs-page-jump-wrap { display: inline-flex; align-items: center; height: 1.4em; overflow: hidden; }
-  .bs-page-jump { font: inherit; font-size: 0.875rem; color: inherit; background: transparent; border: none; -webkit-appearance: none; appearance: none; padding: 0; cursor: pointer; text-decoration: underline; opacity: 0.65; transition: opacity .15s; }
-  .bs-page-jump:hover { opacity: 1; }
-  .bs-page-jump-input { font: inherit; font-size: 0.875rem; width: 36px; height: 1.4em; text-align: center; padding: 0 2px; border-radius: 4px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; -moz-appearance: textfield; }
-  .bs-page-jump-input::-webkit-inner-spin-button, .bs-page-jump-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-  .bs-page-jump-input:focus { outline: none; border-color: var(--logo-primary); }
-
   /* 회원 명단 상단 툴바 — PC에서는 + 새 유저/CSV/사진 갱신 버튼을 왼쪽에 두고
      검색창을 같은 줄 오른쪽 끝에 붙입니다(margin-left:auto). 좁은 화면에서는
      아래 미디어 쿼리로 다시 세로로 쌓습니다. */
@@ -1174,52 +1164,6 @@ function memberPagerLink(q: string, page: number, label: string): string {
   return `<a href="/members${qs ? `?${qs}` : ""}">${label}</a>`;
 }
 
-// 페이저 가운데의 "[현재]/전체" — 대괄호 안의 현재 페이지 숫자만 눌러서 입력칸으로
-// 바꿀 수 있고("/전체"는 그대로 고정), Enter를 눌러야 실제로 이동합니다(포커스만
-// 잃으면 그냥 원래 숫자로 되돌아감 — blur로 이동하면 실수로 딴 데 눌렀을 때도 튀어서).
-// 이 페이지에 한 번만 나오는 요소라 id 충돌 걱정 없이 고정 id를 씁니다.
-function renderMemberPageJump(current: number, total: number, q: string): string {
-  return `<span class="bs-page-jump-wrap">[<button type="button" class="bs-page-jump" id="bs-page-jump" data-page="${current}" data-total="${total}" data-q="${escapeHtml(q)}">${current}</button>]/${total}</span>
-    <script>
-      (function () {
-        var btn = document.getElementById("bs-page-jump");
-        if (!btn) return;
-        function startEdit() {
-          var current = Number(btn.dataset.page);
-          var total = Number(btn.dataset.total);
-          var q = btn.dataset.q;
-          var input = document.createElement("input");
-          input.type = "number";
-          input.min = "1";
-          input.max = String(total);
-          input.value = String(current);
-          input.className = "bs-page-jump-input";
-          btn.replaceWith(input);
-          input.focus();
-          input.select();
-          function restore() {
-            input.replaceWith(btn);
-            btn.addEventListener("click", startEdit, { once: true });
-          }
-          input.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") {
-              var n = Math.max(1, Math.min(total, Number(input.value) || current));
-              var params = new URLSearchParams();
-              if (q) params.set("q", q);
-              if (n > 1) params.set("page", String(n - 1));
-              var qs = params.toString();
-              location.href = "/members" + (qs ? "?" + qs : "");
-            } else if (e.key === "Escape") {
-              restore();
-            }
-          });
-          input.addEventListener("blur", restore);
-        }
-        btn.addEventListener("click", startEdit, { once: true });
-      })();
-    </script>`;
-}
-
 function renderMemberRow(user: UserRecord): string {
   const metaParts = [user.nickname, user.studentId, user.email, `Discord ${user.discordId}`].filter((v): v is string => Boolean(v));
 
@@ -1248,7 +1192,7 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage, noti
     meta.hasPrev || meta.hasNext
       ? `<div class="pager">
         ${meta.hasPrev ? memberPagerLink(meta.q, meta.page - 1, "← 이전") : `<span class="disabled">← 이전</span>`}
-        ${renderMemberPageJump(meta.page + 1, meta.totalPages, meta.q)}
+        <span>${meta.page + 1} / ${meta.totalPages}</span>
         ${meta.hasNext ? memberPagerLink(meta.q, meta.page + 1, "다음 →") : `<span class="disabled">다음 →</span>`}
       </div>`
       : meta.total > 0
