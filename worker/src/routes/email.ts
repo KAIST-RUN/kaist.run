@@ -3,12 +3,20 @@ import PostalMime from "postal-mime";
 import type { Env } from "../types";
 import { requireSession } from "../lib/authGuard";
 import { getRawEmail } from "../lib/emailStore";
-import { listEmailIndex } from "../lib/emailIndex";
+import { listEmailIndex, listEmailNoteStates, getEmailNoteState, setEmailNoteState } from "../lib/emailIndex";
 import { renderEmailPage, renderEmailListPage, renderErrorPage } from "../lib/emailRender";
+import { renderBackstageEmailList, renderBackstageEmailPage } from "../lib/backstageRender";
 
 export const email = new Hono<{ Bindings: Env }>();
 
 const LIST_PAGE_SIZE = 20;
+
+// backstage.kaist.run에서 접근하면 backstage 메뉴(nav)가 있는 셸로, kaist.run에서
+// 직접 접근하면(참고: wrangler.jsonc에 kaist.run/email(/*) 라우트도 따로 있음) 기존
+// 기본 셸로 보여줍니다 — 같은 Worker/같은 경로 매칭이라 호스트로만 구분할 수 있습니다.
+function isBackstageHost(c: Context<{ Bindings: Env }>): boolean {
+  return new URL(c.req.url).hostname === "backstage.kaist.run";
+}
 
 // 로그인 안 됨 → /api/auth/discord로 보내서 로그인 후 이 페이지로 돌아오게 합니다.
 // 로그인은 됐지만 관리자가 아님 → 다시 로그인해도 소용없으니 바로 에러 페이지.
@@ -45,16 +53,13 @@ email.get("/", async (c) => {
   if (gate) return gate;
 
   const page = Math.max(0, Number.parseInt(c.req.query("page") ?? "0", 10) || 0);
-  const all = await listEmailIndex(c.env);
+  const [all, noteStates] = await Promise.all([listEmailIndex(c.env), listEmailNoteStates(c.env)]);
   const start = page * LIST_PAGE_SIZE;
   const items = all.slice(start, start + LIST_PAGE_SIZE);
+  const info = { page, hasPrev: page > 0, hasNext: start + LIST_PAGE_SIZE < all.length };
 
   return c.html(
-    renderEmailListPage(items, {
-      page,
-      hasPrev: page > 0,
-      hasNext: start + LIST_PAGE_SIZE < all.length,
-    }),
+    isBackstageHost(c) ? renderBackstageEmailList(items, info, noteStates) : renderEmailListPage(items, info, noteStates),
   );
 });
 
@@ -69,8 +74,8 @@ email.get("/:id", async (c) => {
   }
 
   try {
-    const parsed = await PostalMime.parse(raw);
-    return c.html(renderEmailPage(id, parsed));
+    const [parsed, state] = await Promise.all([PostalMime.parse(raw), getEmailNoteState(c.env, id)]);
+    return c.html(isBackstageHost(c) ? renderBackstageEmailPage(id, parsed, state) : renderEmailPage(id, parsed, state));
   } catch (err) {
     console.error(`Failed to parse email ${id}`, err);
     return c.html(
@@ -78,6 +83,26 @@ email.get("/:id", async (c) => {
       500,
     );
   }
+});
+
+// 메모 저장 — 처리 완료로 체크해서 저장한 경우엔 "이 메일은 끝났다"는 뜻이므로
+// 목록으로 돌려보내고, 그게 아니면(메모만 남긴 경우) 계속 보던 상세 페이지에 둡니다.
+email.post("/:id/note", async (c) => {
+  const gate = await requireAdmin(c);
+  if (gate) return gate;
+
+  const id = c.req.param("id");
+  const raw = await getRawEmail(c.env, id);
+  if (!raw) {
+    return c.html(renderErrorPage("메일을 찾을 수 없습니다", "존재하지 않거나 삭제된 이메일입니다."), 404);
+  }
+
+  const body = await c.req.parseBody();
+  const note = typeof body.note === "string" ? body.note : "";
+  const handled = body.handled === "1";
+  await setEmailNoteState(c.env, id, note, handled);
+
+  return c.redirect(handled ? "/email" : `/email/${id}`);
 });
 
 email.get("/:id/raw", async (c) => {

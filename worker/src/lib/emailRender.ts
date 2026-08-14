@@ -1,5 +1,5 @@
 import type { Email, Address, Attachment } from "postal-mime";
-import type { EmailIndexEntry } from "./emailIndex";
+import type { EmailIndexEntry, EmailNoteState } from "./emailIndex";
 
 export function escapeHtml(value: string): string {
   return value
@@ -125,15 +125,34 @@ const PAGE_STYLE = `
   .attachments ul { padding-left: 20px; }
   .email-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.25); }
   .email-list li { border-bottom: 1px solid rgba(128,128,128,.25); }
-  .email-list a { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 14px 4px; text-decoration: none; color: inherit; }
+  .email-list a { display: flex; flex-direction: column; gap: 2px; padding: 14px 4px; text-decoration: none; color: inherit; }
   .email-list a:hover { background: rgba(128,128,128,.08); }
-  .email-list .main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .email-list .subject { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .email-list .addrs { font-size: 0.8rem; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .email-list .date { flex-shrink: 0; font-size: 0.8rem; opacity: 0.6; }
+  .email-list .subject { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .email-list .note-badge { font-size: 1.3em; }
+  /* 받는사람 줄과 체크/날짜가 항상 같은 한 줄에 오도록 별도 행으로 묶고, wrap을
+     안 시킵니다 — addrs가 flex-shrink로 줄어들며 말줄임표로 잘리고, date는 폭이
+     고정(flex-shrink:0)이라 항상 오른쪽 끝 자리를 지킵니다. */
+  .email-list .addrs-row { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+  .email-list .addrs { flex: 1 1 auto; min-width: 0; font-size: 0.8rem; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .email-list .date { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; opacity: 0.6; }
+  .email-list .handled-badge { font-size: 1.3em; }
   .empty { opacity: 0.6; padding: 24px 4px; }
   .pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; font-size: 0.875rem; }
   .pager .disabled { opacity: 0.35; }
+  .note-box { margin-top: 20px; padding: 14px 16px; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; background: rgba(128,128,128,.04); }
+  .note-box strong { display: block; font-size: 0.8125rem; margin-bottom: 8px; }
+  .note-box textarea {
+    width: 100%; box-sizing: border-box; font: inherit; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid rgba(128,128,128,.3); background: var(--bg); color: inherit; resize: vertical;
+  }
+  .note-box textarea:focus { outline: none; border-color: var(--logo-primary); }
+  .note-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 10px; }
+  .note-handled { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; cursor: pointer; user-select: none; }
+  .note-handled input { width: auto; accent-color: var(--logo-primary); }
+  .note-box button {
+    font: inherit; padding: 8px 16px; border-radius: 8px; border: none;
+    background: var(--logo-primary); color: #06210b; font-weight: 600; cursor: pointer;
+  }
 `;
 
 // 메인 사이트의 src/components/Logo.tsx와 같은 SVG입니다 (React 없이 그냥
@@ -195,7 +214,14 @@ export function renderErrorPage(title: string, message: string): string {
   return page(title, `<h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p>`);
 }
 
-export function renderEmailPage(id: string, email: Email): string {
+// page() 셸(로고/테마 토글만 있는 기본 topbar)과 backstageRender.ts의 shell()(전체
+// backstage 메뉴가 있는 topbar) 양쪽에서 재사용할 수 있도록, 제목과 내용 마크업을
+// 따로 만듭니다 — kaist.run/email(메인 도메인 직접 접근)은 앞의 것을, backstage.kaist.run/email
+// (backstage 메뉴 안 서브탭)은 뒤의 것을 씁니다. 실제로 쓰는 CSS 클래스(.email-list,
+// .toolbar, .body-frame 등)는 PAGE_STYLE에 있고, page()가 어느 경로로 호출되든 항상
+// <style>${PAGE_STYLE}</style>을 넣어주므로(backstageRender.ts::shell도 내부적으로
+// page()를 호출) 클래스 스타일은 두 경로 모두에서 그대로 적용됩니다.
+export function renderEmailPageBody(id: string, email: Email, state: EmailNoteState): string {
   // id는 URL 경로에서 그대로 옵니다 — 지금은 항상 서버가 생성한 랜덤 hex라
   // 위험한 문자가 들어올 일이 없지만, href에 그대로 꽂아 넣는 값이라 방어적으로
   // escape 해둡니다.
@@ -222,9 +248,22 @@ export function renderEmailPage(id: string, email: Email): string {
         </ul>
       </div>`;
 
-  return page(
-    subject,
-    `
+  const noteHtml = `
+    <div class="note-box">
+      <strong>메모</strong>
+      <form method="post" action="/email/${safeId}/note">
+        <textarea name="note" rows="3" placeholder="이 메일에 대한 메모(회신 여부, 담당자 등)를 남겨두세요.">${escapeHtml(state.note)}</textarea>
+        <div class="note-actions">
+          <label class="note-handled">
+            <input type="checkbox" name="handled" value="1" ${state.handled ? "checked" : ""} />
+            처리 완료
+          </label>
+          <button type="submit">저장</button>
+        </div>
+      </form>
+    </div>`;
+
+  return `
     <h1>${escapeHtml(subject)}</h1>
     <dl>
       <dt>보낸 사람</dt><dd>${escapeHtml(formatAddress(email.from))}</dd>
@@ -236,8 +275,12 @@ export function renderEmailPage(id: string, email: Email): string {
     </div>
     ${bodyHtml}
     ${attachmentsHtml}
-  `,
-  );
+    ${noteHtml}
+  `;
+}
+
+export function renderEmailPage(id: string, email: Email, state: EmailNoteState): string {
+  return page(email.subject || "(제목 없음)", renderEmailPageBody(id, email, state));
 }
 
 // KST(Asia/Seoul) 기준 "YYYY-MM-DD HH:mm"로 고정 포맷 — 로케일 구분자에 기대지 않고
@@ -263,18 +306,25 @@ export type EmailListPageInfo = {
   hasNext: boolean;
 };
 
-export function renderEmailListPage(items: EmailIndexEntry[], info: EmailListPageInfo): string {
+export function renderEmailListBody(
+  items: EmailIndexEntry[],
+  info: EmailListPageInfo,
+  noteStates: Map<string, EmailNoteState> = new Map(),
+): string {
   const rows = items.length
     ? `<ul class="email-list">
         ${items
           .map((item) => {
             const safeId = escapeHtml(item.id);
+            const state = noteStates.get(item.id);
+            const handledBadge = state?.handled ? `<span class="handled-badge" title="처리 완료">✅</span>` : "";
+            const noteBadge = state?.note ? `<span class="note-badge" title="메모 있음">📝</span>` : "";
             return `<li><a href="/email/${safeId}">
-              <div class="main">
-                <span class="subject">${escapeHtml(item.subject)}</span>
+              <span class="subject">${escapeHtml(item.subject)}</span>
+              <div class="addrs-row">
                 <span class="addrs">${escapeHtml(item.from)} → ${escapeHtml(item.to)}</span>
+                <span class="date">${noteBadge}${handledBadge}${escapeHtml(formatKstDateTime(item.receivedAt))}</span>
               </div>
-              <span class="date">${escapeHtml(formatKstDateTime(item.receivedAt))}</span>
             </a></li>`;
           })
           .join("\n")}
@@ -287,5 +337,13 @@ export function renderEmailListPage(items: EmailIndexEntry[], info: EmailListPag
     ${info.hasNext ? `<a href="/email?page=${info.page + 1}">다음 →</a>` : `<span class="disabled">다음 →</span>`}
   </div>`;
 
-  return page("받은 메일함", `<h1>받은 메일함</h1>${rows}${pager}`);
+  return `<h1>받은 메일함</h1>${rows}${pager}`;
+}
+
+export function renderEmailListPage(
+  items: EmailIndexEntry[],
+  info: EmailListPageInfo,
+  noteStates: Map<string, EmailNoteState> = new Map(),
+): string {
+  return page("받은 메일함", renderEmailListBody(items, info, noteStates));
 }

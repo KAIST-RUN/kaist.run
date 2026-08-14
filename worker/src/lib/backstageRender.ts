@@ -1,4 +1,6 @@
-import { page, escapeHtml, formatKstDateTime } from "./emailRender";
+import { page, escapeHtml, formatKstDateTime, renderEmailListBody, renderEmailPageBody, type EmailListPageInfo } from "./emailRender";
+import type { EmailIndexEntry, EmailNoteState } from "./emailIndex";
+import type { Email } from "postal-mime";
 import type { UserRecord } from "./members";
 import type { SemesterInfo, SemesterMemberRow, UserSemesterEntry } from "./semesters";
 import type {
@@ -615,7 +617,7 @@ const UPLOAD_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"
 const LINK_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8.3 11.7l3.4-3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><path d="M9.5 6.5l1.2-1.2a2.7 2.7 0 013.9 3.9L13.4 10.4M10.5 13.5l-1.2 1.2a2.7 2.7 0 01-3.9-3.9l1.2-1.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
 const TRASH_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /><path d="M8 6V4.6a.9.9 0 01.9-.9h2.2a.9.9 0 01.9.9V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M5.5 6l.8 9.3a1 1 0 001 .9h5.4a1 1 0 001-.9l.8-9.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M8.5 8.7v4.6M11.5 8.7v4.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>`;
 
-function shell(title: string, active: string, bodyHtml: string): string {
+export function shell(title: string, active: string, bodyHtml: string): string {
   // 로고 옆(topbarNav)에 ☰ + nav 링크, 테마 토글 오른쪽(topbarEnd)에 로그아웃 —
   // 실제 배치는 emailRender.ts의 page()가 topbar 안에서 조립합니다. ☰는 모바일
   // 폭에서 CSS order로 로고보다 앞(왼쪽)에 오도록 되어 있습니다(FORM_STYLE 참고).
@@ -626,10 +628,11 @@ function shell(title: string, active: string, bodyHtml: string): string {
     </form>
   `;
   const contentGroupActive = active === "notices" || active === "board" || active === "archive" || active === "uploads";
+  const infoGroupActive = active === "contact" || active === "bylaws" || active === "apply";
   const navLinks = `
     <div class="bs-nav-links" id="bs-nav">
       ${navLink("/", "홈", active === "home")}
-      <details class="bs-nav-group"${contentGroupActive ? " open" : ""}>
+      <details class="bs-nav-group" name="bs-nav-group"${contentGroupActive ? " open" : ""}>
         <summary class="${contentGroupActive ? "active" : ""}">콘텐츠</summary>
         <div class="bs-nav-group-menu">
           ${navLink("/notices", "공지사항", active === "notices")}
@@ -638,11 +641,17 @@ function shell(title: string, active: string, bodyHtml: string): string {
           ${navLink("/uploads", "업로드", active === "uploads")}
         </div>
       </details>
+      <details class="bs-nav-group" name="bs-nav-group"${infoGroupActive ? " open" : ""}>
+        <summary class="${infoGroupActive ? "active" : ""}">동아리 정보</summary>
+        <div class="bs-nav-group-menu">
+          ${navLink("/contact", "연락처", active === "contact")}
+          ${navLink("/bylaws", "회칙", active === "bylaws")}
+          ${navLink("/apply", "지원 폼", active === "apply")}
+        </div>
+      </details>
       ${navLink("/members", "회원 명단", active === "members")}
       ${navLink("/runforce", "RUNFORCE", active === "runforce")}
-      ${navLink("/contact", "연락처", active === "contact")}
-      ${navLink("/bylaws", "회칙", active === "bylaws")}
-      ${navLink("/apply", "지원 폼", active === "apply")}
+      ${navLink("/email", "이메일", active === "email")}
       ${drawerLogout}
     </div>
   `;
@@ -3199,5 +3208,25 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
     </div>`
     }
   `,
+  );
+}
+
+// ---------- 이메일 (backstage 서브탭) ----------
+// 실제 목록/상세 마크업(renderEmailListBody/renderEmailPageBody)은 emailRender.ts가
+// 만듭니다 — kaist.run/email(메인 도메인 직접 접근, 기본 topbar)과 여기(backstage
+// 메뉴가 있는 shell) 양쪽에서 같은 내용을 재사용하기 위함입니다.
+export function renderBackstageEmailList(
+  items: EmailIndexEntry[],
+  info: EmailListPageInfo,
+  noteStates: Map<string, EmailNoteState> = new Map(),
+): string {
+  return shell("받은 메일함", "email", `<p class="bs-eyebrow">Backstage</p>${renderEmailListBody(items, info, noteStates)}`);
+}
+
+export function renderBackstageEmailPage(id: string, email: Email, state: EmailNoteState): string {
+  return shell(
+    email.subject || "(제목 없음)",
+    "email",
+    `<p class="bs-eyebrow">Backstage</p>${renderEmailPageBody(id, email, state)}`,
   );
 }

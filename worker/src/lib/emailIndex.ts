@@ -104,3 +104,42 @@ export async function backfillEmailIndex(env: Env): Promise<BackfillResult> {
 
   return { total, indexed };
 }
+
+// ---------- 메일별 관리자 메모/처리 완료 (worker/migrations/0025, 0026) ----------
+
+export type EmailNoteState = { note: string; handled: boolean };
+
+// 목록 페이지에서 메모/처리 완료 뱃지를 달아줄 때 씁니다 — 메모 내용 자체는 필요
+// 없고 "메모가 있다/처리 완료다" 여부만 알면 되므로 id→상태 맵으로 가볍게 가져옵니다.
+export async function listEmailNoteStates(env: Env): Promise<Map<string, EmailNoteState>> {
+  const { results } = await env.CONTENT_DB.prepare("SELECT email_id, note, handled FROM email_notes").all<{
+    email_id: string;
+    note: string;
+    handled: number;
+  }>();
+  return new Map(results.map((r) => [r.email_id, { note: r.note, handled: !!r.handled }]));
+}
+
+export async function getEmailNoteState(env: Env, emailId: string): Promise<EmailNoteState> {
+  const row = await env.CONTENT_DB.prepare("SELECT note, handled FROM email_notes WHERE email_id = ?1")
+    .bind(emailId)
+    .first<{ note: string; handled: number }>();
+  return row ? { note: row.note, handled: !!row.handled } : { note: "", handled: false };
+}
+
+// 메모도 비어있고 처리 완료도 아니면(둘 다 "기본값") 행 자체를 지웁니다 — 목록에
+// 빈 행이 계속 쌓이는 것보단 지우는 쪽이 낫습니다. 처리 완료만 켜고 메모는 안 남긴
+// 경우엔(메모 빈 문자열 + handled=1) 행이 남아야 뱃지가 유지됩니다.
+export async function setEmailNoteState(env: Env, emailId: string, note: string, handled: boolean): Promise<void> {
+  const trimmed = note.trim();
+  if (!trimmed && !handled) {
+    await env.CONTENT_DB.prepare("DELETE FROM email_notes WHERE email_id = ?1").bind(emailId).run();
+    return;
+  }
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO email_notes (email_id, note, handled, updated_at) VALUES (?1, ?2, ?3, datetime('now'))
+     ON CONFLICT (email_id) DO UPDATE SET note = excluded.note, handled = excluded.handled, updated_at = excluded.updated_at`,
+  )
+    .bind(emailId, trimmed, handled ? 1 : 0)
+    .run();
+}
