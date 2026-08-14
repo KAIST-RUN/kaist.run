@@ -177,6 +177,12 @@ const THEME_INIT_SCRIPT = `(function(){try{var m=("; "+document.cookie).split(";
 // 담당하므로, 여기선 속성/쿠키만 건드립니다.
 const THEME_TOGGLE_SCRIPT = `(function(){var b=document.getElementById("theme-toggle");if(!b)return;b.addEventListener("click",function(){var root=document.documentElement;var current=root.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var next=current==="dark"?"light":"dark";root.setAttribute("data-theme",next);try{var h=location.hostname;var onKaistRun=h==="kaist.run"||h.slice(-10)===".kaist.run";var domain=onKaistRun?"; domain=.kaist.run":"";var secure=onKaistRun?"; secure":"";document.cookie="kr-theme="+next+"; path=/; max-age=31536000; samesite=lax"+domain+secure;}catch(e){}});})();`;
 
+// 메인 사이트(src/app/icon.svg)와 같은 "N" 마크입니다. Next.js는 파일 컨벤션으로
+// 자동으로 favicon을 붙여주지만, 이 Worker가 만드는 페이지(backstage, 이메일 뷰어)는
+// 정적 사이트 밖이라 별도 라우트 없이 data URI로 직접 박아 넣습니다.
+const FAVICON_DATA_URI =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='121 61 95 87'%3E%3Cpath d='M153.681 71.1661L149 115.706C148.833 117.288 150.501 118.237 151.923 117.369L184.695 97.3436C185.964 96.5684 186.165 94.844 185.079 94.0428L171.247 83.8325C169.989 82.9038 169.341 81.371 169.514 79.7338L170.666 68.8463C170.834 67.2642 172.701 66.3166 173.939 67.1855L208.666 91.5558C212.621 94.3314 211.92 100.541 207.345 103.25L142.681 141.547C134.871 146.172 125.848 140.94 126.754 132.312L133.181 71.1661C133.412 68.969 135.39 67.188 137.599 67.188H150.099C152.308 67.188 153.912 68.969 153.681 71.1661Z' fill='%2370FF44'/%3E%3C/svg%3E";
+
 // backstage.ts 등 다른 라우트도 같은 스타일/로고 셸을 쓰고 싶을 때를 위해 export합니다.
 // topbarNav/topbarEnd는 backstageRender.ts의 shell()이 로고 옆(nav, ☰)과 테마 토글
 // 오른쪽(로그아웃)에 자기 마크업을 끼워 넣을 때 씁니다 — 이메일 뷰어 등 다른
@@ -189,6 +195,7 @@ export function page(title: string, bodyHtml: string, topbarNav?: string, topbar
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
 <title>${escapeHtml(title)}</title>
+<link rel="icon" href="${FAVICON_DATA_URI}" type="image/svg+xml" />
 <script>if ("scrollRestoration" in history) history.scrollRestoration = "manual";</script>
 <script>${THEME_INIT_SCRIPT}</script>
 <style>${PAGE_STYLE}</style>

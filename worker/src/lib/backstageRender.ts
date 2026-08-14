@@ -444,7 +444,7 @@ const FORM_STYLE = `
   .bs-actions { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
   .bs-submit { border: none; background: var(--logo-primary); color: var(--bg); }
   .bs-submit:hover { opacity: 0.88; }
-  .bs-cancel { font-size: 0.875rem; opacity: 0.6; text-decoration: none; transition: opacity .15s; }
+  .bs-cancel { font-size: 0.875rem; opacity: 0.6; color: var(--fg); text-decoration: underline; transition: opacity .15s; }
   .bs-cancel:hover { opacity: 1; }
   .bs-danger-zone { margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(220,38,38,.2); }
   .bs-danger { border: 1px solid rgba(220,38,38,.4); color: #f87171; background: rgba(220,38,38,.06); transition: background .15s; }
@@ -632,7 +632,7 @@ export function shell(title: string, active: string, bodyHtml: string): string {
   const navLinks = `
     <div class="bs-nav-links" id="bs-nav">
       ${navLink("/", "홈", active === "home")}
-      <details class="bs-nav-group" name="bs-nav-group"${contentGroupActive ? " open" : ""}>
+      <details class="bs-nav-group" name="bs-nav-group">
         <summary class="${contentGroupActive ? "active" : ""}">콘텐츠</summary>
         <div class="bs-nav-group-menu">
           ${navLink("/notices", "공지사항", active === "notices")}
@@ -641,7 +641,7 @@ export function shell(title: string, active: string, bodyHtml: string): string {
           ${navLink("/uploads", "업로드", active === "uploads")}
         </div>
       </details>
-      <details class="bs-nav-group" name="bs-nav-group"${infoGroupActive ? " open" : ""}>
+      <details class="bs-nav-group" name="bs-nav-group">
         <summary class="${infoGroupActive ? "active" : ""}">동아리 정보</summary>
         <div class="bs-nav-group-menu">
           ${navLink("/contact", "연락처", active === "contact")}
@@ -803,7 +803,7 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
 
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>
-        ${mode === "edit" ? `<a href="/notices" class="bs-cancel">취소</a>` : ""}
+        <a href="/notices" class="bs-cancel">취소</a>
       </div>
     </form>
     ${
@@ -925,7 +925,7 @@ export function renderBoardForm(mode: "new" | "edit", data: BoardFormData, error
 
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>
-        ${mode === "edit" ? `<a href="/board" class="bs-cancel">취소</a>` : ""}
+        <a href="/board" class="bs-cancel">취소</a>
       </div>
     </form>
     ${
@@ -1146,7 +1146,7 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>
-        ${mode === "edit" ? `<a href="/archive/${data.season}" class="bs-cancel">취소</a>` : ""}
+        <a href="/archive/${data.season}" class="bs-cancel">취소</a>
       </div>
     </form>
     ${
@@ -1405,7 +1405,7 @@ export function renderUserForm(mode: "new" | "edit", data: UserFormData, semeste
 
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>
-        ${mode === "edit" ? `<a href="/members" class="bs-cancel">취소</a>` : ""}
+        <a href="/members" class="bs-cancel">취소</a>
       </div>
     </form>
     ${
@@ -1821,7 +1821,7 @@ export function renderBylawsList(versions: BylawsVersionSummary[]): string {
     <p class="bs-eyebrow">Backstage</p>
     <h1>역대 회칙</h1>
     <p class="bs-note" style="margin-bottom:16px">
-      게시된 버전들 중 시행일(⭐표시)이 가장 최신인 버전이 <a href="https://kaist.run/ko/bylaws" target="_blank" rel="noopener">kaist.run/bylaws</a>에 뜹니다.
+      게시된 버전들 중 시행일(⭐표시)이 가장 최신인 버전이 <a href="https://kaist.run/ko/bylaws" target="_blank" rel="noopener">kaist.run/ko/bylaws</a>에 뜹니다.
       "초안"은 게시 체크를 끈 상태라 kaist.run에 전혀 안 보입니다. 나머지 게시된 버전은 그 페이지의 "역대 회칙" 목록에서 링크로 연결됩니다.
     </p>
     <a class="bs-new" href="/bylaws/new">+ 새 버전 추가</a>
@@ -2463,7 +2463,7 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
             <label for="isPublished" style="margin:0;">게시 (체크 해제 시 초안으로 저장, kaist.run에 안 보임)</label>
           </div>
         </div>
-        <p class="bs-note" style="margin-top:8px">게시된 버전들 중 시행일이 가장 최신인 게 kaist.run/bylaws에 표시됩니다.</p>
+        <p class="bs-note" style="margin-top:8px">게시된 버전들 중 시행일이 가장 최신인 게 kaist.run/ko/bylaws에 표시됩니다.</p>
       </div>
 
       <div class="bs-card">
@@ -2512,7 +2512,7 @@ export function renderBylawsVersionForm(mode: "new" | "edit", data: BylawsVersio
 
       <div class="bs-actions">
         <button type="submit" class="bs-submit">저장</button>
-        ${mode === "edit" ? `<a href="/bylaws" class="bs-cancel">취소</a>` : ""}
+        <a href="/bylaws" class="bs-cancel">취소</a>
       </div>
     </form>
     ${
