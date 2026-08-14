@@ -4,7 +4,7 @@ import type { Env } from "../types";
 import { requireSession } from "../lib/authGuard";
 import { getRawEmail } from "../lib/emailStore";
 import { listEmailIndex, listEmailNoteStates, getEmailNoteState, setEmailNoteState } from "../lib/emailIndex";
-import { renderEmailPage, renderEmailListPage, renderErrorPage } from "../lib/emailRender";
+import { renderEmailPage, renderEmailListPage, renderErrorPage, type EmailFilter } from "../lib/emailRender";
 import { renderBackstageEmailList, renderBackstageEmailPage } from "../lib/backstageRender";
 
 export const email = new Hono<{ Bindings: Env }>();
@@ -53,10 +53,24 @@ email.get("/", async (c) => {
   if (gate) return gate;
 
   const page = Math.max(0, Number.parseInt(c.req.query("page") ?? "0", 10) || 0);
+  const filterParam = c.req.query("filter");
+  const filter: EmailFilter = filterParam === "unhandled" || filterParam === "handled" ? filterParam : "all";
+
   const [all, noteStates] = await Promise.all([listEmailIndex(c.env), listEmailNoteStates(c.env)]);
+
+  // 탭 옆 개수(전체/미처리/처리완료)는 필터링 전 전체 목록 기준이라, 어느 탭에 있든
+  // 항상 세 값 모두 정확하게 보입니다.
+  const counts = { all: all.length, unhandled: 0, handled: 0 };
+  for (const item of all) {
+    if (noteStates.get(item.id)?.handled) counts.handled++;
+    else counts.unhandled++;
+  }
+
+  const filtered =
+    filter === "all" ? all : all.filter((item) => (noteStates.get(item.id)?.handled ?? false) === (filter === "handled"));
   const start = page * LIST_PAGE_SIZE;
-  const items = all.slice(start, start + LIST_PAGE_SIZE);
-  const info = { page, hasPrev: page > 0, hasNext: start + LIST_PAGE_SIZE < all.length };
+  const items = filtered.slice(start, start + LIST_PAGE_SIZE);
+  const info = { page, hasPrev: page > 0, hasNext: start + LIST_PAGE_SIZE < filtered.length, filter, counts };
 
   return c.html(
     isBackstageHost(c) ? renderBackstageEmailList(items, info, noteStates) : renderEmailListPage(items, info, noteStates),

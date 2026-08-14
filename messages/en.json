@@ -6,7 +6,6 @@
   "nav": {
     "about": "About",
     "notices": "Notices",
-    "board": "Board",
     "archive": "Contest Archive",
     "bylaws": "Bylaws",
     "contact": "Contact",
@@ -117,14 +116,6 @@
     "empty": "No notices yet.",
     "back": "Back to list",
     "readMore": "Read more"
-  },
-  "board": {
-    "title": "Board",
-    "empty": "No posts yet.",
-    "back": "Back to list",
-    "loading": "Loading posts...",
-    "loadError": "Couldn't load posts.",
-    "notFound": "Post not found."
   },
   "archive": {
     "title": "Contest Archive",

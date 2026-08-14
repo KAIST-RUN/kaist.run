@@ -8,10 +8,6 @@ import {
   getNotice,
   upsertNotice,
   deleteNotice,
-  listBoardPosts,
-  getBoardPost,
-  upsertBoardPost,
-  deleteBoardPost,
   listArchiveEntries,
   getArchiveEntry,
   upsertArchiveEntry,
@@ -43,6 +39,7 @@ import {
   listHonoraryMembers,
   refreshAllUserAvatars,
   UserValidationError,
+  MEMBER_EXPORT_COLUMNS,
 } from "../lib/members";
 import {
   listSemesters,
@@ -54,8 +51,9 @@ import {
   revokeSemesterMembership,
   addSemesterMember,
   getUserSemesters,
+  SEMESTER_EXPORT_COLUMNS,
 } from "../lib/semesters";
-import { toCsvDocument } from "../lib/csv";
+import { selectCsvColumns, toCsvDocumentFromColumns } from "../lib/csv";
 import { isAtCoderHeuristicContest } from "../lib/atcoder";
 import {
   getRunforceConfig,
@@ -68,7 +66,6 @@ import {
   removeTargetContest,
   getTargetContestDetail,
   getRunforceLeaderboard,
-  formatRunforceDisplay,
   pairContests,
   unpairContest,
   enqueueDiscoveredContests,
@@ -76,6 +73,8 @@ import {
   resetAllTargetContests,
   RunforceError,
   type RunforcePlatform,
+  RUNFORCE_LEADERBOARD_EXPORT_COLUMNS,
+  RUNFORCE_CONTEST_EXPORT_COLUMNS,
 } from "../lib/runforce";
 import {
   getApplyFormConfig,
@@ -89,8 +88,6 @@ import {
   renderBackstageHome,
   renderNoticeList,
   renderNoticeForm,
-  renderBoardList,
-  renderBoardForm,
   renderArchiveList,
   renderArchiveForm,
   archiveRowsToFormData,
@@ -113,7 +110,6 @@ import {
   renderRunforceContestDetail,
   renderRunforceLeaderboard,
   type NoticeFormData,
-  type BoardFormData,
 } from "../lib/backstageRender";
 import { renderErrorPage } from "../lib/emailRender";
 
@@ -292,107 +288,6 @@ backstage.post("/notices/:slug/delete", async (c) => {
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/notices");
-});
-
-// ---------- board ----------
-// 공지사항과 완전히 같은 구조입니다 — 관리자만 작성하고, 정적 빌드 시점에 그대로
-// 구워집니다(실제 로그인 여부로 접근을 막지는 않습니다).
-
-backstage.get("/board", async (c) => {
-  const gate = await requireAdmin(c);
-  if (!gate.ok) return gate.response;
-  const posts = await listBoardPosts(c.env, "ko");
-  return c.html(renderBoardList(posts));
-});
-
-backstage.get("/board/new", async (c) => {
-  const gate = await requireAdmin(c);
-  if (!gate.ok) return gate.response;
-  const empty: BoardFormData = { slug: "", date: "", pinned: false, titleKo: "", titleEn: "", contentKo: "", contentEn: "" };
-  return c.html(renderBoardForm("new", empty));
-});
-
-backstage.post("/board/new", async (c) => {
-  const gate = await requireAdmin(c);
-  if (!gate.ok) return gate.response;
-
-  const { get } = await readForm(c);
-  const data: BoardFormData = {
-    slug: get("slug").trim(),
-    date: get("date"),
-    pinned: get("pinned") === "on",
-    titleKo: get("titleKo"),
-    titleEn: get("titleEn"),
-    contentKo: get("contentKo"),
-    contentEn: get("contentEn"),
-  };
-
-  if (!/^[a-z0-9-]+$/.test(data.slug)) {
-    return c.html(renderBoardForm("new", data, "슬러그는 영문 소문자/숫자/하이픈만 가능합니다."), 400);
-  }
-  if (await getBoardPost(c.env, "ko", data.slug)) {
-    return c.html(renderBoardForm("new", data, "이미 존재하는 슬러그입니다."), 400);
-  }
-
-  await upsertBoardPost(c.env, data.slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, content: data.contentKo });
-  await upsertBoardPost(c.env, data.slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, content: data.contentEn });
-  c.executionCtx.waitUntil(triggerRebuild(c.env));
-
-  return c.redirect("/board");
-});
-
-backstage.get("/board/:slug/edit", async (c) => {
-  const gate = await requireAdmin(c);
-  if (!gate.ok) return gate.response;
-
-  const slug = c.req.param("slug");
-  const [ko, en] = await Promise.all([getBoardPost(c.env, "ko", slug), getBoardPost(c.env, "en", slug)]);
-  if (!ko && !en) return c.html(renderErrorPage("찾을 수 없습니다", "존재하지 않는 게시글입니다."), 404);
-
-  const base = ko ?? en!;
-  const data: BoardFormData = {
-    slug,
-    date: base.date,
-    pinned: base.pinned,
-    titleKo: ko?.title ?? "",
-    titleEn: en?.title ?? "",
-    contentKo: ko?.content ?? "",
-    contentEn: en?.content ?? "",
-  };
-  return c.html(renderBoardForm("edit", data));
-});
-
-backstage.post("/board/:slug/edit", async (c) => {
-  const gate = await requireAdmin(c);
-  if (!gate.ok) return gate.response;
-
-  const slug = c.req.param("slug");
-  const { get } = await readForm(c);
-  const data: BoardFormData = {
-    slug,
-    date: get("date"),
-    pinned: get("pinned") === "on",
-    titleKo: get("titleKo"),
-    titleEn: get("titleEn"),
-    contentKo: get("contentKo"),
-    contentEn: get("contentEn"),
-  };
-
-  await upsertBoardPost(c.env, slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, content: data.contentKo });
-  await upsertBoardPost(c.env, slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, content: data.contentEn });
-  c.executionCtx.waitUntil(triggerRebuild(c.env));
-
-  return c.redirect("/board");
-});
-
-backstage.post("/board/:slug/delete", async (c) => {
-  const gate = await requireAdmin(c);
-  if (!gate.ok) return gate.response;
-
-  await deleteBoardPost(c.env, c.req.param("slug"));
-  c.executionCtx.waitUntil(triggerRebuild(c.env));
-
-  return c.redirect("/board");
 });
 
 // ---------- archive ----------
@@ -575,24 +470,9 @@ backstage.get("/members/export.csv", async (c) => {
   if (!gate.ok) return gate.response;
 
   const users = await listUsers(c.env);
-  const csv = toCsvDocument(
-    ["UID", "이름", "학번", "이메일", "전화번호", "Discord ID", "solved.ac", "Codeforces", "AtCoder", "상태", "권한", "명예회원", "생성일"],
-    users.map((u) => [
-      u.uid,
-      u.name,
-      u.studentId,
-      u.email,
-      u.phone,
-      u.discordId,
-      u.solvedAc,
-      u.codeforces,
-      u.atcoder,
-      u.status,
-      u.role,
-      u.isHonoraryMember ? "Y" : "N",
-      u.createdAt,
-    ]),
-  );
+  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const columns = selectCsvColumns(MEMBER_EXPORT_COLUMNS, requestedCols);
+  const csv = toCsvDocumentFromColumns(columns, users);
   const filename = "members.csv";
   return new Response(csv, {
     headers: {
@@ -771,10 +651,9 @@ backstage.get("/members/semesters/:year/:season/export.csv", async (c) => {
   if (!Number.isFinite(year) || !isSeason(season)) return c.notFound();
 
   const members = await listSemesterMembers(c.env, year, season);
-  const csv = toCsvDocument(
-    ["UID", "이름", "학번", "이메일", "Discord ID", "상태", "승인자", "승인일시", "신청일시"],
-    members.map((m) => [m.uid, m.name, m.studentId, m.email, m.discordId, m.status, m.approvedByName, m.approvedAt, m.requestedAt]),
-  );
+  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const columns = selectCsvColumns(SEMESTER_EXPORT_COLUMNS, requestedCols);
+  const csv = toCsvDocumentFromColumns(columns, members);
   const filename = `members-${year}-${season}.csv`;
   return new Response(csv, {
     headers: {
@@ -1022,10 +901,9 @@ backstage.get("/runforce/leaderboard/export.csv", async (c) => {
   if (!gate.ok) return gate.response;
 
   const entries = await getRunforceLeaderboard(c.env);
-  const csv = toCsvDocument(
-    ["UID", "이름", "총점", "참가 대회 수"],
-    entries.map((e) => [e.uid, e.name, formatRunforceDisplay(e.totalScore), e.contestsCounted]),
-  );
+  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const columns = selectCsvColumns(RUNFORCE_LEADERBOARD_EXPORT_COLUMNS, requestedCols);
+  const csv = toCsvDocumentFromColumns(columns, entries);
   const filename = "runforce-leaderboard.csv";
   return new Response(csv, {
     headers: {
@@ -1054,10 +932,9 @@ backstage.get("/runforce/:contestId/export.csv", async (c) => {
   const detail = await getTargetContestDetail(c.env, c.req.param("contestId"));
   if (!detail) return c.notFound();
 
-  const csv = toCsvDocument(
-    ["순위", "이름", "핸들", "대회 원본 순위", "RUNFORCE"],
-    detail.rows.map((r) => [r.finalRank + 1, r.name, r.handle, r.platformRank, formatRunforceDisplay(r.score)]),
-  );
+  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const columns = selectCsvColumns(RUNFORCE_CONTEST_EXPORT_COLUMNS, requestedCols);
+  const csv = toCsvDocumentFromColumns(columns, detail.rows);
   const filename = `runforce-${detail.platform}-${detail.contestId}.csv`;
   return new Response(csv, {
     headers: {

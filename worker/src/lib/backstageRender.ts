@@ -2,10 +2,11 @@ import { page, escapeHtml, formatKstDateTime, renderEmailListBody, renderEmailPa
 import type { EmailIndexEntry, EmailNoteState } from "./emailIndex";
 import type { Email } from "postal-mime";
 import type { UserRecord } from "./members";
+import { MEMBER_EXPORT_COLUMNS } from "./members";
 import type { SemesterInfo, SemesterMemberRow, UserSemesterEntry } from "./semesters";
+import { SEMESTER_EXPORT_COLUMNS } from "./semesters";
 import type {
   NoticeRow,
-  BoardPostRow,
   ArchiveRow,
   ContactRow,
   ContactInfoRow,
@@ -22,6 +23,8 @@ import {
   groupContests,
   runforceMaxScoreFor,
   runforceWeightMultiplier,
+  RUNFORCE_LEADERBOARD_EXPORT_COLUMNS,
+  RUNFORCE_CONTEST_EXPORT_COLUMNS,
   type AtCoderPendingEntry,
   type RunforceDiscoveryQueueEntry,
   type ContestGroup,
@@ -193,6 +196,18 @@ const FORM_STYLE = `
      초록 알약이면 뭐가 우선인지 헷갈려서 보조 쪽만 테두리만 있는 버전으로 뺍니다. */
   .bs-new-outline { background: transparent; color: inherit; border: 1px solid rgba(128,128,128,.3); }
   .bs-new-outline:hover { background: rgba(128,128,128,.08); opacity: 1; }
+
+  /* CSV 내보내기 열 선택 팝업 — 네이티브 <dialog>. showModal()로 열리므로 위치
+     지정 없이 브라우저 기본 중앙 정렬을 그대로 씁니다. */
+  .bs-csv-dialog {
+    border: 1px solid rgba(128,128,128,.2); border-radius: 16px; padding: 22px 24px;
+    background: var(--bg); color: inherit; max-width: 360px; width: calc(100vw - 48px);
+  }
+  .bs-csv-dialog::backdrop { background: rgba(0,0,0,.4); }
+  .bs-csv-cols { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; }
+  .bs-csv-col { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; cursor: pointer; user-select: none; }
+  .bs-csv-col input { width: auto; accent-color: var(--logo-primary); }
+  .bs-csv-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
   form.bs-form { display: flex; flex-direction: column; gap: 18px; }
   .bs-field { display: flex; flex-direction: column; gap: 6px; }
@@ -579,6 +594,31 @@ function navLink(href: string, label: string, active: boolean): string {
   return `<a href="${href}"${active ? ' class="active"' : ""}>${label}</a>`;
 }
 
+// CSV 다운로드 버튼 — 클릭하면 내보낼 열을 고르는 <dialog> 팝업이 뜹니다(기본은
+// 전부 체크). id는 한 페이지에 이 버튼이 여러 번 나올 수 있으면(RUNFORCE Div1+Div2
+// 상세처럼) 호출부에서 겹치지 않게 넘겨야 합니다. 백스테이지는 서버 렌더 HTML +
+// 인라인 onclick 컨벤션(FORM_STYLE 주변 다른 버튼들 참고)이라 <dialog>도 같은
+// 방식(showModal/close)으로 여닫습니다.
+function renderCsvExportButton(id: string, action: string, label: string, columns: { key: string; label: string }[]): string {
+  const checkboxes = columns
+    .map(
+      (c) =>
+        `<label class="bs-csv-col"><input type="checkbox" name="cols" value="${escapeHtml(c.key)}" checked /> ${escapeHtml(c.label)}</label>`,
+    )
+    .join("");
+  return `<button type="button" class="bs-new bs-new-outline" style="margin-bottom:0" onclick="document.getElementById('${id}').showModal()">${label}</button>
+    <dialog id="${id}" class="bs-csv-dialog">
+      <form method="get" action="${action}">
+        <p class="bs-card-title" style="margin-bottom:12px">내보낼 열 선택</p>
+        <div class="bs-csv-cols">${checkboxes}</div>
+        <div class="bs-csv-actions">
+          <button type="button" class="bs-cancel-btn" onclick="document.getElementById('${id}').close()">취소</button>
+          <button type="submit" class="bs-new" style="margin-bottom:0">다운로드</button>
+        </div>
+      </form>
+    </dialog>`;
+}
+
 // ☰ 버튼 클릭 시 nav를 서랍처럼 여닫습니다. 데스크톱에선 버튼 자체가 숨겨져
 // (FORM_STYLE) 아무 효과가 없습니다.
 const BS_MENU_SCRIPT = `
@@ -630,7 +670,7 @@ export function shell(title: string, active: string, bodyHtml: string): string {
       <button type="submit" class="bs-nav-logout">로그아웃</button>
     </form>
   `;
-  const contentGroupActive = active === "notices" || active === "board" || active === "archive" || active === "uploads";
+  const contentGroupActive = active === "notices" || active === "archive" || active === "uploads";
   const infoGroupActive = active === "contact" || active === "bylaws" || active === "apply";
   const navLinks = `
     <div class="bs-nav-links" id="bs-nav">
@@ -639,7 +679,6 @@ export function shell(title: string, active: string, bodyHtml: string): string {
         <summary class="${contentGroupActive ? "active" : ""}">콘텐츠</summary>
         <div class="bs-nav-group-menu">
           ${navLink("/notices", "공지사항", active === "notices")}
-          ${navLink("/board", "게시판", active === "board")}
           ${navLink("/archive", "대회 아카이브", active === "archive")}
           ${navLink("/uploads", "업로드", active === "uploads")}
         </div>
@@ -814,128 +853,6 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
         ? `<div class="bs-danger-zone">
             <form method="post" action="/notices/${escapeHtml(data.slug)}/delete" onsubmit="return confirm('정말 삭제할까요?')">
               <button type="submit" class="bs-danger">이 공지 삭제</button>
-            </form>
-          </div>`
-        : ""
-    }
-  `,
-  );
-}
-
-// ---------- board ----------
-// 공지사항 관리 UI와 완전히 같은 구조입니다.
-
-export function renderBoardList(posts: BoardPostRow[]): string {
-  const items =
-    posts.length === 0
-      ? `<p class="empty">등록된 게시글이 없습니다.</p>`
-      : `<ul class="bs-list">
-        ${posts
-          .map(
-            (p) => `<li>
-              <span>
-                ${p.pinned ? '<span class="pin">📌</span>' : ""}
-                <a class="title" href="/board/${escapeHtml(p.slug)}/edit">${escapeHtml(p.title)}</a>
-              </span>
-              <span class="meta">${escapeHtml(p.date)} · ${escapeHtml(p.slug)}</span>
-            </li>`,
-          )
-          .join("\n")}
-      </ul>`;
-
-  return shell(
-    "게시판 관리",
-    "board",
-    `
-    <p class="bs-eyebrow">Backstage</p>
-    <h1>게시판</h1>
-    <a class="bs-new" href="/board/new">+ 새 글 작성</a>
-    ${items}
-  `,
-  );
-}
-
-export type BoardFormData = {
-  slug: string;
-  date: string;
-  pinned: boolean;
-  titleKo: string;
-  titleEn: string;
-  contentKo: string;
-  contentEn: string;
-};
-
-export function renderBoardForm(mode: "new" | "edit", data: BoardFormData, error?: string): string {
-  const action = mode === "new" ? "/board/new" : `/board/${escapeHtml(data.slug)}/edit`;
-  return shell(
-    mode === "new" ? "새 글 작성" : `게시글 수정 — ${data.slug}`,
-    "board",
-    `
-    <p class="bs-eyebrow">Backstage · 게시판</p>
-    <h1>${mode === "new" ? "새 글 작성" : "게시글 수정"}</h1>
-    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
-    <form class="bs-form" method="post" action="${action}">
-      <div class="bs-card">
-        <p class="bs-card-title">기본 정보</p>
-        <div class="bs-field">
-          <label>슬러그 (URL에 쓰임, 영문/숫자/하이픈)</label>
-          <input type="text" name="slug" value="${escapeHtml(data.slug)}" pattern="[a-z0-9-]+" required ${mode === "edit" ? "readonly" : ""} />
-        </div>
-        <div class="bs-row2" style="margin-top:18px">
-          <div class="bs-field">
-            <label>날짜</label>
-            <input type="date" name="date" value="${escapeHtml(data.date)}" required />
-          </div>
-          <div class="bs-field bs-check" style="align-self:end;flex-direction:row;">
-            <input type="checkbox" id="pinned" name="pinned" ${data.pinned ? "checked" : ""} />
-            <label for="pinned" style="margin:0;">상단 고정</label>
-          </div>
-        </div>
-      </div>
-
-      <div class="bs-card">
-        <p class="bs-card-title">제목</p>
-        <div class="bs-row2">
-          <div class="bs-field">
-            <label>한국어</label>
-            <input type="text" name="titleKo" value="${escapeHtml(data.titleKo)}" required />
-          </div>
-          <div class="bs-field">
-            <label>영어</label>
-            <input type="text" name="titleEn" value="${escapeHtml(data.titleEn)}" required />
-          </div>
-        </div>
-      </div>
-
-      <div class="bs-card">
-        <p class="bs-card-title">본문 (마크다운)</p>
-        <div class="bs-row2">
-          <div class="bs-field">
-            <label>한국어</label>
-            <textarea name="contentKo" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentKo)}</textarea>
-          </div>
-          <div class="bs-field">
-            <label>영어</label>
-            <textarea name="contentEn" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentEn)}</textarea>
-          </div>
-        </div>
-      </div>
-      <script>
-        document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
-          el.style.height = el.scrollHeight + "px";
-        });
-      </script>
-
-      <div class="bs-actions bs-actions-end">
-        <a href="/board" class="bs-cancel">취소</a>
-        <button type="submit" class="bs-submit">저장</button>
-      </div>
-    </form>
-    ${
-      mode === "edit"
-        ? `<div class="bs-danger-zone">
-            <form method="post" action="/board/${escapeHtml(data.slug)}/delete" onsubmit="return confirm('정말 삭제할까요?')">
-              <button type="submit" class="bs-danger">이 글 삭제</button>
             </form>
           </div>`
         : ""
@@ -1265,7 +1182,7 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage, noti
 
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       <a class="bs-new" href="/members/new" style="margin-bottom:0">+ 새 유저</a>
-      <a class="bs-new bs-new-outline" href="/members/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+      ${renderCsvExportButton("csv-dialog-members", "/members/export.csv", "CSV 다운로드", MEMBER_EXPORT_COLUMNS)}
       <form method="post" action="/members/refresh-avatars" style="margin:0;">
         <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0;">프로필 사진 갱신</button>
       </form>
@@ -1560,7 +1477,7 @@ export function renderSemesterRoster(
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
 
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-      <a class="bs-new bs-new-outline" href="${base}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+      ${renderCsvExportButton("csv-dialog-semester", `${base}/export.csv`, "CSV 다운로드", SEMESTER_EXPORT_COLUMNS)}
       ${
         isCurrent
           ? ""
@@ -3016,7 +2933,7 @@ export function renderRunforceSettings(
     ${pendingCard}
 
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-      <a class="bs-new bs-new-outline" href="/runforce/leaderboard/export.csv" style="margin-bottom:0">리더보드 CSV 다운로드</a>
+      ${renderCsvExportButton("csv-dialog-leaderboard", "/runforce/leaderboard/export.csv", "리더보드 CSV 다운로드", RUNFORCE_LEADERBOARD_EXPORT_COLUMNS)}
     </div>
 
     <p class="bs-card-title" style="margin-top:24px">산정 대상 대회 (${contests.length})</p>
@@ -3099,7 +3016,7 @@ function runforceContestSection(contest: RunforceContestDetail, label: string): 
   return `<div class="bs-card">
     <div class="bylaws-card-header">
       <p class="bs-card-title">[${label}] ${escapeHtml(contest.contestName)}</p>
-      <a class="bs-new bs-new-outline" href="/runforce/${encodeURIComponent(contest.id)}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+      ${renderCsvExportButton(`csv-dialog-${encodeURIComponent(contest.id)}`, `/runforce/${encodeURIComponent(contest.id)}/export.csv`, "CSV 다운로드", RUNFORCE_CONTEST_EXPORT_COLUMNS)}
     </div>
     <p class="bs-note" style="margin-bottom:12px">
       ${escapeHtml(contest.contestId)} · ${contest.source === "manual" ? "수동 등록" : "자동 등록"} · 참가대상 ${contest.participantCount}명 · ${runforceWeightLabel(contest.weightIndex)}
@@ -3160,7 +3077,7 @@ export function renderRunforceContestDetail(
     </p>
 
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-      <a class="bs-new bs-new-outline" href="/runforce/${encodeURIComponent(contest.id)}/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+      ${renderCsvExportButton(`csv-dialog-${encodeURIComponent(contest.id)}`, `/runforce/${encodeURIComponent(contest.id)}/export.csv`, "CSV 다운로드", RUNFORCE_CONTEST_EXPORT_COLUMNS)}
     </div>
 
     ${renderRunforceDivPairingCard(contest)}
@@ -3197,7 +3114,7 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
     ${runforceSubnav("leaderboard")}
 
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-      <a class="bs-new bs-new-outline" href="/runforce/leaderboard/export.csv" style="margin-bottom:0">CSV 다운로드</a>
+      ${renderCsvExportButton("csv-dialog-leaderboard", "/runforce/leaderboard/export.csv", "CSV 다운로드", RUNFORCE_LEADERBOARD_EXPORT_COLUMNS)}
     </div>
 
     ${

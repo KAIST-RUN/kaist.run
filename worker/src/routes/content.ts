@@ -42,9 +42,6 @@ content.get("/notices/:locale/:slug", async (c) => {
   return c.json(notice);
 });
 
-// 게시판은 여기 없습니다 — "회원 전용"이라 이 완전공개 API에 둘 수 없어서
-// worker/src/routes/board.ts(세션 로그인 필요, /api/board/*)로 따로 뺐습니다.
-
 content.get("/archive/:season/:locale", async (c) => {
   const season = c.req.param("season");
   const locale = c.req.param("locale");

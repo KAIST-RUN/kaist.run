@@ -1,5 +1,6 @@
 import type { Env } from "../types";
 import type { Season } from "./content";
+import type { CsvColumn } from "./csv";
 
 // "학기별 활동회원" — 신규 회원가입(users 테이블)과 별개로, 각 학기 소속은 승인
 // 워크플로를 거칩니다: 디스코드 봇이 requestSemesterMembership으로 pending을
@@ -173,6 +174,20 @@ export type SemesterMemberRow = {
   approvedByName: string | null;
   approvedAt: string | null;
 };
+
+// backstage 학기별 명단 CSV 내보내기(/members/semesters/:year/:season/export.csv)의
+// 열 정의 — MEMBER_EXPORT_COLUMNS(members.ts)와 같은 방식으로 라우트/렌더가 공유합니다.
+export const SEMESTER_EXPORT_COLUMNS: CsvColumn<SemesterMemberRow>[] = [
+  { key: "uid", label: "UID", value: (m) => m.uid },
+  { key: "name", label: "이름", value: (m) => m.name },
+  { key: "studentId", label: "학번", value: (m) => m.studentId },
+  { key: "email", label: "이메일", value: (m) => m.email },
+  { key: "discordId", label: "Discord ID", value: (m) => m.discordId },
+  { key: "status", label: "상태", value: (m) => m.status },
+  { key: "approvedByName", label: "승인자", value: (m) => m.approvedByName },
+  { key: "approvedAt", label: "승인일시", value: (m) => m.approvedAt },
+  { key: "requestedAt", label: "신청일시", value: (m) => m.requestedAt },
+];
 
 // 학기별 명단 backstage 페이지용 — pending/approved 둘 다 같이 내려주고, 화면에서
 // 섹션을 나눕니다.

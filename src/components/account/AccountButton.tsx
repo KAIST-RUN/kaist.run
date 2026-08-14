@@ -8,13 +8,17 @@ import type { Locale } from "@/i18n/routing";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getDiscordLoginHref } from "@/lib/account/authLinks";
 import { avatarInitial } from "@/lib/account/display";
-import DoorIcon from "./DoorIcon";
 
 // 헤더의 계정 자리는 로그인 여부와 상관없이 항상 같은 원입니다 — 로그인 상태면 프로필
 // 사진(없으면 이니셜), 비로그인 상태면 들어가기 아이콘. 로딩 스켈레톤까지 셋 다 지름이 같아서
 // /api/me 응답이 도착하는 순간에도 헤더가 가로로 밀리지 않습니다.
 const CIRCLE_CLASS =
   "inline-flex h-9 w-9 shrink-0 animate-fade-in items-center justify-center overflow-hidden rounded-full border border-black/10 bg-black/[.03] transition-opacity hover:opacity-70 dark:border-white/10 dark:bg-white/[.05]";
+
+// 비로그인 상태의 "지원/로그인" 버튼 — accent 색 필 버튼. 홈 화면 CTA(HomeStory.tsx의
+// 가입 버튼)와 같은 룩앤필로, 헤더에서도 눈에 띄는 주요 액션임을 드러냅니다.
+const PILL_CLASS =
+  "inline-flex h-9 shrink-0 animate-fade-in items-center justify-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold whitespace-nowrap text-[var(--accent-foreground)] transition-opacity hover:opacity-80";
 
 export default function AccountButton() {
   const t = useTranslations("account.header");
@@ -47,12 +51,13 @@ export default function AccountButton() {
   }, [open]);
 
   if (state.status === "loading") {
-    // 로그인/비로그인 어느 쪽으로 확정되든 같은 크기의 원(CIRCLE_CLASS)이 되므로,
-    // 이 스켈레톤과 지름을 맞춰두면 /api/me 응답이 도착해도 헤더가 전혀 흔들리지 않습니다.
+    // 로그인 확정이면 원(CIRCLE_CLASS), 비로그인 확정이면 필 버튼(PILL_CLASS)이 되므로
+    // 정확히 어느 쪽과도 크기가 안 맞습니다 — 다만 비로그인이 기본값에 가까운 상태이므로
+    // 필 버튼 쪽 대략적인 너비에 맞춰서, 그쪽으로 확정될 때 헤더가 덜 흔들리게 합니다.
     return (
       <span
         aria-hidden="true"
-        className="inline-block h-9 w-9 shrink-0 rounded-full border border-black/10 opacity-40 dark:border-white/10"
+        className="inline-block h-9 w-28 shrink-0 rounded-full border border-black/10 opacity-40 dark:border-white/10"
       />
     );
   }
@@ -85,13 +90,12 @@ export default function AccountButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={t("joinOrSignIn")}
         title={t("joinOrSignIn")}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={CIRCLE_CLASS}
+        className={PILL_CLASS}
       >
-        <DoorIcon />
+        {t("joinOrSignIn")}
       </button>
 
       {mounted &&

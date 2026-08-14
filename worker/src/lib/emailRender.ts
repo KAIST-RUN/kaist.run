@@ -139,6 +139,13 @@ const PAGE_STYLE = `
   .email-list .date { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; opacity: 0.6; }
   .email-list .handled-badge { font-size: 1.3em; }
   .empty { opacity: 0.6; padding: 24px 4px; }
+
+  /* 처리 상태(전체/미처리/처리완료) 필터 탭 — backstage 서브탭(.bs-subnav)과 같은
+     알약 모양이지만, backstage shell 없이(kaist.run/email 직접 접근) 이 스타일만으로도
+     떠야 하므로 여기 PAGE_STYLE에 따로 둡니다. */
+  .email-filter-tabs { display: flex; gap: 8px; margin: -4px 0 20px; font-size: 0.8125rem; }
+  .email-filter-tabs a { opacity: 0.6; text-decoration: none; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(128,128,128,.25); color: inherit; }
+  .email-filter-tabs a.active { opacity: 1; font-weight: 700; border-color: var(--logo-primary); color: var(--logo-primary); }
   .pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; font-size: 0.875rem; }
   .pager .disabled { opacity: 0.35; }
   .note-box { margin-top: 20px; padding: 14px 16px; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; background: rgba(128,128,128,.04); }
@@ -316,11 +323,27 @@ export function formatKstDateTime(ms: number): string {
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
 }
 
+export type EmailFilter = "all" | "unhandled" | "handled";
+
 export type EmailListPageInfo = {
   page: number;
   hasPrev: boolean;
   hasNext: boolean;
+  filter: EmailFilter;
+  counts: { all: number; unhandled: number; handled: number };
 };
+
+const FILTER_LABEL: Record<EmailFilter, string> = { all: "전체", unhandled: "미처리", handled: "처리완료" };
+
+// 필터 탭/페이지 링크가 서로의 쿼리 파라미터를 안 밀어내도록 항상 이 함수로 만듭니다
+// — 예를 들어 "미처리" 탭에서 2페이지로 넘어갈 때 filter가 풀리면 안 됩니다.
+function emailListHref(page: number, filter: EmailFilter): string {
+  const params = new URLSearchParams();
+  if (page > 0) params.set("page", String(page));
+  if (filter !== "all") params.set("filter", filter);
+  const qs = params.toString();
+  return qs ? `/email?${qs}` : "/email";
+}
 
 export function renderEmailListBody(
   items: EmailIndexEntry[],
@@ -345,15 +368,24 @@ export function renderEmailListBody(
           })
           .join("\n")}
       </ul>`
-    : `<p class="empty">받은 메일이 없습니다.</p>`;
+    : `<p class="empty">${info.filter === "all" ? "받은 메일이 없습니다." : "해당하는 메일이 없습니다."}</p>`;
 
-  const pager = `<div class="pager">
-    ${info.hasPrev ? `<a href="/email?page=${info.page - 1}">← 이전</a>` : `<span class="disabled">← 이전</span>`}
-    <span>${info.page + 1}페이지</span>
-    ${info.hasNext ? `<a href="/email?page=${info.page + 1}">다음 →</a>` : `<span class="disabled">다음 →</span>`}
+  const tabs = `<div class="email-filter-tabs">
+    ${(["all", "unhandled", "handled"] as const)
+      .map(
+        (f) =>
+          `<a href="${emailListHref(0, f)}"${f === info.filter ? ' class="active"' : ""}>${FILTER_LABEL[f]} ${info.counts[f]}</a>`,
+      )
+      .join("")}
   </div>`;
 
-  return `<h1>받은 메일함</h1>${rows}${pager}`;
+  const pager = `<div class="pager">
+    ${info.hasPrev ? `<a href="${emailListHref(info.page - 1, info.filter)}">← 이전</a>` : `<span class="disabled">← 이전</span>`}
+    <span>${info.page + 1}페이지</span>
+    ${info.hasNext ? `<a href="${emailListHref(info.page + 1, info.filter)}">다음 →</a>` : `<span class="disabled">다음 →</span>`}
+  </div>`;
+
+  return `<h1>받은 메일함</h1>${tabs}${rows}${pager}`;
 }
 
 export function renderEmailListPage(

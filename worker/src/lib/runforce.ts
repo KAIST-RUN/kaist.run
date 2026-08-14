@@ -1,4 +1,5 @@
 import type { Env } from "../types";
+import type { CsvColumn } from "./csv";
 import { listActiveMembersWithHandle } from "./members";
 import {
   fetchCodeforcesContestMeta,
@@ -345,6 +346,16 @@ export type RunforceRankedRow = {
   // 언제나 x로부터 공식으로 유도된 값입니다.
   isUnratedParticipant: boolean;
 };
+
+// backstage 대회 결과 CSV 내보내기(/runforce/:contestId/export.csv)의 열 정의 —
+// MEMBER_EXPORT_COLUMNS(members.ts)와 같은 방식으로 라우트/렌더가 공유합니다.
+export const RUNFORCE_CONTEST_EXPORT_COLUMNS: CsvColumn<RunforceRankedRow>[] = [
+  { key: "finalRank", label: "순위", value: (r) => r.finalRank + 1 },
+  { key: "name", label: "이름", value: (r) => r.name },
+  { key: "handle", label: "핸들", value: (r) => r.handle },
+  { key: "platformRank", label: "대회 원본 순위", value: (r) => r.platformRank },
+  { key: "score", label: "RUNFORCE", value: (r) => formatRunforceDisplay(r.score) },
+];
 
 // members: 이번 학기 활동회원 전원(핸들 없는 사람도 포함). platformRanks: 대회 원본
 // 순위표를 handle(trim + 소문자 정규화)→rank로 만든 Map. unratedParticipantUids: 단독
@@ -966,6 +977,15 @@ export type RunforceLeaderboardEntry = {
   totalScore: number;
   contestsCounted: number;
 };
+
+// backstage 리더보드 CSV 내보내기(/runforce/leaderboard/export.csv)의 열 정의 —
+// MEMBER_EXPORT_COLUMNS(members.ts)와 같은 방식으로 라우트/렌더가 공유합니다.
+export const RUNFORCE_LEADERBOARD_EXPORT_COLUMNS: CsvColumn<RunforceLeaderboardEntry>[] = [
+  { key: "uid", label: "UID", value: (e) => e.uid },
+  { key: "name", label: "이름", value: (e) => e.name },
+  { key: "totalScore", label: "총점", value: (e) => formatRunforceDisplay(e.totalScore) },
+  { key: "contestsCounted", label: "참가 대회 수", value: (e) => e.contestsCounted },
+];
 
 // 이번 학기 활동회원 전원 대상, 총점 DESC. 점수 행이 하나도 없는 활동회원도
 // 총점 0으로 포함합니다(시상 대상 명단 전체를 봐야 하므로).

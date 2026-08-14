@@ -12,20 +12,6 @@ export type NoticeRow = {
   updated_at: string;
 };
 
-// 회원 전용 게시판 — notices와 완전히 같은 구조/제약(관리자만 작성, 목록/상세 둘 다
-// 빌드 시점에 정적으로 굳음)입니다. "회원 전용"이라는 이름과 달리 실제로 로그인
-// 여부를 서버가 확인하지는 않습니다 — 공지사항과 같은 방식으로 만들어 달라는
-// 요청에 따라 그대로 뺐습니다.
-export type BoardPostRow = {
-  slug: string;
-  locale: Locale;
-  title: string;
-  date: string;
-  pinned: boolean;
-  content: string;
-  updated_at: string;
-};
-
 export type ArchiveResource = { file: string; label: string };
 export type ArchiveJudge = { name: string; url: string };
 export type Season = "spring" | "fall";
@@ -91,15 +77,10 @@ export type BylawsVersionSummary = Omit<BylawsVersionRow, "revisionHistory" | "b
 
 // D1에서 그대로 나온 row(불리언/JSON이 문자열)를 앱에서 쓰는 타입으로 바꿉니다.
 type RawNoticeRow = Omit<NoticeRow, "pinned"> & { pinned: number };
-type RawBoardPostRow = Omit<BoardPostRow, "pinned"> & { pinned: number };
 type RawArchiveRow = Omit<ArchiveRow, "resources" | "judges"> & { resources: string; judges: string };
 type RawContactRow = Omit<ContactRow, "info" | "socials"> & { info: string; socials: string };
 
 function fromRawNotice(row: RawNoticeRow): NoticeRow {
-  return { ...row, pinned: row.pinned !== 0 };
-}
-
-function fromRawBoardPost(row: RawBoardPostRow): BoardPostRow {
   return { ...row, pinned: row.pinned !== 0 };
 }
 
@@ -145,42 +126,6 @@ export async function upsertNotice(env: Env, slug: string, locale: Locale, input
 
 export async function deleteNotice(env: Env, slug: string): Promise<void> {
   await env.CONTENT_DB.prepare("DELETE FROM notices WHERE slug = ?1").bind(slug).run();
-}
-
-// ---------- board ----------
-
-export async function listBoardPosts(env: Env, locale: Locale): Promise<BoardPostRow[]> {
-  const { results } = await env.CONTENT_DB.prepare(
-    "SELECT * FROM board_posts WHERE locale = ?1 ORDER BY pinned DESC, date DESC",
-  )
-    .bind(locale)
-    .all<RawBoardPostRow>();
-  return results.map(fromRawBoardPost);
-}
-
-export async function getBoardPost(env: Env, locale: Locale, slug: string): Promise<BoardPostRow | null> {
-  const row = await env.CONTENT_DB.prepare("SELECT * FROM board_posts WHERE locale = ?1 AND slug = ?2")
-    .bind(locale, slug)
-    .first<RawBoardPostRow>();
-  return row ? fromRawBoardPost(row) : null;
-}
-
-export type BoardPostInput = { title: string; date: string; pinned: boolean; content: string };
-
-export async function upsertBoardPost(env: Env, slug: string, locale: Locale, input: BoardPostInput): Promise<void> {
-  await env.CONTENT_DB.prepare(
-    `INSERT INTO board_posts (slug, locale, title, date, pinned, content, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
-     ON CONFLICT (slug, locale) DO UPDATE SET
-       title = excluded.title, date = excluded.date, pinned = excluded.pinned,
-       content = excluded.content, updated_at = datetime('now')`,
-  )
-    .bind(slug, locale, input.title, input.date, input.pinned ? 1 : 0, input.content)
-    .run();
-}
-
-export async function deleteBoardPost(env: Env, slug: string): Promise<void> {
-  await env.CONTENT_DB.prepare("DELETE FROM board_posts WHERE slug = ?1").bind(slug).run();
 }
 
 // ---------- archive ----------

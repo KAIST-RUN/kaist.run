@@ -2,6 +2,7 @@ import type { Env } from "../types";
 import { fetchDiscordAvatarUrl, fetchDiscordUserProfile } from "./discord";
 import type { Season } from "./content";
 import type { UserSemesterEntry } from "./semesters";
+import type { CsvColumn } from "./csv";
 
 // 예전엔 구글 스프레드시트 → MEMBERS(KV) 캐시가 회원 데이터의 원천이었지만, 이제 D1의
 // users/admins/semester_membership 테이블이 원천입니다(0012_users.sql). uid는
@@ -82,6 +83,25 @@ export type UserRecord = {
   isHonoraryMember: boolean;
   createdAt: string;
 };
+
+// backstage 회원 목록 CSV 내보내기(/members/export.csv)의 열 정의 — 라우트(backstage.ts)의
+// 값 추출과 renderCsvExportButton(backstageRender.ts)의 체크박스 라벨이 이 배열 하나를
+// 같이 참조하므로 열을 추가/제거해도 두 쪽이 어긋나지 않습니다.
+export const MEMBER_EXPORT_COLUMNS: CsvColumn<UserRecord>[] = [
+  { key: "uid", label: "UID", value: (u) => u.uid },
+  { key: "name", label: "이름", value: (u) => u.name },
+  { key: "studentId", label: "학번", value: (u) => u.studentId },
+  { key: "email", label: "이메일", value: (u) => u.email },
+  { key: "phone", label: "전화번호", value: (u) => u.phone },
+  { key: "discordId", label: "Discord ID", value: (u) => u.discordId },
+  { key: "solvedAc", label: "solved.ac", value: (u) => u.solvedAc },
+  { key: "codeforces", label: "Codeforces", value: (u) => u.codeforces },
+  { key: "atcoder", label: "AtCoder", value: (u) => u.atcoder },
+  { key: "status", label: "상태", value: (u) => u.status },
+  { key: "role", label: "권한", value: (u) => u.role },
+  { key: "isHonoraryMember", label: "명예회원", value: (u) => (u.isHonoraryMember ? "Y" : "N") },
+  { key: "createdAt", label: "생성일", value: (u) => u.createdAt },
+];
 
 // is_current_member: "현재 학기"에 approved된 학기 소속이 있는지.
 // has_ever_approved: 학기를 막론하고 approved된 적이 한 번이라도 있는지.
