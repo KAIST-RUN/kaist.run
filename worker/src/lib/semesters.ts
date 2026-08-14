@@ -9,7 +9,7 @@ import type { CsvColumn } from "./csv";
 
 export class SemesterError extends Error {}
 
-export type SemesterInfo = { year: number; season: Season; isCurrent: boolean };
+export type SemesterInfo = { year: number; season: Season; isCurrent: boolean; pendingCount: number };
 
 export async function getCurrentSemester(env: Env): Promise<{ year: number; season: Season } | null> {
   const row = await env.CONTENT_DB.prepare("SELECT year, season FROM semesters WHERE is_current = 1").first<{
@@ -23,11 +23,16 @@ export async function getCurrentSemester(env: Env): Promise<{ year: number; seas
 // 같은 해 안에서 봄이 가을보다 먼저(더 최신처럼) 나오는 오류가 생겨서, CASE로
 // 가을=1/봄=0을 매겨 DESC 정렬합니다.
 export async function listSemesters(env: Env): Promise<SemesterInfo[]> {
+  // 학기별 명단 탭(/members/semesters)에서 학기명 옆에 대기중인 승인 요청 개수를
+  // 바로 보여주기 위해 상관 서브쿼리로 같이 가져옵니다 — 학기가 몇 개든 쿼리 1번.
   const { results } = await env.CONTENT_DB.prepare(
-    `SELECT year, season, is_current FROM semesters
-     ORDER BY year DESC, (CASE season WHEN 'fall' THEN 1 ELSE 0 END) DESC`,
-  ).all<{ year: number; season: Season; is_current: number }>();
-  return results.map((r) => ({ year: r.year, season: r.season, isCurrent: !!r.is_current }));
+    `SELECT s.year, s.season, s.is_current,
+       (SELECT COUNT(*) FROM semester_membership sm
+        WHERE sm.year = s.year AND sm.season = s.season AND sm.status = 'pending') AS pending_count
+     FROM semesters s
+     ORDER BY s.year DESC, (CASE s.season WHEN 'fall' THEN 1 ELSE 0 END) DESC`,
+  ).all<{ year: number; season: Season; is_current: number; pending_count: number }>();
+  return results.map((r) => ({ year: r.year, season: r.season, isCurrent: !!r.is_current, pendingCount: r.pending_count }));
 }
 
 // 새 학기를 엽니다(이미 있으면 존재 확인만). makeCurrent면 기존 "현재 학기"를 내리고

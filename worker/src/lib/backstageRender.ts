@@ -1314,7 +1314,7 @@ export function renderUserForm(mode: "new" | "edit", data: UserFormData, semeste
                       ${semesters
                         .map(
                           (s) =>
-                            `<li><span>${escapeHtml(semesterLabel(s.year, s.season))}</span><span class="meta">${s.status === "approved" ? "승인됨" : "승인 대기"}</span></li>`,
+                            `<li><a class="title" href="/members/semesters/${s.year}/${s.season}">${escapeHtml(semesterLabel(s.year, s.season))}</a><span class="meta">${s.status === "approved" ? "승인됨" : "승인 대기"}</span></li>`,
                         )
                         .join("\n")}
                     </ul>`
@@ -1352,7 +1352,10 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
             .map(
               (s) =>
                 `<li>
-                  <a class="title" href="/members/semesters/${s.year}/${s.season}">${escapeHtml(semesterLabel(s.year, s.season))}</a>
+                  <span>
+                    <a class="title" href="/members/semesters/${s.year}/${s.season}">${escapeHtml(semesterLabel(s.year, s.season))}</a>
+                    ${s.pendingCount > 0 ? `<span class="bs-badge" style="background:var(--logo-accent);">승인 대기 ${s.pendingCount}</span>` : ""}
+                  </span>
                   ${s.isCurrent ? '<span class="bs-badge" style="font-size:0.9rem;padding:5px 16px;">현재 학기</span>' : ""}
                 </li>`,
             )
