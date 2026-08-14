@@ -1191,7 +1191,7 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage, noti
     meta.hasPrev || meta.hasNext
       ? `<div class="pager">
         ${meta.hasPrev ? memberPagerLink(meta.q, meta.page - 1, "← 이전") : `<span class="disabled">← 이전</span>`}
-        <span>${meta.page + 1}페이지 · 총 ${meta.total}명</span>
+        <span>${meta.page + 1}</span>
         ${meta.hasNext ? memberPagerLink(meta.q, meta.page + 1, "다음 →") : `<span class="disabled">다음 →</span>`}
       </div>`
       : meta.total > 0
@@ -1415,12 +1415,12 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
             <option value="fall">가을</option>
           </select>
         </div>
-        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;">
-          <input type="checkbox" id="makeCurrent" name="makeCurrent" value="1" checked />
-          <label for="makeCurrent" style="margin:0;">현재 학기로 설정</label>
-        </div>
-        <div style="grid-column:1/-1;">
-          <button type="submit" class="bs-submit">새로운 학기 생성</button>
+        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;justify-content:space-between;">
+          <span style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="makeCurrent" name="makeCurrent" value="1" checked />
+            <label for="makeCurrent" style="margin:0;">현재 학기로 설정</label>
+          </span>
+          <button type="submit" class="bs-submit" style="margin:0;">새로운 학기 생성</button>
         </div>
       </form>
     </div>
@@ -2904,43 +2904,21 @@ export function renderRunforceSettings(
         </div>
         <div class="bs-field">
           <label>종료일</label>
-          <div style="position:relative;">
-            <input type="date" id="rangeEndDate" name="rangeEndDate" value="${escapeHtml(config.rangeEndDate ?? "")}" />
-            <div
-              id="rangeEndDateMask"
-              style="position:absolute;inset:0;border-radius:8px;background:rgba(0,0,0,.45);cursor:not-allowed;display:${config.rangeEndAuto ? "block" : "none"};"
-            ></div>
-          </div>
-          <label class="bs-check" style="flex-direction:row;margin-top:6px;font-weight:400;">
-            <input type="checkbox" id="rangeEndAuto" name="rangeEndAuto" value="1" ${config.rangeEndAuto ? "checked" : ""} />
-            <span>항상 오늘 날짜로 자동 설정</span>
-          </label>
+          <input type="date" name="rangeEndDate" value="${escapeHtml(config.rangeEndDate ?? "")}" />
         </div>
-        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;">
-          <input type="checkbox" id="autoDiscoveryEnabled" name="autoDiscoveryEnabled" value="1" ${config.autoDiscoveryEnabled ? "checked" : ""} />
-          <label for="autoDiscoveryEnabled" style="margin:0;">매시 정각마다 이 기간의 rated 대회를 자동으로 추가</label>
-        </div>
-        <div style="grid-column:1/-1;">
-          <button type="submit" class="bs-submit">저장</button>
+        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;justify-content:space-between;">
+          <span style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="autoDiscoveryEnabled" name="autoDiscoveryEnabled" value="1" ${config.autoDiscoveryEnabled ? "checked" : ""} />
+            <label for="autoDiscoveryEnabled" style="margin:0;">매시 정각마다 이 기간의 rated 대회를 자동으로 추가</label>
+          </span>
+          <button type="submit" class="bs-submit" style="margin:0;">저장</button>
         </div>
       </form>
       <p class="bs-note" style="margin-top:8px">
         저장하면 매시 정각 갱신을 기다리지 않고 바로 한 번 수집합니다(수집은 백그라운드로 돌아가니,
         잠시 뒤 새로고침하면 아래 목록에 반영됩니다). 이미 등록된 대회는 다시 계산되지 않고 —
         새로 열린 rated 대회만 추가됩니다. 기간은 최대 6개월까지 설정할 수 있습니다.
-        "항상 오늘 날짜로 자동 설정"을 켜면 종료일 입력값은 그대로 저장은 되지만(꺼두면 되돌아옵니다)
-        실제 탐색에는 매번 오늘 날짜가 쓰입니다.
       </p>
-      <script>
-        (function () {
-          var chk = document.getElementById("rangeEndAuto");
-          var mask = document.getElementById("rangeEndDateMask");
-          if (!chk || !mask) return;
-          chk.addEventListener("change", function () {
-            mask.style.display = chk.checked ? "block" : "none";
-          });
-        })();
-      </script>
     </div>
 
     <div class="bs-card">
@@ -3127,10 +3105,23 @@ export function renderRunforceContestDetail(
 }
 
 export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): string {
+  // 총점이 같으면 순위도 같게(표준 경기 순위) — 동점자 다음 순위는 인원수만큼
+  // 건너뜁니다(예: 공동 1위가 둘이면 다음은 3위). entries는 이미 totalScore DESC로
+  // 정렬돼서 들어옵니다(getRunforceLeaderboard).
+  let lastScore: number | null = null;
+  let lastRank = 0;
+  const ranks = entries.map((e, idx) => {
+    if (lastScore === null || e.totalScore !== lastScore) {
+      lastRank = idx + 1;
+      lastScore = e.totalScore;
+    }
+    return lastRank;
+  });
+
   const rows = entries
     .map(
       (e, idx) => `<tr>
-        <td class="num center">${idx + 1}</td>
+        <td class="num center">${ranks[idx]}</td>
         <td class="center">${escapeHtml(e.name || "(이름 없음)")}</td>
         <td class="num center">${formatRunforceDisplay(e.totalScore)}</td>
         <td class="num center">${e.contestsCounted}</td>

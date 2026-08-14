@@ -147,6 +147,8 @@ const PAGE_STYLE = `
   .email-filter-tabs a { opacity: 0.6; text-decoration: none; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(128,128,128,.25); color: inherit; }
   .email-filter-tabs a.active { opacity: 1; font-weight: 700; border-color: var(--logo-primary); color: var(--logo-primary); }
   .pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; font-size: 0.875rem; }
+  .pager a { color: inherit; text-decoration: underline; opacity: 0.65; transition: opacity .15s; }
+  .pager a:hover { opacity: 1; }
   .pager .disabled { opacity: 0.35; }
   .note-box { margin-top: 20px; padding: 14px 16px; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; background: rgba(128,128,128,.04); }
   .note-box strong { display: block; font-size: 0.8125rem; margin-bottom: 8px; }

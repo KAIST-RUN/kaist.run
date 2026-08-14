@@ -841,7 +841,6 @@ backstage.post("/runforce/config", async (c) => {
       autoDiscoveryEnabled: get("autoDiscoveryEnabled") === "1",
       rangeStartDate: get("rangeStartDate") || null,
       rangeEndDate: get("rangeEndDate") || null,
-      rangeEndAuto: get("rangeEndAuto") === "1",
       seasonName: get("seasonName").trim() || null,
     });
 
