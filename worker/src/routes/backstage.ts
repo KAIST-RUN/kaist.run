@@ -490,7 +490,7 @@ backstage.get("/members/export.csv", async (c) => {
   if (!gate.ok) return gate.response;
 
   const users = await listUsers(c.env);
-  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const requestedCols = c.req.queries("cols");
   const columns = selectCsvColumns(MEMBER_EXPORT_COLUMNS, requestedCols);
   const csv = toCsvDocumentFromColumns(columns, users);
   const filename = "members.csv";
@@ -671,7 +671,7 @@ backstage.get("/members/semesters/:year/:season/export.csv", async (c) => {
   if (!Number.isFinite(year) || !isSeason(season)) return c.notFound();
 
   const members = await listSemesterMembers(c.env, year, season);
-  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const requestedCols = c.req.queries("cols");
   const columns = selectCsvColumns(SEMESTER_EXPORT_COLUMNS, requestedCols);
   const csv = toCsvDocumentFromColumns(columns, members);
   const filename = `members-${year}-${season}.csv`;
@@ -920,7 +920,7 @@ backstage.get("/runforce/leaderboard/export.csv", async (c) => {
   if (!gate.ok) return gate.response;
 
   const entries = await getRunforceLeaderboard(c.env);
-  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const requestedCols = c.req.queries("cols");
   const columns = selectCsvColumns(RUNFORCE_LEADERBOARD_EXPORT_COLUMNS, requestedCols);
   const csv = toCsvDocumentFromColumns(columns, entries);
   const filename = "runforce-leaderboard.csv";
@@ -951,7 +951,7 @@ backstage.get("/runforce/:contestId/export.csv", async (c) => {
   const detail = await getTargetContestDetail(c.env, c.req.param("contestId"));
   if (!detail) return c.notFound();
 
-  const requestedCols = c.req.query("cols")?.split(",").filter(Boolean);
+  const requestedCols = c.req.queries("cols");
   const columns = selectCsvColumns(RUNFORCE_CONTEST_EXPORT_COLUMNS, requestedCols);
   const csv = toCsvDocumentFromColumns(columns, detail.rows);
   const filename = `runforce-${detail.platform}-${detail.contestId}.csv`;
