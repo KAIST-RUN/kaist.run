@@ -149,11 +149,10 @@ const FORM_STYLE = `
        끝까지 채웁니다. */
     .bs-search input[type="text"] { max-width: none; }
 
-    /* 회원 명단 툴바는 좁은 화면에서 PC용 한 줄 배치(검색 왼쪽 + 버튼 오른쪽 정렬)를
+    /* 회원 명단 툴바는 좁은 화면에서 PC용 한 줄 배치(버튼 왼쪽 + 검색 오른쪽 정렬)를
        풀고 다시 세로로 쌓습니다 — 한 줄에 다 넣기엔 버튼이 너무 많습니다. */
     .bs-list-toolbar { flex-direction: column; align-items: stretch; }
-    .bs-list-toolbar .bs-search { padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
-    .bs-list-toolbar-actions { margin-left: 0; }
+    .bs-list-toolbar .bs-search { margin-left: 0; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
   }
 
   /* 모션을 끄고 쓰는 사용자를 위해 이동/확대 같은 transform 애니메이션은
@@ -500,15 +499,15 @@ const FORM_STYLE = `
   /* 검색창도 항상 버튼과 한 줄에서 양 끝까지 채웁니다(모바일/PC 공통) — PC에서는
      max-width로 너무 안 넓어지게만 막아둡니다. */
   .bs-search { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; margin-bottom: 20px; padding-top: 16px; border-top: 1px solid rgba(128,128,128,.16); }
-  .bs-search input[type="text"] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex: 1 1 auto; min-width: 0; max-width: 420px; }
+  .bs-search input[type="text"] { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.04); color: inherit; flex: 1 1 auto; min-width: 0; max-width: 560px; }
   .bs-search input[type="text"]:focus { outline: none; border-color: var(--logo-primary); }
 
-  /* 회원 명단 상단 툴바 — PC에서는 검색창을 맨 왼쪽에 두고 + 새 유저/CSV/사진 갱신
-     버튼들이 같은 줄 오른쪽 끝에 몰리도록(margin-left:auto) 합니다. 좁은 화면에서는
+  /* 회원 명단 상단 툴바 — PC에서는 + 새 유저/CSV/사진 갱신 버튼을 왼쪽에 두고
+     검색창을 같은 줄 오른쪽 끝에 붙입니다(margin-left:auto). 좁은 화면에서는
      아래 미디어 쿼리로 다시 세로로 쌓습니다. */
   .bs-list-toolbar { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 16px; }
-  .bs-list-toolbar .bs-search { margin: 0; padding-top: 0; border-top: none; flex: 0 1 auto; }
-  .bs-list-toolbar-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+  .bs-list-toolbar .bs-search { margin: 0 0 0 auto; padding-top: 0; border-top: none; flex: 1 1 auto; }
+  .bs-list-toolbar-actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .bs-cancel-btn { border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
@@ -1210,11 +1209,6 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage, noti
     ${notice ? `<p class="bs-note" style="margin-bottom:16px">${escapeHtml(notice)}</p>` : ""}
 
     <div class="bs-list-toolbar">
-      <form class="bs-search" method="get" action="/members">
-        <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="이름 · 학번 · 이메일 · Discord 검색" />
-        <button type="submit" class="bs-cancel-btn bs-icon-btn" aria-label="검색">${SEARCH_ICON_SVG}</button>
-        ${meta.q ? `<a href="/members" class="bs-cancel">지우기</a>` : ""}
-      </form>
       <div class="bs-list-toolbar-actions">
         <a class="bs-new" href="/members/new" style="margin-bottom:0">+ 새 유저</a>
         ${renderCsvExportButton("csv-dialog-members", "/members/export.csv", "CSV 다운로드", MEMBER_EXPORT_COLUMNS)}
@@ -1222,6 +1216,11 @@ export function renderMemberList(users: UserRecord[], meta: MemberListPage, noti
           <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0;">프로필 사진 갱신</button>
         </form>
       </div>
+      <form class="bs-search" method="get" action="/members">
+        <input type="text" name="q" value="${escapeHtml(meta.q)}" placeholder="이름 · 학번 · 이메일 · Discord 검색" />
+        <button type="submit" class="bs-cancel-btn bs-icon-btn" aria-label="검색">${SEARCH_ICON_SVG}</button>
+        ${meta.q ? `<a href="/members" class="bs-cancel">지우기</a>` : ""}
+      </form>
     </div>
 
     ${body}
