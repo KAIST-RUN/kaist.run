@@ -452,6 +452,7 @@ function paginateMembers(c: { req: { query(key: string): string | undefined } },
       hasNext: start + MEMBERS_PAGE_SIZE < filtered.length,
       total: filtered.length,
       grandTotal: users.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / MEMBERS_PAGE_SIZE)),
     },
   };
 }
