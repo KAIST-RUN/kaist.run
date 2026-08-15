@@ -211,7 +211,11 @@ const FORM_STYLE = `
   .bs-new-outline:hover { background: rgba(128,128,128,.08); opacity: 1; }
 
   /* CSV 내보내기 열 선택 팝업 — 네이티브 <dialog>. showModal()로 열리므로 위치
-     지정 없이 브라우저 기본 중앙 정렬을 그대로 씁니다. */
+     지정 없이 브라우저 기본 중앙 정렬을 그대로 씁니다. 닫혀있을 땐 반드시 레이아웃에서
+     완전히 빠지도록 못박아둡니다 — 트리거 버튼과 나란히 flex 행(.bs-list-toolbar-actions
+     등)에 형제로 들어가는데, 혹시라도 안 닫힌 것처럼 치이면 그 행 전체가 다이얼로그
+     높이만큼 늘어나 버튼들이 세로로 비대해 보이는 원인이 됩니다. */
+  dialog:not([open]) { display: none !important; }
   .bs-csv-dialog {
     border: 1px solid rgba(128,128,128,.2); border-radius: 16px; padding: 22px 24px;
     background: var(--bg); color: inherit; max-width: 360px; width: calc(100vw - 48px);
@@ -508,7 +512,7 @@ const FORM_STYLE = `
      아래 미디어 쿼리로 다시 세로로 쌓습니다. */
   .bs-list-toolbar { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 16px; }
   .bs-list-toolbar .bs-search { margin: 0 0 0 auto; padding-top: 0; border-top: none; flex: 1 1 auto; }
-  .bs-list-toolbar-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .bs-list-toolbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .bs-cancel-btn { border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; }
   .bs-cancel-btn:hover { background: rgba(128,128,128,.08); }
   .bs-upload-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.18); }
@@ -1511,7 +1515,7 @@ export function renderSemesterRoster(
     </p>
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
 
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       ${renderCsvExportButton("csv-dialog-semester", `${base}/export.csv`, "CSV 다운로드", SEMESTER_EXPORT_COLUMNS)}
       ${
         isCurrent
@@ -2945,7 +2949,7 @@ export function renderRunforceSettings(
 
     ${pendingCard}
 
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       ${renderCsvExportButton("csv-dialog-leaderboard", "/runforce/leaderboard/export.csv", "리더보드 CSV 다운로드", RUNFORCE_LEADERBOARD_EXPORT_COLUMNS)}
     </div>
 
@@ -3089,7 +3093,7 @@ export function renderRunforceContestDetail(
       ${runforceWeightLabel(contest.weightIndex)}
     </p>
 
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       ${renderCsvExportButton(`csv-dialog-${encodeURIComponent(contest.id)}`, `/runforce/${encodeURIComponent(contest.id)}/export.csv`, "CSV 다운로드", RUNFORCE_CONTEST_EXPORT_COLUMNS)}
     </div>
 
@@ -3139,7 +3143,7 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
     <h1>RUNFORCE 리더보드</h1>
     ${runforceSubnav("leaderboard")}
 
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       ${renderCsvExportButton("csv-dialog-leaderboard", "/runforce/leaderboard/export.csv", "CSV 다운로드", RUNFORCE_LEADERBOARD_EXPORT_COLUMNS)}
     </div>
 
