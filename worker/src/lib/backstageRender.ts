@@ -1132,6 +1132,16 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
 // 남은 두 경우는 한 번도 승인된 적 없으면(status==="applicant") 신규회원, 아니면
 // (과거엔 승인됐지만 이번 학기는 아님) 휴회원 — 마이페이지(src/components/account/
 // UserProfileCard.tsx의 memberStatusLabel)와 정확히 같은 규칙입니다.
+// 이름 뒤에 "이/가" 조사를 붙일 때, 받침 유무에 따라 골라줍니다 — 완성형 한글
+// 음절(가~힣)은 코드포인트가 0xAC00부터 28개씩 규칙적으로 반복되고, 그 나머지가
+// 0이면 받침이 없는 음절입니다(유니코드 한글 음절 조합 공식). 한글이 아닌 이름
+// (영문 등)이나 빈 문자열이면 다른 조사 규칙이 없어 그냥 "가"를 씁니다.
+function josaEuiGa(name: string): "이" | "가" {
+  const code = name.trim().slice(-1).codePointAt(0) ?? 0;
+  if (code < 0xac00 || code > 0xd7a3) return "가";
+  return (code - 0xac00) % 28 === 0 ? "가" : "이";
+}
+
 function memberStatusLabel(user: UserRecord): string {
   if (user.isHonoraryMember) return "명예회원";
   if (user.status === "member") return "활동회원";
@@ -1517,7 +1527,7 @@ export function renderSemesterRoster(
               semesterMemberRowHtml(
                 m,
                 `<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-                  <span class="bs-note" style="text-align:right;">${escapeHtml(m.approvedByName ?? "관리자")}이 승인함${m.approvedAt ? `<br />${escapeHtml(formatKstDateTime(parseD1DateTime(m.approvedAt)))}` : ""}</span>
+                  <span class="bs-note" style="text-align:right;">${escapeHtml(m.approvedByName ?? "관리자")}${josaEuiGa(m.approvedByName ?? "관리자")} 승인함${m.approvedAt ? `<br />${escapeHtml(formatKstDateTime(parseD1DateTime(m.approvedAt)))}` : ""}</span>
                   <form method="post" action="${base}/revoke" onsubmit="return confirm('이 학기 소속을 취소할까요?')"><input type="hidden" name="uid" value="${escapeHtml(m.uid)}" /><button type="submit" class="bs-danger bs-icon-btn" aria-label="회수">${TRASH_ICON_SVG}</button></form>
                 </div>`,
               ),
