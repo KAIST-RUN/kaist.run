@@ -601,6 +601,9 @@ const FORM_STYLE = `
   .bs-badge { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
   /* 명예회원/활동회원/휴회원처럼 "관리자" 배지만큼 강조할 필요는 없는 상태 표시용 — 테두리만. */
   .bs-badge-outline { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(128,128,128,.3); opacity: .75; }
+  /* 학기별 명단 목록에서 "현재 학기"를 글자 대신 체크 표시로. */
+  .bs-current-check { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: 999px; background: var(--logo-primary); color: var(--bg); }
+  .bs-current-check svg { width: 13px; height: 13px; }
 
   /* RUNFORCE 대회별 상세/리더보드 — backstage에서 처음 쓰는 진짜 <table>입니다.
      여기 전까지는 전부 <ul> 기반 행이었지만, 순위/이름/핸들/원본순위/점수처럼
@@ -682,6 +685,7 @@ const MENU_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><
 const SEARCH_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5" /><path d="M17 17l-4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>`;
 const UPLOAD_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 13V3M10 3l-4 4M10 3l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M3.5 15v1a1 1 0 001 1h11a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>`;
 const LINK_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M8.3 11.7l3.4-3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><path d="M9.5 6.5l1.2-1.2a2.7 2.7 0 013.9 3.9L13.4 10.4M10.5 13.5l-1.2 1.2a2.7 2.7 0 01-3.9-3.9l1.2-1.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
+const CHECK_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.3l3.4 3.4 7.2-7.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
 const TRASH_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /><path d="M8 6V4.6a.9.9 0 01.9-.9h2.2a.9.9 0 01.9.9V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M5.5 6l.8 9.3a1 1 0 001 .9h5.4a1 1 0 001-.9l.8-9.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M8.5 8.7v4.6M11.5 8.7v4.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>`;
 
 // shell()은 페이지 내용과 무관하게 항상 이 자리표시자를 nav의 "회원 명단" 링크
@@ -1392,7 +1396,7 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
                     <a class="title" href="/members/semesters/${s.year}/${s.season}">${escapeHtml(semesterLabel(s.year, s.season))}</a>
                     ${s.pendingCount > 0 ? `<span class="bs-badge" style="background:var(--logo-accent);font-size:0.85rem;" title="승인 대기 중">${s.pendingCount}</span>` : ""}
                   </span>
-                  ${s.isCurrent ? '<span class="bs-badge" style="font-size:0.9rem;padding:5px 16px;">현재 학기</span>' : ""}
+                  ${s.isCurrent ? `<span class="bs-current-check" title="현재 학기">${CHECK_ICON_SVG}</span>` : ""}
                 </li>`,
             )
             .join("\n")}
