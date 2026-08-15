@@ -50,3 +50,6 @@ next-env.d.ts
 # raw source dumps used to migrate content (already merged into content/ and public/)
 /contest-data
 /recruit-data
+
+# member PII source file for the past-semester bulk-import feature — never commit real names/student IDs/emails/phones
+/member-roster.xlsx

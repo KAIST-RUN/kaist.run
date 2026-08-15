@@ -1387,7 +1387,7 @@ export function renderUserForm(mode: "new" | "edit", data: UserFormData, semeste
 
 // ---------- members: 학기별 명단 ----------
 
-export function renderSemesterPicker(semesters: SemesterInfo[], error?: string): string {
+export function renderSemesterPicker(semesters: SemesterInfo[], error?: string, notice?: string): string {
   const list =
     semesters.length === 0
       ? `<p class="empty">아직 열린 학기가 없습니다. 아래에서 첫 학기를 열어주세요.</p>`
@@ -1414,6 +1414,7 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
     <h1>회원 명단</h1>
     ${memberSubnav("semesters")}
     ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+    ${notice ? `<p class="bs-note" style="margin-bottom:16px">${escapeHtml(notice)}</p>` : ""}
 
     <div class="bs-card">
       <p class="bs-card-title">새 학기 열기</p>
@@ -1436,6 +1437,20 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
           </span>
           <button type="submit" class="bs-submit" style="margin:0 0 0 auto;">새로운 학기 생성</button>
         </div>
+      </form>
+    </div>
+
+    <div class="bs-card">
+      <p class="bs-card-title">과거 학기 일괄 등록 (엑셀)</p>
+      <p class="bs-note" style="margin-bottom:12px">
+        시트 이름이 "2025-봄"처럼 "연도-봄"/"연도-가을" 형식이어야 하고, 1행은 헤더, 2행부터
+        학번·신청자·전화번호·이메일 순서로 있어야 합니다. 학번이 일치하는 기존 회원을 찾아
+        그 학기에 곧바로 승인 상태로 추가합니다(전화번호·이메일은 안 씀). 2025-가을 이후
+        학기 시트는 건너뜁니다 — 이미 정상 경로로 관리 중이라서요.
+      </p>
+      <form method="post" action="/members/semesters/import" enctype="multipart/form-data" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <input type="file" name="file" accept=".xlsx" required />
+        <button type="submit" class="bs-submit" style="margin:0;">업로드 후 일괄 등록</button>
       </form>
     </div>
 

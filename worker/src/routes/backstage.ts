@@ -55,6 +55,7 @@ import {
   hasPendingApprovals,
 } from "../lib/semesters";
 import { selectCsvColumns, toCsvDocumentFromColumns } from "../lib/csv";
+import { parseSemesterImportWorkbook } from "../lib/semesterImport";
 import { isAtCoderHeuristicContest } from "../lib/atcoder";
 import {
   getRunforceConfig,
@@ -646,6 +647,71 @@ backstage.post("/members/semesters/open", async (c) => {
 
   await openSemester(c.env, year, season, get("makeCurrent") === "1");
   return c.redirect(`/members/semesters/${year}/${season}`);
+});
+
+// 과거 학기 명단 엑셀 일괄 등록 — 시트별로 학기를 자동으로 열고(없으면), 학번이
+// 정확히 하나의 기존 회원과 일치하는 행만 그 학기에 승인 상태로 추가합니다.
+// addSemesterMember가 ON CONFLICT DO UPDATE라 같은 파일을 다시 올려도 안전합니다.
+backstage.post("/members/semesters/import", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const body = await c.req.parseBody();
+  const file = body["file"];
+  if (!(file instanceof File) || file.size === 0) {
+    const semesters = await listSemesters(c.env);
+    return c.html(renderSemesterPicker(semesters, "업로드할 엑셀 파일을 선택해 주세요."), 400);
+  }
+
+  let parsed: ReturnType<typeof parseSemesterImportWorkbook>;
+  try {
+    parsed = parseSemesterImportWorkbook(await file.arrayBuffer());
+  } catch {
+    const semesters = await listSemesters(c.env);
+    return c.html(renderSemesterPicker(semesters, "엑셀 파일을 읽지 못했습니다 — 형식(.xlsx)을 확인해 주세요."), 400);
+  }
+
+  // 학번 → 회원 목록(같은 학번을 쓰는 회원이 여럿이면 모호한 매칭으로 처리하기
+  // 위해 배열로 모아둡니다 — student_id는 DB에 유니크 제약이 없습니다).
+  const users = await listUsers(c.env);
+  const byStudentId = new Map<string, typeof users>();
+  for (const u of users) {
+    const key = u.studentId?.trim();
+    if (!key) continue;
+    const list = byStudentId.get(key);
+    if (list) list.push(u);
+    else byStudentId.set(key, [u]);
+  }
+
+  let addedCount = 0;
+  const failed: { studentId: string; name: string; reason: string }[] = [];
+
+  for (const sheet of parsed.sheets) {
+    if (sheet.rows.length === 0) continue;
+    await openSemester(c.env, sheet.year, sheet.season, false);
+    for (const row of sheet.rows) {
+      const matches = byStudentId.get(row.studentId) ?? [];
+      if (matches.length !== 1) {
+        failed.push({ studentId: row.studentId, name: row.name, reason: matches.length === 0 ? "일치하는 회원 없음" : "학번이 여러 회원과 겹침" });
+        continue;
+      }
+      await addSemesterMember(c.env, matches[0].uid, sheet.year, sheet.season, gate.member.uid, gate.member.name);
+      addedCount++;
+    }
+  }
+
+  const parts = [`${parsed.sheets.length}개 학기 처리 — ${addedCount}명 추가/갱신`];
+  if (failed.length > 0) {
+    const shown = failed.slice(0, 20).map((f) => `${f.name || "(이름 없음)"}(${f.studentId})`);
+    const more = failed.length > shown.length ? ` 외 ${failed.length - shown.length}명` : "";
+    parts.push(`매칭 실패 ${failed.length}명 [${shown.join(", ")}${more}]`);
+  }
+  if (parsed.skipped.length > 0) {
+    parts.push(`제외된 시트: ${parsed.skipped.map((s) => s.name).join(", ")}`);
+  }
+
+  const semesters = await listSemesters(c.env);
+  return c.html(renderSemesterPicker(semesters, undefined, parts.join(" · ")));
 });
 
 backstage.get("/members/semesters/:year/:season", async (c) => {
