@@ -12,15 +12,7 @@ import {
   listBotMemberRoster,
   type HandleSite,
 } from "../lib/members";
-import {
-  requestSemesterMembership,
-  getUserSemesters,
-  listAllSemesterDiscordIds,
-  listPendingApprovalNotifications,
-  ackApprovalNotifications,
-  SemesterError,
-  type PendingApprovalNotification,
-} from "../lib/semesters";
+import { requestSemesterMembership, getUserSemesters, listAllSemesterDiscordIds, SemesterError } from "../lib/semesters";
 import { completeAtCoderContest, listPendingAtCoderContests, RunforceError, type AtCoderPendingEntry } from "../lib/runforce";
 
 // 외부 디스코드 봇이 "신규 회원가입"/"학기별 활동회원 등록"을 처리할 때 부르는 API입니다.
@@ -170,36 +162,6 @@ bot.get("/members", async (c) => {
 // 모든(열린) 학기 각각의 소속(승인된) 디스코드 ID 목록.
 bot.get("/semesters", async (c) => {
   return c.json(await listAllSemesterDiscordIds(c.env));
-});
-
-// ---------- 학기 승인 알림(DM) 큐 ----------
-// /members(전체 스냅샷)로는 "방금 승인됐다"를 정확히 알 수 없어서(리컨실리에이션이라
-// 역할이 빠져있으면 다 "새로 승인됨"처럼 보임) 따로 둔 큐입니다. 봇은 이걸 폴링해
-// DM을 보내고 처리한 건을 /approvals/ack로 소비 처리합니다 — 역할 동기화와는 완전히
-// 독립적이라, 이 큐가 막혀도 역할 부여/회수 자체는 평소대로 돕니다.
-
-bot.get("/approvals/pending", async (c) => {
-  return c.json(await listPendingApprovalNotifications(c.env));
-});
-
-bot.post("/approvals/ack", async (c) => {
-  const body = await c.req.json().catch(() => null);
-  if (!body || typeof body !== "object" || !Array.isArray((body as Record<string, unknown>).items)) {
-    return c.json({ error: "items 배열이 필요합니다." }, 400);
-  }
-
-  const items: PendingApprovalNotification[] = [];
-  for (const raw of (body as Record<string, unknown>).items as unknown[]) {
-    if (!raw || typeof raw !== "object") return c.json({ error: "items 형식이 올바르지 않습니다." }, 400);
-    const r = raw as Record<string, unknown>;
-    if (typeof r.discordId !== "string" || typeof r.year !== "number" || !isSeason(r.season)) {
-      return c.json({ error: "items의 각 항목은 { discordId, year, season } 형식이어야 합니다." }, 400);
-    }
-    items.push({ discordId: r.discordId, year: r.year, season: r.season });
-  }
-
-  await ackApprovalNotifications(c.env, items);
-  return c.json({ acked: items.length });
 });
 
 // ---------- RUNFORCE: AtCoder 순위표 중계 ----------
