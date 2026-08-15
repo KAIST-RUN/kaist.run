@@ -280,3 +280,34 @@ export async function listAllSemesterDiscordIds(env: Env): Promise<SemesterDisco
   // Map은 삽입 순서를 유지하므로, 위 SQL의 ORDER BY(최신순) 그대로 나갑니다.
   return [...bySemester.values()];
 }
+
+export type PendingApprovalNotification = { discordId: string; year: number; season: Season };
+
+// 디스코드 봇용 — 아직 DM으로 알리지 않은 승인 건. approveSemesterMembership과
+// addSemesterMember 어느 경로로 승인됐든 approved_at만 찍히면 여기 걸립니다.
+// bot_notified_at은 ackApprovalNotifications로만 채워지고, 승인 로직 쪽은 이 컬럼을
+// 전혀 건드리지 않습니다 — "누가 승인했는지"와 "봇이 가져갔는지"는 분리된 사실입니다.
+export async function listPendingApprovalNotifications(env: Env): Promise<PendingApprovalNotification[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT u.discord_id, sm.year, sm.season
+     FROM semester_membership sm
+     JOIN users u ON u.uid = sm.uid
+     WHERE sm.status = 'approved' AND sm.bot_notified_at IS NULL
+     ORDER BY sm.approved_at ASC`,
+  ).all<{ discord_id: string; year: number; season: Season }>();
+  return results.map((r) => ({ discordId: r.discord_id, year: r.year, season: r.season }));
+}
+
+// 봇이 처리(DM 발송 시도)를 마친 건을 소비 완료로 표시합니다. DM이 실제로 갔는지는
+// 여기서 신경 쓰지 않습니다 — 차단/DM 비허용으로 실패해도 무한 재시도 대상은 아니라는
+// 점은 다른 알림 실패 처리(닉네임 동기화 등)와 같습니다.
+export async function ackApprovalNotifications(env: Env, items: PendingApprovalNotification[]): Promise<void> {
+  if (items.length === 0) return;
+  const statements = items.map((item) =>
+    env.CONTENT_DB.prepare(
+      `UPDATE semester_membership SET bot_notified_at = datetime('now')
+       WHERE uid = (SELECT uid FROM users WHERE discord_id = ?1) AND year = ?2 AND season = ?3`,
+    ).bind(item.discordId, item.year, item.season),
+  );
+  await env.CONTENT_DB.batch(statements);
+}
