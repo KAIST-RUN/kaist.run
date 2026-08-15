@@ -110,10 +110,9 @@ const FORM_STYLE = `
        background/border 지정과 별개로 비쳐 보이는 문제가 생겨 껐습니다. 테두리가
        필요한 쪽(.bs-new-outline 등)은 각자 규칙에서 다시 지정합니다. */
     -webkit-appearance: none; appearance: none; border: none;
-    /* 체크박스 라벨과 한 flex 줄에서 justify-content:space-between으로 나란히
-       두는 곳(RUNFORCE 저장, 새로운 학기 생성 등)에서, 좁은 화면에 라벨이 길면
-       버튼이 밀려 쪼그라들다 글자가 세로로 줄바꿈되는 문제가 있었습니다 — 절대
-       줄바꿈 안 하고, 줄어들지도 않게 못박습니다. */
+    /* 체크박스 라벨과 한 flex 줄에 나란히 두는 곳(RUNFORCE 저장, 새로운 학기 생성
+       등)에서, 좁은 화면에 라벨이 길면 버튼이 밀려 쪼그라들다 글자가 세로로
+       줄바꿈되는 문제가 있었습니다 — 절대 줄바꿈 안 하고, 줄어들지도 않게 못박습니다. */
     white-space: nowrap; flex-shrink: 0;
   }
 
@@ -1430,12 +1429,12 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string):
             <option value="fall">가을</option>
           </select>
         </div>
-        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;justify-content:space-between;flex-wrap:wrap;row-gap:10px;">
+        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;flex-wrap:wrap;row-gap:10px;">
           <span style="display:flex;align-items:center;gap:8px;">
             <input type="checkbox" id="makeCurrent" name="makeCurrent" value="1" checked />
             <label for="makeCurrent" style="margin:0;">현재 학기로 설정</label>
           </span>
-          <button type="submit" class="bs-submit" style="margin:0;">새로운 학기 생성</button>
+          <button type="submit" class="bs-submit" style="margin:0 0 0 auto;">새로운 학기 생성</button>
         </div>
       </form>
     </div>
@@ -2921,12 +2920,12 @@ export function renderRunforceSettings(
           <label>종료일</label>
           <input type="date" name="rangeEndDate" value="${escapeHtml(config.rangeEndDate ?? "")}" />
         </div>
-        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;justify-content:space-between;flex-wrap:wrap;row-gap:10px;">
+        <div class="bs-field bs-check" style="flex-direction:row;grid-column:1/-1;flex-wrap:wrap;row-gap:10px;">
           <span style="display:flex;align-items:center;gap:8px;">
             <input type="checkbox" id="autoDiscoveryEnabled" name="autoDiscoveryEnabled" value="1" ${config.autoDiscoveryEnabled ? "checked" : ""} />
             <label for="autoDiscoveryEnabled" style="margin:0;">매시 정각마다 이 기간의 rated 대회를 자동으로 추가</label>
           </span>
-          <button type="submit" class="bs-submit" style="margin:0;">저장</button>
+          <button type="submit" class="bs-submit" style="margin:0 0 0 auto;">저장</button>
         </div>
       </form>
       <p class="bs-note" style="margin-top:8px">
