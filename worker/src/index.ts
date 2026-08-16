@@ -57,7 +57,10 @@ export default {
     try {
       const raw = await new Response(message.raw).arrayBuffer();
       const id = await storeRawEmail(env, raw);
-      viewUrl = `${ALLOWED_ORIGINS[0]}/email/${id}`;
+      // backstage.kaist.run specifically (not ALLOWED_ORIGINS[0]/kaist.run) — same
+      // page either host (see routes/email.ts::isBackstageHost), but this way the
+      // "View Full Email" button opens it inside the backstage nav shell.
+      viewUrl = `https://backstage.kaist.run/email/${id}`;
 
       // 목록 페이지(GET /email)용 가벼운 색인. 이 블록만의 실패는 원본 저장/
       // 포워딩에 영향을 주면 안 되므로 별도 try/catch로 감쌉니다(안 그러면 색인
