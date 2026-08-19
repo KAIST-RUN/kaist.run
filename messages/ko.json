@@ -222,6 +222,7 @@
         "solvedAc": "solved.ac",
         "codeforces": "Codeforces",
         "atcoder": "AtCoder",
+        "doj": "DOJ",
         "empty": "등록된 핸들이 없습니다.",
         "edit": "코딩 핸들 수정",
         "placeholder": "핸들 입력",

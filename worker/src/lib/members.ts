@@ -47,6 +47,7 @@ type RawUserRow = {
   solved_ac: string | null;
   codeforces: string | null;
   atcoder: string | null;
+  doj: string | null;
   avatar_url: string | null;
   nickname: string | null;
   created_at: string;
@@ -67,6 +68,7 @@ export type UserRecord = {
   solvedAc: string | null;
   codeforces: string | null;
   atcoder: string | null;
+  doj: string | null;
   avatarUrl: string | null;
   // 실명(name)과 별개인 표시용 닉네임. NULL(아직 정해진 적 없음)과 ''(회원이 명시적으로
   // 비움)를 구분해서 저장하지만, 화면에는 둘 다 "닉네임 없음"으로 똑같이 보입니다
@@ -97,6 +99,7 @@ export const MEMBER_EXPORT_COLUMNS: CsvColumn<UserRecord>[] = [
   { key: "solvedAc", label: "solved.ac", value: (u) => u.solvedAc },
   { key: "codeforces", label: "Codeforces", value: (u) => u.codeforces },
   { key: "atcoder", label: "AtCoder", value: (u) => u.atcoder },
+  { key: "doj", label: "DOJ", value: (u) => u.doj },
   { key: "status", label: "상태", value: (u) => u.status },
   { key: "role", label: "권한", value: (u) => u.role },
   { key: "isHonoraryMember", label: "명예회원", value: (u) => (u.isHonoraryMember ? "Y" : "N") },
@@ -130,6 +133,7 @@ function toUserRecord(row: RawUserRow): UserRecord {
     solvedAc: row.solved_ac,
     codeforces: row.codeforces,
     atcoder: row.atcoder,
+    doj: row.doj,
     avatarUrl: row.avatar_url,
     nickname: row.nickname,
     role: row.is_admin ? "admin" : "member",
@@ -170,6 +174,7 @@ export type UserInput = {
   solvedAc?: string | null;
   codeforces?: string | null;
   atcoder?: string | null;
+  doj?: string | null;
   avatarUrl?: string | null;
   // 생략(undefined)하면 Discord 표시 이름으로 채우고, ''를 명시하면 "닉네임 없음"으로 둡니다.
   nickname?: string | null;
@@ -220,8 +225,8 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
   // 같은 에러로 바꿔 던집니다 — upsertUserByDiscordId가 이 에러를 받아 갱신 경로로
   // 넘어갑니다(race에서 진 쪽도 결국 성공 응답).
   const result = await env.CONTENT_DB.prepare(
-    `INSERT INTO users (uid, discord_id, name, email, student_id, phone, solved_ac, codeforces, atcoder, avatar_url, nickname)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+    `INSERT INTO users (uid, discord_id, name, email, student_id, phone, solved_ac, codeforces, atcoder, doj, avatar_url, nickname)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
      ON CONFLICT (discord_id) DO NOTHING`,
   )
     .bind(
@@ -234,6 +239,7 @@ export async function createUser(env: Env, input: UserInput): Promise<UserRecord
       input.solvedAc ?? null,
       input.codeforces ?? null,
       input.atcoder ?? null,
+      input.doj ?? null,
       avatarUrl,
       nickname,
     )
@@ -292,6 +298,7 @@ export async function upsertUserByDiscordId(
   if (input.solvedAc !== undefined) add("solved_ac", input.solvedAc);
   if (input.codeforces !== undefined) add("codeforces", input.codeforces);
   if (input.atcoder !== undefined) add("atcoder", input.atcoder);
+  if (input.doj !== undefined) add("doj", input.doj);
 
   if (sets.length > 0) {
     await env.CONTENT_DB.prepare(`UPDATE users SET ${sets.join(", ")}, updated_at=datetime('now') WHERE uid=?1`)
@@ -351,6 +358,7 @@ export type UserUpdateInput = {
   solvedAc: string | null;
   codeforces: string | null;
   atcoder: string | null;
+  doj: string | null;
 };
 
 // backstage 유저 수정 페이지 저장 — discordId도 고칠 수 있게 합니다(오타 정정 등
@@ -362,7 +370,7 @@ export async function updateUser(env: Env, uid: string, input: UserUpdateInput):
   }
 
   await env.CONTENT_DB.prepare(
-    `UPDATE users SET discord_id=?2, name=?3, email=?4, student_id=?5, phone=?6, solved_ac=?7, codeforces=?8, atcoder=?9, nickname=?10, updated_at=datetime('now')
+    `UPDATE users SET discord_id=?2, name=?3, email=?4, student_id=?5, phone=?6, solved_ac=?7, codeforces=?8, atcoder=?9, doj=?10, nickname=?11, updated_at=datetime('now')
      WHERE uid=?1`,
   )
     .bind(
@@ -375,6 +383,7 @@ export async function updateUser(env: Env, uid: string, input: UserUpdateInput):
       input.solvedAc,
       input.codeforces,
       input.atcoder,
+      input.doj,
       normalizeNickname(input.nickname),
     )
     .run();
@@ -387,15 +396,15 @@ export async function updateUserNickname(env: Env, uid: string, rawNickname: str
   await env.CONTENT_DB.prepare("UPDATE users SET nickname=?2, updated_at=datetime('now') WHERE uid=?1").bind(uid, nickname).run();
 }
 
-export type OwnHandlesInput = { solvedAc: string | null; codeforces: string | null; atcoder: string | null };
+export type OwnHandlesInput = { solvedAc: string | null; codeforces: string | null; atcoder: string | null; doj: string | null };
 
 // 마이페이지 본인 수정용 — backstage의 updateUser(전체 필드 + discordId 충돌 검사)와
 // 달리, 세션으로 이미 확인된 본인 uid에 대해 핸들 3개만 딱 고칩니다. 이름/이메일/
 // 학번/Discord ID는 여기서 절대 안 건드립니다(신원 관련 필드라 본인 수정 범위 밖 —
 // 그건 계속 backstage 관리자만 고칠 수 있음).
 export async function updateUserHandles(env: Env, uid: string, input: OwnHandlesInput): Promise<void> {
-  await env.CONTENT_DB.prepare(`UPDATE users SET solved_ac=?2, codeforces=?3, atcoder=?4, updated_at=datetime('now') WHERE uid=?1`)
-    .bind(uid, input.solvedAc, input.codeforces, input.atcoder)
+  await env.CONTENT_DB.prepare(`UPDATE users SET solved_ac=?2, codeforces=?3, atcoder=?4, doj=?5, updated_at=datetime('now') WHERE uid=?1`)
+    .bind(uid, input.solvedAc, input.codeforces, input.atcoder, input.doj)
     .run();
 }
 
@@ -525,12 +534,12 @@ export async function listBotMemberRoster(env: Env): Promise<BotMemberRosterEntr
   return [...byDiscordId.values()];
 }
 
-export type HandleSite = "solvedAc" | "codeforces" | "atcoder";
+export type HandleSite = "solvedAc" | "codeforces" | "atcoder" | "doj";
 export type HandleEntry = { discordId: string; handle: string };
 
 // 컬럼명은 여기 고정된 매핑에서만 나옵니다 — site는 호출부(bot.ts)가 이 타입으로
 // 미리 검증해서 넘기므로, SQL에 사용자 입력이 그대로 흘러들어갈 일이 없습니다.
-const HANDLE_COLUMN: Record<HandleSite, string> = { solvedAc: "solved_ac", codeforces: "codeforces", atcoder: "atcoder" };
+const HANDLE_COLUMN: Record<HandleSite, string> = { solvedAc: "solved_ac", codeforces: "codeforces", atcoder: "atcoder", doj: "doj" };
 
 // "역대 모든 인원"용 — 학기 소속과 무관하게 users 테이블 전체에서 그 사이트
 // 핸들이 채워진 사람만 걸러냅니다(핸들이 없으면 목록에서 제외).

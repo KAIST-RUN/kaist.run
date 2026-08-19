@@ -73,6 +73,7 @@ bot.post("/users", async (c) => {
       solvedAc: str(b.solvedAc),
       codeforces: str(b.codeforces),
       atcoder: str(b.atcoder),
+      doj: str(b.doj),
     });
 
     // grantAdmin/revokeAdmin 둘 다 멱등이라(ON CONFLICT DO NOTHING / DELETE) 봇이 같은
@@ -133,7 +134,7 @@ bot.get("/users/:discordId", async (c) => {
 // URL 세그먼트("solved-ac")와 실제 컬럼/타입 키("solvedAc")가 달라서 여기서만
 // 매핑합니다 — HANDLE_COLUMN(members.ts)에 쓰는 site 값은 이 매핑을 거친 뒤라
 // 항상 셋 중 하나로 검증된 상태입니다.
-const SITE_PARAM: Record<string, HandleSite> = { "solved-ac": "solvedAc", codeforces: "codeforces", atcoder: "atcoder" };
+const SITE_PARAM: Record<string, HandleSite> = { "solved-ac": "solvedAc", codeforces: "codeforces", atcoder: "atcoder", doj: "doj" };
 
 function parseSite(c: { req: { param(key: string): string } }): HandleSite | null {
   return SITE_PARAM[c.req.param("site")] ?? null;
@@ -142,14 +143,14 @@ function parseSite(c: { req: { param(key: string): string } }): HandleSite | nul
 // 역대 모든 인원(학기 소속과 무관)의 특정 사이트 핸들 — 핸들이 없는 사람은 빠집니다.
 bot.get("/handles/:site", async (c) => {
   const site = parseSite(c);
-  if (!site) return c.json({ error: "site는 solved-ac|codeforces|atcoder 중 하나여야 합니다." }, 400);
+  if (!site) return c.json({ error: "site는 solved-ac|codeforces|atcoder|doj 중 하나여야 합니다." }, 400);
   return c.json(await listAllTimeHandles(c.env, site));
 });
 
 // 이번 학기(현재 학기로 지정된 학기)에 승인된 인원만 — 핸들이 없는 사람은 빠집니다.
 bot.get("/handles/:site/current-semester", async (c) => {
   const site = parseSite(c);
-  if (!site) return c.json({ error: "site는 solved-ac|codeforces|atcoder 중 하나여야 합니다." }, 400);
+  if (!site) return c.json({ error: "site는 solved-ac|codeforces|atcoder|doj 중 하나여야 합니다." }, 400);
   return c.json(await listCurrentSemesterHandles(c.env, site));
 });
 

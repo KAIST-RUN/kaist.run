@@ -519,6 +519,7 @@ backstage.get("/members/new", async (c) => {
     solvedAc: "",
     codeforces: "",
     atcoder: "",
+    doj: "",
     isAdmin: false,
     isHonoraryMember: false,
   };
@@ -536,6 +537,7 @@ function readUserForm(get: (key: string) => string): Omit<UserFormData, "uid"> {
     solvedAc: get("solvedAc").trim(),
     codeforces: get("codeforces").trim(),
     atcoder: get("atcoder").trim(),
+    doj: get("doj").trim(),
     isAdmin: get("isAdmin") === "1",
     isHonoraryMember: get("isHonoraryMember") === "1",
   };
@@ -561,6 +563,7 @@ backstage.post("/members/new", async (c) => {
       solvedAc: input.solvedAc || null,
       codeforces: input.codeforces || null,
       atcoder: input.atcoder || null,
+      doj: input.doj || null,
     });
     if (input.isAdmin) await grantAdmin(c.env, created.uid, gate.member.uid, gate.member.name);
     if (input.isHonoraryMember) await grantHonoraryMember(c.env, created.uid, gate.member.uid, gate.member.name);
@@ -602,6 +605,7 @@ backstage.post("/members/:uid/edit", async (c) => {
       solvedAc: input.solvedAc || null,
       codeforces: input.codeforces || null,
       atcoder: input.atcoder || null,
+      doj: input.doj || null,
     });
     if (input.isAdmin) await grantAdmin(c.env, uid, gate.member.uid, gate.member.name);
     else await revokeAdmin(c.env, uid);

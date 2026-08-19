@@ -1264,6 +1264,7 @@ export type UserFormData = {
   solvedAc: string;
   codeforces: string;
   atcoder: string;
+  doj: string;
   isAdmin: boolean;
   isHonoraryMember: boolean;
 };
@@ -1280,6 +1281,7 @@ export function userRowToFormData(user: UserRecord): UserFormData {
     solvedAc: user.solvedAc ?? "",
     codeforces: user.codeforces ?? "",
     atcoder: user.atcoder ?? "",
+    doj: user.doj ?? "",
     isAdmin: user.role === "admin",
     isHonoraryMember: user.isHonoraryMember,
   };
@@ -1339,9 +1341,15 @@ export function renderUserForm(mode: "new" | "edit", data: UserFormData, semeste
             <input type="text" name="codeforces" value="${escapeHtml(data.codeforces)}" />
           </div>
         </div>
-        <div class="bs-field" style="margin-top:18px">
-          <label>AtCoder</label>
-          <input type="text" name="atcoder" value="${escapeHtml(data.atcoder)}" />
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>AtCoder</label>
+            <input type="text" name="atcoder" value="${escapeHtml(data.atcoder)}" />
+          </div>
+          <div class="bs-field">
+            <label>DOJ</label>
+            <input type="text" name="doj" value="${escapeHtml(data.doj)}" />
+          </div>
         </div>
       </div>
 

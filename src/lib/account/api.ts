@@ -63,7 +63,7 @@ export async function fetchCurrentUser(): Promise<CurrentUserState> {
   }
 }
 
-export type HandlesInput = { solvedAc: string; codeforces: string; atcoder: string };
+export type HandlesInput = { solvedAc: string; codeforces: string; atcoder: string; doj: string };
 
 // 마이페이지 UserInfoCard의 연필 아이콘 → 저장. 성공하면 호출부가
 // useCurrentUser().refetch()로 화면을 최신화합니다.

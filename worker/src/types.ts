@@ -73,6 +73,7 @@ export type CurrentUser = {
   solvedAc: string | null;
   codeforces: string | null;
   atcoder: string | null;
+  doj: string | null;
 
   // RUNFORCE(worker/src/lib/runforce.ts::getMemberRunforce) — semesters처럼 nullable이
   // 아닙니다: 산정 대상 대회가 하나도 없으면 total=0, breakdown=[]로 내려갑니다.

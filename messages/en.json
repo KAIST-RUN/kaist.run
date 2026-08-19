@@ -222,6 +222,7 @@
         "solvedAc": "solved.ac",
         "codeforces": "Codeforces",
         "atcoder": "AtCoder",
+        "doj": "DOJ",
         "empty": "No handles registered.",
         "edit": "Edit coding handles",
         "placeholder": "Enter handle",
