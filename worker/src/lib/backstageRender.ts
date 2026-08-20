@@ -204,6 +204,8 @@ const FORM_STYLE = `
   .bs-list .title { font-weight: 600; text-decoration: none; color: inherit; }
   .bs-list .title:hover { color: var(--logo-primary); }
   .bs-list .meta { font-size: 0.8rem; opacity: 0.55; white-space: nowrap; }
+  .bs-list .meta a { color: inherit; text-decoration: underline; opacity: 0.8; }
+  .bs-list .meta a:hover { opacity: 1; }
   .bs-list .pin { color: var(--logo-accent); font-weight: 700; margin-right: 6px; }
   .empty { opacity: 0.5; padding: 20px 6px; font-size: 0.9rem; }
 
@@ -254,6 +256,28 @@ const FORM_STYLE = `
   .bs-field textarea { resize: vertical; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem; line-height: 1.6; }
   .bs-field textarea.bs-autosize { resize: none; overflow: hidden; }
   .bs-field .hint { font-size: 0.75rem; opacity: 0.5; }
+  .bs-field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .bs-md-preview-toggle {
+    font: inherit; font-size: 0.75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid rgba(128,128,128,.3); background: transparent; color: inherit; cursor: pointer; transition: background .15s;
+  }
+  .bs-md-preview-toggle:hover { background: rgba(128,128,128,.08); }
+  .bs-md-preview {
+    margin-top: 8px; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; padding: 14px 16px;
+    background: rgba(128,128,128,.03); font-size: 0.9rem; line-height: 1.65; word-break: break-word;
+  }
+  .bs-md-preview h1, .bs-md-preview h2, .bs-md-preview h3, .bs-md-preview h4, .bs-md-preview h5, .bs-md-preview h6 {
+    margin: 0.6em 0 0.35em; line-height: 1.35;
+  }
+  .bs-md-preview h1:first-child, .bs-md-preview h2:first-child, .bs-md-preview h3:first-child,
+  .bs-md-preview h4:first-child, .bs-md-preview h5:first-child, .bs-md-preview h6:first-child { margin-top: 0; }
+  .bs-md-preview h4, .bs-md-preview h5, .bs-md-preview h6 { font-size: 1em; }
+  .bs-md-preview p { margin: 0.6em 0; }
+  .bs-md-preview ul, .bs-md-preview ol { margin: 0.6em 0; padding-left: 1.4em; }
+  .bs-md-preview a { color: var(--logo-primary); }
+  .bs-md-preview img { max-width: 100%; height: auto; display: block; margin: 0.6em 0; }
+  .bs-md-preview code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.875em; background: rgba(128,128,128,.12); padding: 0.1em 0.35em; border-radius: 4px; }
+  .bs-md-preview-empty { opacity: 0.5; font-style: italic; }
   .bs-rows { display: flex; flex-direction: column; gap: 8px; }
   .bs-row-item { display: flex; gap: 8px; align-items: center; }
   /* box-sizing이 border-box가 아니면 padding+border만큼 실제 렌더 너비가
@@ -681,6 +705,59 @@ const BS_MENU_SCRIPT = `
   })();
 `;
 
+// 공지/아카이브 본문(마크다운) 편집 칸 옆에 붙는 "미리보기" 토글 — 매 페이지 shell()에
+// 실려있으니 버튼/패널 마크업(data-target="필드id")만 있으면 어디서든 동작합니다.
+// 실제 발행 렌더러(remark 기반, src/lib/markdown 등)와 100% 똑같진 않은 간이 변환기라
+// "대충 이렇게 보이겠다" 확인용입니다 — 헤더/굵게/기울임/링크/목록/문단 정도만 지원합니다.
+const MD_PREVIEW_SCRIPT = `
+(function () {
+  function bsMdToHtml(src) {
+    function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    function inline(text) {
+      text = esc(text);
+      text = text.replace(/\\*\\*(.+?)\\*\\*/g, "<strong>$1</strong>");
+      text = text.replace(/(^|[^*])\\*([^*]+)\\*(?!\\*)/g, "$1<em>$2</em>");
+      text = text.replace(/\`([^\`]+)\`/g, "<code>$1</code>");
+      // 이미지(![alt](url))가 링크([text](url))의 부분집합 문법이라, 링크로 먼저
+      // 매치되면 앞의 "!"만 덩그러니 남습니다 — 이미지를 먼저 처리해야 합니다.
+      text = text.replace(/!\\[([^\\]]*)\\]\\(([^)]+)\\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;" />');
+      text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      return text;
+    }
+    var lines = src.replace(/\\r\\n/g, "\\n").split("\\n");
+    var html = "";
+    var listTag = null;
+    function closeList() { if (listTag) { html += "</" + listTag + ">"; listTag = null; } }
+    lines.forEach(function (line) {
+      var h = line.match(/^(#{1,6})\\s+(.*)$/);
+      if (h) { closeList(); var lvl = h[1].length; html += "<h" + lvl + ">" + inline(h[2]) + "</h" + lvl + ">"; return; }
+      var ol = line.match(/^\\s*\\d+\\.\\s+(.*)$/);
+      if (ol) { if (listTag !== "ol") { closeList(); html += "<ol>"; listTag = "ol"; } html += "<li>" + inline(ol[1]) + "</li>"; return; }
+      var ul = line.match(/^\\s*[-*]\\s+(.*)$/);
+      if (ul) { if (listTag !== "ul") { closeList(); html += "<ul>"; listTag = "ul"; } html += "<li>" + inline(ul[1]) + "</li>"; return; }
+      if (line.trim() === "") { closeList(); return; }
+      closeList();
+      html += "<p>" + inline(line) + "</p>";
+    });
+    closeList();
+    return html || '<p class="bs-md-preview-empty">(내용 없음)</p>';
+  }
+  document.querySelectorAll(".bs-md-preview-toggle").forEach(function (btn) {
+    var textarea = document.getElementById(btn.getAttribute("data-target"));
+    var preview = document.getElementById(btn.getAttribute("data-target") + "-preview");
+    if (!textarea || !preview) return;
+    function update() { preview.innerHTML = bsMdToHtml(textarea.value); }
+    btn.addEventListener("click", function () {
+      var opening = preview.hidden;
+      if (opening) update();
+      preview.hidden = !opening;
+      btn.textContent = opening ? "미리보기 닫기" : "미리보기";
+    });
+    textarea.addEventListener("input", function () { if (!preview.hidden) update(); });
+  });
+})();
+`;
+
 // 메인 사이트 MobileNav(src/components/layout/MobileNav.tsx)와 같은 아이콘입니다.
 const MENU_ICON_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>`;
 
@@ -748,7 +825,7 @@ export function shell(title: string, active: string, bodyHtml: string): string {
 
   return page(
     title,
-    `<style>${FORM_STYLE}</style>${backdrop}${bodyHtml}<script>${BS_MENU_SCRIPT}</script>`,
+    `<style>${FORM_STYLE}</style>${backdrop}${bodyHtml}<script>${BS_MENU_SCRIPT}${MD_PREVIEW_SCRIPT}</script>`,
     `${menuToggle}${navLinks}`,
     logout,
   );
@@ -794,7 +871,7 @@ export function renderNoticeList(notices: NoticeRow[]): string {
                 ${n.pinned ? '<span class="pin">📌</span>' : ""}
                 <a class="title" href="/notices/${escapeHtml(n.slug)}/edit">${escapeHtml(n.title)}</a>
               </span>
-              <span class="meta">${escapeHtml(n.date)} · ${escapeHtml(n.slug)}</span>
+              <span class="meta">${escapeHtml(n.date)} · ${escapeHtml(n.slug)} · <a href="/notices/new?from=${escapeHtml(n.slug)}">복사</a></span>
             </li>`,
           )
           .join("\n")}
@@ -868,12 +945,20 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
         <p class="bs-card-title">본문 (마크다운)</p>
         <div class="bs-row2">
           <div class="bs-field">
-            <label>한국어</label>
-            <textarea name="contentKo" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentKo)}</textarea>
+            <div class="bs-field-label-row">
+              <label>한국어</label>
+              <button type="button" class="bs-md-preview-toggle" data-target="contentKo">미리보기</button>
+            </div>
+            <textarea id="contentKo" name="contentKo" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentKo)}</textarea>
+            <div class="bs-md-preview" id="contentKo-preview" hidden></div>
           </div>
           <div class="bs-field">
-            <label>영어</label>
-            <textarea name="contentEn" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentEn)}</textarea>
+            <div class="bs-field-label-row">
+              <label>영어</label>
+              <button type="button" class="bs-md-preview-toggle" data-target="contentEn">미리보기</button>
+            </div>
+            <textarea id="contentEn" name="contentEn" class="bs-autosize" rows="14" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentEn)}</textarea>
+            <div class="bs-md-preview" id="contentEn-preview" hidden></div>
           </div>
         </div>
       </div>
@@ -884,6 +969,7 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
       </script>
 
       <div class="bs-actions bs-actions-end">
+        ${mode === "edit" ? `<a href="/notices/new?from=${escapeHtml(data.slug)}" class="bs-new bs-new-outline" style="margin-bottom:0;margin-right:auto;">복사</a>` : ""}
         <a href="/notices" class="bs-cancel">취소</a>
         <button type="submit" class="bs-submit">저장</button>
       </div>
@@ -912,7 +998,7 @@ export function renderArchiveList(season: Season, entries: ArchiveRow[]): string
           .map(
             (e) => `<li>
               <a class="title" href="/archive/${season}/${escapeHtml(e.slug)}/edit">${escapeHtml(e.title)}</a>
-              <span class="meta">${escapeHtml(e.date)} · ${escapeHtml(e.slug)}</span>
+              <span class="meta">${escapeHtml(e.date)} · ${escapeHtml(e.slug)} · <a href="/archive/${season}/new?from=${escapeHtml(e.slug)}">복사</a></span>
             </li>`,
           )
           .join("\n")}
@@ -1094,17 +1180,31 @@ export function renderArchiveForm(mode: "new" | "edit", data: ArchiveFormData, e
         <p class="bs-card-title">본문 (마크다운)</p>
         <div class="bs-row2">
           <div class="bs-field">
-            <label>한국어</label>
-            <textarea name="contentKo" rows="8">${escapeHtml(data.contentKo)}</textarea>
+            <div class="bs-field-label-row">
+              <label>한국어</label>
+              <button type="button" class="bs-md-preview-toggle" data-target="contentKo">미리보기</button>
+            </div>
+            <textarea id="contentKo" name="contentKo" class="bs-autosize" rows="8" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentKo)}</textarea>
+            <div class="bs-md-preview" id="contentKo-preview" hidden></div>
           </div>
           <div class="bs-field">
-            <label>영어</label>
-            <textarea name="contentEn" rows="8">${escapeHtml(data.contentEn)}</textarea>
+            <div class="bs-field-label-row">
+              <label>영어</label>
+              <button type="button" class="bs-md-preview-toggle" data-target="contentEn">미리보기</button>
+            </div>
+            <textarea id="contentEn" name="contentEn" class="bs-autosize" rows="8" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(data.contentEn)}</textarea>
+            <div class="bs-md-preview" id="contentEn-preview" hidden></div>
           </div>
         </div>
       </div>
+      <script>
+        document.querySelectorAll("textarea.bs-autosize").forEach((el) => {
+          el.style.height = el.scrollHeight + "px";
+        });
+      </script>
 
       <div class="bs-actions bs-actions-end">
+        ${mode === "edit" ? `<a href="/archive/${data.season}/new?from=${escapeHtml(data.slug)}" class="bs-new bs-new-outline" style="margin-bottom:0;margin-right:auto;">복사</a>` : ""}
         <a href="/archive/${data.season}" class="bs-cancel">취소</a>
         <button type="submit" class="bs-submit">저장</button>
       </div>

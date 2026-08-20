@@ -223,6 +223,28 @@ backstage.get("/notices", async (c) => {
 backstage.get("/notices/new", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
+
+  // ?from=<slug>가 있으면 그 공지 내용을 그대로 채운 채로 폼을 엽니다(목록의 "복사"
+  // 링크) — slug만 비워둬서 새 슬러그를 새로 정하게 하고, 저장 전까지는 아무것도
+  // 안 바뀝니다(기존 공지도 그대로, 사이트에도 아직 안 올라감).
+  const from = c.req.query("from");
+  if (from) {
+    const [ko, en] = await Promise.all([getNotice(c.env, "ko", from), getNotice(c.env, "en", from)]);
+    if (ko || en) {
+      const base = ko ?? en!;
+      const copy: NoticeFormData = {
+        slug: "",
+        date: base.date,
+        pinned: base.pinned,
+        titleKo: ko?.title ?? "",
+        titleEn: en?.title ?? "",
+        contentKo: ko?.content ?? "",
+        contentEn: en?.content ?? "",
+      };
+      return c.html(renderNoticeForm("new", copy));
+    }
+  }
+
   const empty: NoticeFormData = { slug: "", date: "", pinned: false, titleKo: "", titleEn: "", contentKo: "", contentEn: "" };
   return c.html(renderNoticeForm("new", empty));
 });
@@ -333,6 +355,17 @@ backstage.get("/archive/:season/new", async (c) => {
 
   const season = c.req.param("season");
   if (!isSeason(season)) return c.notFound();
+
+  // ?from=<slug>가 있으면 같은 시즌의 그 대회 내용을 그대로 채운 채로 폼을 엽니다
+  // (목록의 "복사" 링크) — notices/new의 from 처리와 같은 방식.
+  const from = c.req.query("from");
+  if (from) {
+    const [ko, en] = await Promise.all([getArchiveEntry(c.env, season, "ko", from), getArchiveEntry(c.env, season, "en", from)]);
+    if (ko || en) {
+      const copy = archiveRowsToFormData(season, "", ko, en);
+      return c.html(renderArchiveForm("new", copy));
+    }
+  }
 
   const empty = archiveRowsToFormData(season, "", null, null);
   return c.html(renderArchiveForm("new", empty));
