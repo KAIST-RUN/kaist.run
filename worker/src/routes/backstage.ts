@@ -24,7 +24,7 @@ import {
   type BylawsBlock,
   type BylawsTagKind,
 } from "../lib/content";
-import { listUploads, storeUpload, deleteUpload } from "../lib/uploads";
+import { listUploads, storeUpload, deleteUpload, UploadNameCollisionError } from "../lib/uploads";
 import {
   listUsers,
   getUserByUid,
@@ -1465,7 +1465,14 @@ backstage.post("/uploads", async (c) => {
     return c.html(renderUploadList(pageItems, meta, "업로드할 파일을 선택해 주세요."), 400);
   }
 
-  await storeUpload(c.env, file.name, file.type || "application/octet-stream", await file.arrayBuffer(), desiredName);
+  try {
+    await storeUpload(c.env, file.name, file.type || "application/octet-stream", await file.arrayBuffer(), desiredName);
+  } catch (err) {
+    if (!(err instanceof UploadNameCollisionError)) throw err;
+    const files = await listUploads(c.env);
+    const { pageItems, meta } = paginateUploads(c, files);
+    return c.html(renderUploadList(pageItems, meta, `이미 같은 이름의 파일이 있습니다: "${err.key}". 이름을 바꿔서 다시 올려 주세요.`), 400);
+  }
 
   return c.redirect("/uploads");
 });
