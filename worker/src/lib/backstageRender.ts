@@ -921,11 +921,23 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
               ? `<div class="bs-actions" style="align-items:center">
                   <code id="short-url-value" style="font-size:15px">https://kaist.run/${escapeHtml(shortCode)}</code>
                   <button type="button" class="bs-new bs-new-outline" style="margin-bottom:0" id="short-url-copy">복사</button>
-                  <a class="bs-new bs-new-outline" style="margin-bottom:0" href="/notices/${escapeHtml(data.slug)}/short-link/qr" target="_blank">QR 코드</a>
                   <form method="post" action="/notices/${escapeHtml(data.slug)}/short-link/delete" onsubmit="return confirm('짧은 URL을 삭제할까요? 이미 공유된 링크는 더 이상 동작하지 않습니다.')" style="margin-left:auto">
                     <button type="submit" class="bs-danger">삭제</button>
                   </form>
                 </div>
+                <form method="get" action="/notices/${escapeHtml(data.slug)}/short-link/qr" target="_blank" class="bs-actions" style="align-items:center;margin-top:14px;flex-wrap:wrap">
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px">QR 색
+                    <input type="color" name="fg" value="#000000" style="width:34px;height:26px;padding:0;border:none;background:none;cursor:pointer" />
+                  </label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px">배경
+                    <input type="color" name="bg" value="#ffffff" style="width:34px;height:26px;padding:0;border:none;background:none;cursor:pointer" />
+                  </label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px">배경 불투명도
+                    <input type="number" name="bgAlpha" value="100" min="0" max="100" step="5" style="width:64px" />%
+                  </label>
+                  <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0">QR 코드</button>
+                </form>
+                <p class="bs-note" style="margin-top:8px">새 탭에 SVG로 열립니다(우클릭 → 저장). 배경 불투명도 0%는 투명 배경입니다. 스캔이 되려면 QR 색이 배경보다 충분히 어두워야 합니다.</p>
                 <script>
                   document.getElementById("short-url-copy").addEventListener("click", function () {
                     var btn = this;
@@ -960,14 +972,16 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
             <label>날짜</label>
             <input type="date" name="date" value="${escapeHtml(data.date)}" required />
           </div>
-          <div class="bs-field bs-check" style="align-self:end;flex-direction:row;">
-            <input type="checkbox" id="pinned" name="pinned" ${data.pinned ? "checked" : ""} />
-            <label for="pinned" style="margin:0;">상단 고정</label>
+          <div style="align-self:end;display:flex;align-items:center;gap:18px;">
+            <div class="bs-field bs-check" style="flex-direction:row;">
+              <input type="checkbox" id="published" name="published" ${data.published ? "checked" : ""} />
+              <label for="published" style="margin:0;">공개</label>
+            </div>
+            <div class="bs-field bs-check" style="flex-direction:row;">
+              <input type="checkbox" id="pinned" name="pinned" ${data.pinned ? "checked" : ""} />
+              <label for="pinned" style="margin:0;">상단 고정</label>
+            </div>
           </div>
-        </div>
-        <div class="bs-field bs-check" style="flex-direction:row;margin-top:14px;">
-          <input type="checkbox" id="published" name="published" ${data.published ? "checked" : ""} />
-          <label for="published" style="margin:0;">공개 (체크 해제 시 비공개 — kaist.run에 안 보임)</label>
         </div>
       </div>
 

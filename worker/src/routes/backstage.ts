@@ -342,13 +342,38 @@ backstage.get("/notices/:slug/short-link/qr", async (c) => {
   const code = await getShortLinkBySlug(c.env, slug);
   if (!code) return c.html(renderErrorPage("찾을 수 없습니다", "이 공지에는 발급된 짧은 URL이 없습니다."), 404);
 
+  // 색 지정(edit 화면의 GET 폼에서 넘어옴) — fg/bg는 #rrggbb, bgAlpha는 0~100(%).
+  // 값이 없거나 형식이 어긋나면 기본값(검정 QR / 흰 배경 / 불투명)으로 조용히 돌아갑니다.
+  const isHexColor = (v: string | undefined): v is string => !!v && /^#[0-9a-fA-F]{6}$/.test(v);
+  const fg = isHexColor(c.req.query("fg")) ? c.req.query("fg")! : "#000000";
+  const bg = isHexColor(c.req.query("bg")) ? c.req.query("bg")! : "#ffffff";
+  const alphaNum = Number(c.req.query("bgAlpha") ?? "100");
+  const bgAlpha = Number.isFinite(alphaNum) && alphaNum >= 0 && alphaNum <= 100 ? alphaNum : 100;
+  // 투명도는 rgba()로 — SVG의 style="fill:..."에 들어가며 브라우저/디자인 툴 모두 인식.
+  const background =
+    bgAlpha === 100
+      ? bg
+      : `rgba(${parseInt(bg.slice(1, 3), 16)},${parseInt(bg.slice(3, 5), 16)},${parseInt(bg.slice(5, 7), 16)},${bgAlpha / 100})`;
+
+  // ecl "M"(15% 복원): H(30%)는 URL이 짧아도 모듈이 눈에 띄게 촘촘해집니다. 일반 QR
+  // 생성기(Adobe 등)의 기본값이 M이고, 이 QR은 로고를 얹는 용도가 아니라 M이면 충분합니다.
+  //
+  // 루트에 고정 width/height(512)와 viewBox를 함께 둡니다 — 고정 크기가 없으면 새 탭에서
+  // 창 크기만큼 무한정 늘어나고, viewBox가 없으면 문서에 삽입할 때 스케일이 안 됩니다.
+  // qrcode-svg는 둘 중 하나만 내보낼 수 있어서(container 옵션) viewBox본에 고정 크기를
+  // 덧붙입니다.
   const svg = new QRCode({
     content: `https://kaist.run/${code}`,
-    ecl: "H",
+    ecl: "M",
     padding: 2,
     width: 512,
     height: 512,
-  }).svg();
+    color: fg,
+    background,
+    container: "svg-viewbox",
+  })
+    .svg()
+    .replace('viewBox="0 0 512 512"', 'width="512" height="512" viewBox="0 0 512 512"');
   return c.body(svg, 200, {
     "Content-Type": "image/svg+xml",
     "Content-Disposition": `inline; filename="kaist-run-${code}.svg"`,
