@@ -872,8 +872,9 @@ export function renderNoticeList(notices: NoticeRow[], shortCodes: Map<string, s
               <span>
                 ${n.pinned ? '<span class="pin">📌</span>' : ""}
                 <a class="title" href="/notices/${escapeHtml(n.slug)}/edit">${escapeHtml(n.title)}</a>
+                ${!n.published ? '<span class="bs-badge" style="background:rgba(128,128,128,.35);color:inherit;margin-left:8px;">비공개</span>' : ""}
               </span>
-              <span class="meta">${escapeHtml(n.date)} · ${escapeHtml(n.slug)}${shortCodes.has(n.slug) ? ` · /${escapeHtml(shortCodes.get(n.slug)!)}` : ""} · <a href="/notices/new?from=${escapeHtml(n.slug)}">복사</a></span>
+              <span class="meta">${escapeHtml(n.date)} · ${escapeHtml(n.slug)}${shortCodes.has(n.slug) ? ` · /${escapeHtml(shortCodes.get(n.slug)!)}` : ""}</span>
             </li>`,
           )
           .join("\n")}
@@ -895,6 +896,8 @@ export type NoticeFormData = {
   slug: string;
   date: string;
   pinned: boolean;
+  // false면 메인 사이트에서 숨김(회칙의 게시/초안과 같은 패턴). ko/en이 함께 따릅니다.
+  published: boolean;
   titleKo: string;
   titleEn: string;
   contentKo: string;
@@ -918,6 +921,7 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
               ? `<div class="bs-actions" style="align-items:center">
                   <code id="short-url-value" style="font-size:15px">https://kaist.run/${escapeHtml(shortCode)}</code>
                   <button type="button" class="bs-new bs-new-outline" style="margin-bottom:0" id="short-url-copy">복사</button>
+                  <a class="bs-new bs-new-outline" style="margin-bottom:0" href="/notices/${escapeHtml(data.slug)}/short-link/qr" target="_blank">QR 코드</a>
                   <form method="post" action="/notices/${escapeHtml(data.slug)}/short-link/delete" onsubmit="return confirm('짧은 URL을 삭제할까요? 이미 공유된 링크는 더 이상 동작하지 않습니다.')" style="margin-left:auto">
                     <button type="submit" class="bs-danger">삭제</button>
                   </form>
@@ -931,7 +935,7 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
                     });
                   });
                 </script>`
-              : `<p class="bs-note" style="margin-top:0">2글자 코드(kaist.run/Xy)를 발급하면 이 공지로 바로 연결되는 짧은 주소가 생깁니다. 접속자는 언어 설정에 맞는 페이지로 이동합니다.</p>
+              : `<p class="bs-note" style="margin-top:0">2글자 hex 코드(kaist.run/3F)를 발급하면 이 공지로 바로 연결되는 짧은 주소가 생깁니다. 접속자는 언어 설정에 맞는 페이지로 이동합니다.</p>
                 <form method="post" action="/notices/${escapeHtml(data.slug)}/short-link">
                   <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0">짧은 URL 발급</button>
                 </form>`
@@ -960,6 +964,10 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
             <input type="checkbox" id="pinned" name="pinned" ${data.pinned ? "checked" : ""} />
             <label for="pinned" style="margin:0;">상단 고정</label>
           </div>
+        </div>
+        <div class="bs-field bs-check" style="flex-direction:row;margin-top:14px;">
+          <input type="checkbox" id="published" name="published" ${data.published ? "checked" : ""} />
+          <label for="published" style="margin:0;">공개 (체크 해제 시 비공개 — kaist.run에 안 보임)</label>
         </div>
       </div>
 

@@ -5,8 +5,8 @@ import { withBasePath } from "@/lib/basePath";
 // (out/404.html)를 서빙하므로, 여기서 파스 타임 인라인 스크립트로 세 갈래를 처리합니다:
 //
 //   1) /ko/... 또는 /en/...  → 로케일이 이미 붙었는데 없는 페이지 = 진짜 404. 그대로 표시.
-//   2) /Xy (2글자 [A-Za-z0-9], ko/en/my 제외)
-//      → 공지 짧은 URL 후보. 공개 API(/api/content/short-links/Xy)로 slug를 해석해
+//   2) /3F (대문자 hex 2글자 — 소문자로 쳐도 정규화해서 인정)
+//      → 공지 짧은 URL 후보. 공개 API(/api/content/short-links/3F)로 slug를 해석해
 //        해당 공지로 이동. 해석 중엔 404 화면이 깜빡이지 않게 문서를 숨기고, 실패하면
 //        (없는 코드) 다시 드러내 404를 보여줍니다. API가 죽어도 2.5초 뒤엔 반드시
 //        화면이 복원됩니다(failsafe).
@@ -27,10 +27,10 @@ export default function NotFound() {
     `var seg=p.split("/").filter(Boolean);` +
     `if(seg[0]==="ko"||seg[0]==="en")return;` + // 1) 진짜 404
     `var loc=${localeExpression()};` +
-    `if(seg.length===1&&/^[A-Za-z0-9]{2}$/.test(seg[0])&&["ko","en","my"].indexOf(seg[0].toLowerCase())<0){` + // 2) 짧은 URL 후보
+    `if(seg.length===1&&/^[0-9A-Fa-f]{2}$/.test(seg[0])){` + // 2) 짧은 URL 후보 (hex — ko/en/my 등 예약어는 hex 밖이라 검사 불필요)
     `var d=document.documentElement;d.style.visibility="hidden";` +
     `var show=function(){d.style.visibility=""};setTimeout(show,2500);` +
-    `fetch(B+"/api/content/short-links/"+seg[0]).then(function(r){return r.ok?r.json():null}).then(function(j){` +
+    `fetch(B+"/api/content/short-links/"+seg[0].toUpperCase()).then(function(r){return r.ok?r.json():null}).then(function(j){` +
     `if(j&&j.slug)location.replace(B+"/"+loc+"/notices/"+encodeURIComponent(j.slug)+"/");else show()` +
     `}).catch(show);` +
     `return}` +

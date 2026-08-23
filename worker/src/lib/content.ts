@@ -8,6 +8,9 @@ export type NoticeRow = {
   title: string;
   date: string;
   pinned: boolean;
+  // false면 메인 사이트에서 숨김 — 공개 API(routes/content.ts)가 목록/상세 양쪽에서
+  // 걸러냅니다. backstage에는 항상 보입니다(0034_notices_published.sql).
+  published: boolean;
   content: string;
   updated_at: string;
 };
@@ -76,12 +79,12 @@ export type BylawsVersionRow = {
 export type BylawsVersionSummary = Omit<BylawsVersionRow, "revisionHistory" | "blocks">;
 
 // D1에서 그대로 나온 row(불리언/JSON이 문자열)를 앱에서 쓰는 타입으로 바꿉니다.
-type RawNoticeRow = Omit<NoticeRow, "pinned"> & { pinned: number };
+type RawNoticeRow = Omit<NoticeRow, "pinned" | "published"> & { pinned: number; published: number };
 type RawArchiveRow = Omit<ArchiveRow, "resources" | "judges"> & { resources: string; judges: string };
 type RawContactRow = Omit<ContactRow, "info" | "socials"> & { info: string; socials: string };
 
 function fromRawNotice(row: RawNoticeRow): NoticeRow {
-  return { ...row, pinned: row.pinned !== 0 };
+  return { ...row, pinned: row.pinned !== 0, published: row.published !== 0 };
 }
 
 function fromRawArchive(row: RawArchiveRow): ArchiveRow {
@@ -110,17 +113,17 @@ export async function getNotice(env: Env, locale: Locale, slug: string): Promise
   return row ? fromRawNotice(row) : null;
 }
 
-export type NoticeInput = { title: string; date: string; pinned: boolean; content: string };
+export type NoticeInput = { title: string; date: string; pinned: boolean; published: boolean; content: string };
 
 export async function upsertNotice(env: Env, slug: string, locale: Locale, input: NoticeInput): Promise<void> {
   await env.CONTENT_DB.prepare(
-    `INSERT INTO notices (slug, locale, title, date, pinned, content, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+    `INSERT INTO notices (slug, locale, title, date, pinned, published, content, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
      ON CONFLICT (slug, locale) DO UPDATE SET
        title = excluded.title, date = excluded.date, pinned = excluded.pinned,
-       content = excluded.content, updated_at = datetime('now')`,
+       published = excluded.published, content = excluded.content, updated_at = datetime('now')`,
   )
-    .bind(slug, locale, input.title, input.date, input.pinned ? 1 : 0, input.content)
+    .bind(slug, locale, input.title, input.date, input.pinned ? 1 : 0, input.published ? 1 : 0, input.content)
     .run();
 }
 
@@ -137,29 +140,26 @@ export async function deleteNotice(env: Env, slug: string): Promise<void> {
 // kaist.run/<code>(2글자) → 공지 리다이렉트용 매핑. 발급/삭제는 backstage(관리자),
 // 해석은 공개 API(routes/content.ts::/short-links/:code)가 담당합니다. 왜 이 구조인지는
 // migrations/0033_notice_short_links.sql 주석 참고.
+//
+// 코드는 대문자 hex 2글자(00~FF, 256개)입니다. 원래 [A-Za-z0-9]였는데, 말로 전하거나
+// 손으로 적을 때 대소문자·l/I/O/0 구분이 문제가 돼서 hex로 좁혔습니다. 저장은 항상
+// 대문자이고, 조회는 소문자 입력도 정규화해서 받아줍니다(normalizeShortCode).
+// ko/en/my 같은 루트 경로 예약어는 hex 밖이라 충돌 자체가 불가능합니다.
 
-const SHORT_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-// 실제 사이트 루트 경로와 겹치는 2글자들 — 대소문자 무시하고 발급에서 제외합니다.
-// (GitHub Pages 경로는 대소문자를 구분해서 "KO" 같은 코드도 기술적으로는 동작하지만,
-// 사람이 말로 전할 때 혼동을 부르므로 아예 피합니다.)
-const RESERVED_SHORT_CODES = new Set(["ko", "en", "my"]);
+const SHORT_CODE_ALPHABET = "0123456789ABCDEF";
 
-export function isValidShortCode(code: string): boolean {
-  return /^[A-Za-z0-9]{2}$/.test(code) && !RESERVED_SHORT_CODES.has(code.toLowerCase());
+// 소문자 hex 입력(kaist.run/3f처럼 손으로 친 경우)을 저장 형식으로 맞춥니다.
+// hex 형식이 아니면 null.
+export function normalizeShortCode(raw: string): string | null {
+  return /^[0-9A-Fa-f]{2}$/.test(raw) ? raw.toUpperCase() : null;
 }
 
 function randomShortCode(): string {
-  // rejection sampling — 256 % 62 ≠ 0이라 나머지 연산만 쓰면 앞쪽 글자가 미세하게 더
-  // 자주 나옵니다. 248(=62*4) 미만인 바이트만 채택해 균등하게 뽑습니다.
-  const chars: string[] = [];
-  while (chars.length < 2) {
-    const buf = new Uint8Array(8);
-    crypto.getRandomValues(buf);
-    for (const b of buf) {
-      if (chars.length < 2 && b < 62 * 4) chars.push(SHORT_CODE_ALPHABET[b % 62]);
-    }
-  }
-  return chars.join("");
+  // 256 % 16 === 0이라 rejection sampling이 필요 없습니다 — 상·하위 4비트가 그대로
+  // 균등한 hex 두 글자가 됩니다.
+  const buf = new Uint8Array(1);
+  crypto.getRandomValues(buf);
+  return SHORT_CODE_ALPHABET[buf[0] >> 4] + SHORT_CODE_ALPHABET[buf[0] & 0x0f];
 }
 
 export class ShortLinkError extends Error {}
@@ -187,14 +187,15 @@ export async function getShortLinkByCode(env: Env, code: string): Promise<string
 // 발급 — 이미 코드가 있으면 그 코드를 그대로 돌려줍니다(멱등). 무작위 코드가 기존 코드와
 // 충돌하면 ON CONFLICT DO NOTHING이 0행 삽입으로 알려주므로 새 코드로 재시도합니다
 // (members.ts::createUser의 race 처리와 같은 패턴 — 확인-후-삽입 사이의 동시 발급도
-// 안전합니다). 3,844개 공간에 수십 개 수준이라 충돌 자체가 드뭅니다.
+// 안전합니다). 공간이 256개라 발급이 수십 개 쌓이면 충돌이 잦아지는데, 시도 횟수를
+// 넉넉히 잡아 절반쯤 찰 때까지는 사실상 실패하지 않게 했습니다(128개 사용 중이어도
+// 30회 연속 충돌 확률은 (1/2)^30 수준).
 export async function createShortLink(env: Env, slug: string): Promise<string> {
   const existing = await getShortLinkBySlug(env, slug);
   if (existing) return existing;
 
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 30; attempt++) {
     const code = randomShortCode();
-    if (!isValidShortCode(code)) continue; // 예약어(ko/en/my)에 걸린 경우 — 새로 뽑기
     // ON CONFLICT DO NOTHING은 code 충돌(다른 공지가 선점)과 slug 충돌(같은 공지에 동시
     // 발급이 방금 이김 — idx_notice_short_links_slug) 둘 다 0행 삽입으로 알려줍니다.
     const result = await env.CONTENT_DB.prepare(
@@ -208,7 +209,7 @@ export async function createShortLink(env: Env, slug: string): Promise<string> {
     if (raced) return raced;
     // code 충돌이었다면 새 코드로 재시도.
   }
-  throw new ShortLinkError("짧은 URL 코드를 발급하지 못했습니다. 다시 시도해 주세요.");
+  throw new ShortLinkError("짧은 URL 코드를 발급하지 못했습니다. 코드 공간(256개)이 거의 가득 찼을 수 있습니다.");
 }
 
 export async function deleteShortLink(env: Env, slug: string): Promise<void> {

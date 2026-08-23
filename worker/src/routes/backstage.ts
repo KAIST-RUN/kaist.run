@@ -30,6 +30,7 @@ import {
   type BylawsTagKind,
 } from "../lib/content";
 import { listUploads, storeUpload, deleteUpload, UploadNameCollisionError } from "../lib/uploads";
+import QRCode from "qrcode-svg";
 import {
   listUsers,
   getUserByUid,
@@ -241,6 +242,7 @@ backstage.get("/notices/new", async (c) => {
         slug: "",
         date: base.date,
         pinned: base.pinned,
+        published: base.published,
         titleKo: ko?.title ?? "",
         titleEn: en?.title ?? "",
         contentKo: ko?.content ?? "",
@@ -250,7 +252,7 @@ backstage.get("/notices/new", async (c) => {
     }
   }
 
-  const empty: NoticeFormData = { slug: "", date: "", pinned: false, titleKo: "", titleEn: "", contentKo: "", contentEn: "" };
+  const empty: NoticeFormData = { slug: "", date: "", pinned: false, published: true, titleKo: "", titleEn: "", contentKo: "", contentEn: "" };
   return c.html(renderNoticeForm("new", empty));
 });
 
@@ -263,6 +265,7 @@ backstage.post("/notices/new", async (c) => {
     slug: get("slug").trim(),
     date: get("date"),
     pinned: get("pinned") === "on",
+    published: get("published") === "on",
     titleKo: get("titleKo"),
     titleEn: get("titleEn"),
     contentKo: get("contentKo"),
@@ -276,8 +279,8 @@ backstage.post("/notices/new", async (c) => {
     return c.html(renderNoticeForm("new", data, "이미 존재하는 슬러그입니다."), 400);
   }
 
-  await upsertNotice(c.env, data.slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, content: data.contentKo });
-  await upsertNotice(c.env, data.slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, content: data.contentEn });
+  await upsertNotice(c.env, data.slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, published: data.published, content: data.contentKo });
+  await upsertNotice(c.env, data.slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, published: data.published, content: data.contentEn });
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/notices");
@@ -300,6 +303,7 @@ backstage.get("/notices/:slug/edit", async (c) => {
     slug,
     date: base.date,
     pinned: base.pinned,
+    published: base.published,
     titleKo: ko?.title ?? "",
     titleEn: en?.title ?? "",
     contentKo: ko?.content ?? "",
@@ -327,6 +331,30 @@ backstage.post("/notices/:slug/short-link", async (c) => {
   return c.redirect(`/notices/${encodeURIComponent(slug)}/edit`);
 });
 
+// 짧은 URL의 QR 코드(SVG) — 포스터/슬라이드에 바로 붙일 수 있게 브라우저 새 탭으로
+// 열어줍니다(우클릭 저장 시 파일명도 지정됨). ecl "H"라 로고를 얹거나 살짝 훼손돼도
+// 인식됩니다. 관리자 전용인 건 다른 backstage 경로와 같은 이유입니다.
+backstage.get("/notices/:slug/short-link/qr", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const slug = c.req.param("slug");
+  const code = await getShortLinkBySlug(c.env, slug);
+  if (!code) return c.html(renderErrorPage("찾을 수 없습니다", "이 공지에는 발급된 짧은 URL이 없습니다."), 404);
+
+  const svg = new QRCode({
+    content: `https://kaist.run/${code}`,
+    ecl: "H",
+    padding: 2,
+    width: 512,
+    height: 512,
+  }).svg();
+  return c.body(svg, 200, {
+    "Content-Type": "image/svg+xml",
+    "Content-Disposition": `inline; filename="kaist-run-${code}.svg"`,
+  });
+});
+
 backstage.post("/notices/:slug/short-link/delete", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
@@ -346,14 +374,15 @@ backstage.post("/notices/:slug/edit", async (c) => {
     slug,
     date: get("date"),
     pinned: get("pinned") === "on",
+    published: get("published") === "on",
     titleKo: get("titleKo"),
     titleEn: get("titleEn"),
     contentKo: get("contentKo"),
     contentEn: get("contentEn"),
   };
 
-  await upsertNotice(c.env, slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, content: data.contentKo });
-  await upsertNotice(c.env, slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, content: data.contentEn });
+  await upsertNotice(c.env, slug, "ko", { title: data.titleKo, date: data.date, pinned: data.pinned, published: data.published, content: data.contentKo });
+  await upsertNotice(c.env, slug, "en", { title: data.titleEn, date: data.date, pinned: data.pinned, published: data.published, content: data.contentEn });
   c.executionCtx.waitUntil(triggerRebuild(c.env));
 
   return c.redirect("/notices");

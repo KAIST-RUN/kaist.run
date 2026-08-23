@@ -4,6 +4,7 @@ import {
   listNotices,
   getNotice,
   getShortLinkByCode,
+  normalizeShortCode,
   listArchiveEntries,
   getArchiveEntry,
   getContact,
@@ -34,24 +35,28 @@ function isSeason(value: string): value is Season {
 // (src/app/not-found.tsx). 존재하지 않는 코드는 404 — 그 페이지는 그냥 404 화면을
 // 보여줍니다.
 content.get("/short-links/:code", async (c) => {
-  const code = c.req.param("code");
-  if (!/^[A-Za-z0-9]{2}$/.test(code)) return c.json({ error: "invalid code" }, 400);
+  // 저장은 대문자 hex지만 소문자 입력(kaist.run/3f)도 정규화해서 받아줍니다.
+  const code = normalizeShortCode(c.req.param("code"));
+  if (!code) return c.json({ error: "invalid code" }, 400);
   const slug = await getShortLinkByCode(c.env, code);
   if (!slug) return c.notFound();
   return c.json({ slug });
 });
 
+// 비공개(published=false) 공지는 목록/상세 모두 여기서 걸러냅니다 — 이 API가 정적 빌드의
+// 유일한 공지 출처라, 다음 재빌드부터 메인 사이트에서 사라집니다(회칙의 isPublished 필터와
+// 같은 패턴). backstage는 lib 함수를 직접 쓰므로 계속 전부 봅니다.
 content.get("/notices/:locale", async (c) => {
   const locale = c.req.param("locale");
   if (!isLocale(locale)) return c.json({ error: "invalid locale" }, 400);
-  return c.json(await listNotices(c.env, locale));
+  return c.json((await listNotices(c.env, locale)).filter((n) => n.published));
 });
 
 content.get("/notices/:locale/:slug", async (c) => {
   const locale = c.req.param("locale");
   if (!isLocale(locale)) return c.json({ error: "invalid locale" }, 400);
   const notice = await getNotice(c.env, locale, c.req.param("slug"));
-  if (!notice) return c.notFound();
+  if (!notice || !notice.published) return c.notFound();
   return c.json(notice);
 });
 
