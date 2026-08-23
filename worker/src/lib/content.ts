@@ -125,7 +125,94 @@ export async function upsertNotice(env: Env, slug: string, locale: Locale, input
 }
 
 export async function deleteNotice(env: Env, slug: string): Promise<void> {
-  await env.CONTENT_DB.prepare("DELETE FROM notices WHERE slug = ?1").bind(slug).run();
+  // 짧은 URL 코드도 함께 지웁니다 — 남겨두면 죽은 공지로 가는 코드가 계속 발급 공간을
+  // 차지하고, 그 코드로 접속한 사람은 존재하지 않는 slug로 리다이렉트됩니다.
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("DELETE FROM notices WHERE slug = ?1").bind(slug),
+    env.CONTENT_DB.prepare("DELETE FROM notice_short_links WHERE slug = ?1").bind(slug),
+  ]);
+}
+
+// ---------- notice short links ----------
+// kaist.run/<code>(2글자) → 공지 리다이렉트용 매핑. 발급/삭제는 backstage(관리자),
+// 해석은 공개 API(routes/content.ts::/short-links/:code)가 담당합니다. 왜 이 구조인지는
+// migrations/0033_notice_short_links.sql 주석 참고.
+
+const SHORT_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+// 실제 사이트 루트 경로와 겹치는 2글자들 — 대소문자 무시하고 발급에서 제외합니다.
+// (GitHub Pages 경로는 대소문자를 구분해서 "KO" 같은 코드도 기술적으로는 동작하지만,
+// 사람이 말로 전할 때 혼동을 부르므로 아예 피합니다.)
+const RESERVED_SHORT_CODES = new Set(["ko", "en", "my"]);
+
+export function isValidShortCode(code: string): boolean {
+  return /^[A-Za-z0-9]{2}$/.test(code) && !RESERVED_SHORT_CODES.has(code.toLowerCase());
+}
+
+function randomShortCode(): string {
+  // rejection sampling — 256 % 62 ≠ 0이라 나머지 연산만 쓰면 앞쪽 글자가 미세하게 더
+  // 자주 나옵니다. 248(=62*4) 미만인 바이트만 채택해 균등하게 뽑습니다.
+  const chars: string[] = [];
+  while (chars.length < 2) {
+    const buf = new Uint8Array(8);
+    crypto.getRandomValues(buf);
+    for (const b of buf) {
+      if (chars.length < 2 && b < 62 * 4) chars.push(SHORT_CODE_ALPHABET[b % 62]);
+    }
+  }
+  return chars.join("");
+}
+
+export class ShortLinkError extends Error {}
+
+// backstage 공지 목록에서 각 행 옆에 코드를 보여주기 위한 전체 매핑(slug → code).
+export async function listShortLinks(env: Env): Promise<Map<string, string>> {
+  const { results } = await env.CONTENT_DB.prepare("SELECT code, slug FROM notice_short_links").all<{ code: string; slug: string }>();
+  return new Map(results.map((r) => [r.slug, r.code]));
+}
+
+export async function getShortLinkBySlug(env: Env, slug: string): Promise<string | null> {
+  const row = await env.CONTENT_DB.prepare("SELECT code FROM notice_short_links WHERE slug = ?1")
+    .bind(slug)
+    .first<{ code: string }>();
+  return row?.code ?? null;
+}
+
+export async function getShortLinkByCode(env: Env, code: string): Promise<string | null> {
+  const row = await env.CONTENT_DB.prepare("SELECT slug FROM notice_short_links WHERE code = ?1")
+    .bind(code)
+    .first<{ slug: string }>();
+  return row?.slug ?? null;
+}
+
+// 발급 — 이미 코드가 있으면 그 코드를 그대로 돌려줍니다(멱등). 무작위 코드가 기존 코드와
+// 충돌하면 ON CONFLICT DO NOTHING이 0행 삽입으로 알려주므로 새 코드로 재시도합니다
+// (members.ts::createUser의 race 처리와 같은 패턴 — 확인-후-삽입 사이의 동시 발급도
+// 안전합니다). 3,844개 공간에 수십 개 수준이라 충돌 자체가 드뭅니다.
+export async function createShortLink(env: Env, slug: string): Promise<string> {
+  const existing = await getShortLinkBySlug(env, slug);
+  if (existing) return existing;
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = randomShortCode();
+    if (!isValidShortCode(code)) continue; // 예약어(ko/en/my)에 걸린 경우 — 새로 뽑기
+    // ON CONFLICT DO NOTHING은 code 충돌(다른 공지가 선점)과 slug 충돌(같은 공지에 동시
+    // 발급이 방금 이김 — idx_notice_short_links_slug) 둘 다 0행 삽입으로 알려줍니다.
+    const result = await env.CONTENT_DB.prepare(
+      "INSERT INTO notice_short_links (code, slug) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
+    )
+      .bind(code, slug)
+      .run();
+    if (result.meta.changes === 1) return code;
+    // slug 충돌이었다면 이미 이 공지의 코드가 생긴 것이므로 그걸 돌려줍니다(멱등).
+    const raced = await getShortLinkBySlug(env, slug);
+    if (raced) return raced;
+    // code 충돌이었다면 새 코드로 재시도.
+  }
+  throw new ShortLinkError("짧은 URL 코드를 발급하지 못했습니다. 다시 시도해 주세요.");
+}
+
+export async function deleteShortLink(env: Env, slug: string): Promise<void> {
+  await env.CONTENT_DB.prepare("DELETE FROM notice_short_links WHERE slug = ?1").bind(slug).run();
 }
 
 // ---------- archive ----------

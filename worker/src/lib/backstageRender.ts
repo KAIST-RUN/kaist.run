@@ -859,7 +859,9 @@ export function renderBackstageHome(member: UserRecord): string {
 
 // ---------- notices ----------
 
-export function renderNoticeList(notices: NoticeRow[]): string {
+// shortCodes: slug → 짧은 URL 코드(notice_short_links). 발급된 공지만 meta 줄에
+// /코드 형태로 표시됩니다.
+export function renderNoticeList(notices: NoticeRow[], shortCodes: Map<string, string>): string {
   const items =
     notices.length === 0
       ? `<p class="empty">등록된 공지가 없습니다.</p>`
@@ -871,7 +873,7 @@ export function renderNoticeList(notices: NoticeRow[]): string {
                 ${n.pinned ? '<span class="pin">📌</span>' : ""}
                 <a class="title" href="/notices/${escapeHtml(n.slug)}/edit">${escapeHtml(n.title)}</a>
               </span>
-              <span class="meta">${escapeHtml(n.date)} · ${escapeHtml(n.slug)} · <a href="/notices/new?from=${escapeHtml(n.slug)}">복사</a></span>
+              <span class="meta">${escapeHtml(n.date)} · ${escapeHtml(n.slug)}${shortCodes.has(n.slug) ? ` · /${escapeHtml(shortCodes.get(n.slug)!)}` : ""} · <a href="/notices/new?from=${escapeHtml(n.slug)}">복사</a></span>
             </li>`,
           )
           .join("\n")}
@@ -899,8 +901,42 @@ export type NoticeFormData = {
   contentEn: string;
 };
 
-export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, error?: string): string {
+// shortCode: 이 공지에 발급된 짧은 URL 코드(없으면 null). edit 모드에서만 의미 있고,
+// new 모드는 저장 전이라(슬러그 미확정) 발급 UI를 아예 그리지 않습니다.
+export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, error?: string, shortCode?: string | null): string {
   const action = mode === "new" ? "/notices/new" : `/notices/${escapeHtml(data.slug)}/edit`;
+
+  // 메인 폼 밖에 두는 별도 카드입니다(폼 중첩은 유효한 HTML이 아님). 발급/삭제는 정적
+  // 빌드에 영향이 없어 재빌드가 돌지 않습니다(routes/backstage.ts).
+  const shortLinkCard =
+    mode !== "edit"
+      ? ""
+      : `<div class="bs-card" style="margin-top:24px">
+          <p class="bs-card-title">짧은 URL</p>
+          ${
+            shortCode
+              ? `<div class="bs-actions" style="align-items:center">
+                  <code id="short-url-value" style="font-size:15px">https://kaist.run/${escapeHtml(shortCode)}</code>
+                  <button type="button" class="bs-new bs-new-outline" style="margin-bottom:0" id="short-url-copy">복사</button>
+                  <form method="post" action="/notices/${escapeHtml(data.slug)}/short-link/delete" onsubmit="return confirm('짧은 URL을 삭제할까요? 이미 공유된 링크는 더 이상 동작하지 않습니다.')" style="margin-left:auto">
+                    <button type="submit" class="bs-danger">삭제</button>
+                  </form>
+                </div>
+                <script>
+                  document.getElementById("short-url-copy").addEventListener("click", function () {
+                    var btn = this;
+                    navigator.clipboard.writeText(document.getElementById("short-url-value").textContent).then(function () {
+                      btn.textContent = "복사됨!";
+                      setTimeout(function () { btn.textContent = "복사"; }, 1500);
+                    });
+                  });
+                </script>`
+              : `<p class="bs-note" style="margin-top:0">2글자 코드(kaist.run/Xy)를 발급하면 이 공지로 바로 연결되는 짧은 주소가 생깁니다. 접속자는 언어 설정에 맞는 페이지로 이동합니다.</p>
+                <form method="post" action="/notices/${escapeHtml(data.slug)}/short-link">
+                  <button type="submit" class="bs-new bs-new-outline" style="margin-bottom:0">짧은 URL 발급</button>
+                </form>`
+          }
+        </div>`;
   return shell(
     mode === "new" ? "새 공지 작성" : `공지 수정 — ${data.slug}`,
     "notices",
@@ -974,6 +1010,7 @@ export function renderNoticeForm(mode: "new" | "edit", data: NoticeFormData, err
         <button type="submit" class="bs-submit">저장</button>
       </div>
     </form>
+    ${shortLinkCard}
     ${
       mode === "edit"
         ? `<div class="bs-danger-zone">

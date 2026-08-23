@@ -3,6 +3,7 @@ import type { Env } from "../types";
 import {
   listNotices,
   getNotice,
+  getShortLinkByCode,
   listArchiveEntries,
   getArchiveEntry,
   getContact,
@@ -27,6 +28,18 @@ function isLocale(value: string): value is Locale {
 function isSeason(value: string): value is Season {
   return value === "spring" || value === "fall";
 }
+
+// 짧은 URL 해석 — kaist.run/<code>(2글자)로 들어온 방문을 정적 사이트의 404 페이지
+// 인라인 스크립트가 이 API로 slug로 바꿔 해당 공지로 리다이렉트합니다
+// (src/app/not-found.tsx). 존재하지 않는 코드는 404 — 그 페이지는 그냥 404 화면을
+// 보여줍니다.
+content.get("/short-links/:code", async (c) => {
+  const code = c.req.param("code");
+  if (!/^[A-Za-z0-9]{2}$/.test(code)) return c.json({ error: "invalid code" }, 400);
+  const slug = await getShortLinkByCode(c.env, code);
+  if (!slug) return c.notFound();
+  return c.json({ slug });
+});
 
 content.get("/notices/:locale", async (c) => {
   const locale = c.req.param("locale");

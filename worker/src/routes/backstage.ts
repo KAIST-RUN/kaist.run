@@ -8,6 +8,11 @@ import {
   getNotice,
   upsertNotice,
   deleteNotice,
+  listShortLinks,
+  getShortLinkBySlug,
+  createShortLink,
+  deleteShortLink,
+  ShortLinkError,
   listArchiveEntries,
   getArchiveEntry,
   upsertArchiveEntry,
@@ -216,8 +221,8 @@ backstage.post("/logout", async (c) => {
 backstage.get("/notices", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
-  const notices = await listNotices(c.env, "ko");
-  return c.html(renderNoticeList(notices));
+  const [notices, shortCodes] = await Promise.all([listNotices(c.env, "ko"), listShortLinks(c.env)]);
+  return c.html(renderNoticeList(notices, shortCodes));
 });
 
 backstage.get("/notices/new", async (c) => {
@@ -283,7 +288,11 @@ backstage.get("/notices/:slug/edit", async (c) => {
   if (!gate.ok) return gate.response;
 
   const slug = c.req.param("slug");
-  const [ko, en] = await Promise.all([getNotice(c.env, "ko", slug), getNotice(c.env, "en", slug)]);
+  const [ko, en, shortCode] = await Promise.all([
+    getNotice(c.env, "ko", slug),
+    getNotice(c.env, "en", slug),
+    getShortLinkBySlug(c.env, slug),
+  ]);
   if (!ko && !en) return c.html(renderErrorPage("찾을 수 없습니다", "존재하지 않는 공지입니다."), 404);
 
   const base = ko ?? en!;
@@ -296,7 +305,35 @@ backstage.get("/notices/:slug/edit", async (c) => {
     contentKo: ko?.content ?? "",
     contentEn: en?.content ?? "",
   };
-  return c.html(renderNoticeForm("edit", data));
+  return c.html(renderNoticeForm("edit", data, undefined, shortCode));
+});
+
+// 짧은 URL 발급/삭제 — 정적 콘텐츠에는 영향이 없으므로(해석은 런타임 API) 재빌드
+// (triggerRebuild)를 트리거하지 않습니다.
+backstage.post("/notices/:slug/short-link", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const slug = c.req.param("slug");
+  const [ko, en] = await Promise.all([getNotice(c.env, "ko", slug), getNotice(c.env, "en", slug)]);
+  if (!ko && !en) return c.html(renderErrorPage("찾을 수 없습니다", "존재하지 않는 공지입니다."), 404);
+
+  try {
+    await createShortLink(c.env, slug);
+  } catch (err) {
+    if (!(err instanceof ShortLinkError)) throw err;
+    // 10회 연속 충돌은 사실상 발생하지 않지만, 나면 폼으로 돌아가 다시 누르게 합니다.
+  }
+  return c.redirect(`/notices/${encodeURIComponent(slug)}/edit`);
+});
+
+backstage.post("/notices/:slug/short-link/delete", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const slug = c.req.param("slug");
+  await deleteShortLink(c.env, slug);
+  return c.redirect(`/notices/${encodeURIComponent(slug)}/edit`);
 });
 
 backstage.post("/notices/:slug/edit", async (c) => {
