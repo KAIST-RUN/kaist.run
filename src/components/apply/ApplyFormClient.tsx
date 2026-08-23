@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import type { ApplyFormConfig, ApplyFormQuestion } from "@/lib/content/applyForm";
+import { submitApplyForm } from "@/lib/apply/submit";
 
 type Locale = "ko" | "en";
 
@@ -216,8 +217,7 @@ function questionOptions(q: ApplyFormQuestion, locale: Locale): Option[] {
 
 export default function ApplyFormClient({ config, locale }: { config: ApplyFormConfig; locale: Locale }) {
   const t = useTranslations("apply");
-  const [status, setStatus] = useState<"idle" | "submitting" | "submitted">("idle");
-  const hasSubmitted = useRef(false);
+  const [status, setStatus] = useState<"idle" | "submitting" | "submitted" | "error">("idle");
   const formRef = useRef<HTMLFormElement>(null);
   const [isFormValid, setIsFormValid] = useState(false);
 
@@ -225,8 +225,19 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
     setIsFormValid(formRef.current?.checkValidity() ?? false);
   }
 
-  const actionUrl = `https://docs.google.com/forms/d/e/${config.formId}/formResponse`;
   const viewUrl = `https://docs.google.com/forms/d/e/${config.formId}/viewform`;
+
+  // 예전엔 <form target="hidden_iframe">로 구글 폼에 브라우저가 직접 크로스 오리진
+  // 제출을 했는데, CORS 때문에 응답을 전혀 못 읽어서 400이 나도 화면엔 "제출
+  // 완료"가 떴습니다. 이제 우리 Worker(/api/apply-form/submit)를 거쳐서 제출하고,
+  // 실제 성공/실패를 받아 옵니다(worker/src/routes/applyForm.ts 참고).
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!formRef.current) return;
+    setStatus("submitting");
+    const ok = await submitApplyForm(new FormData(formRef.current));
+    setStatus(ok ? "submitted" : "error");
+  }
 
   return (
     <main className="mx-auto flex min-h-full max-w-2xl flex-col px-6 py-12 sm:px-10 sm:py-16">
@@ -251,15 +262,9 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
 
           <form
             ref={formRef}
-            action={actionUrl}
-            method="POST"
-            target="hidden_iframe"
             onInput={updateFormValidity}
             onChange={updateFormValidity}
-            onSubmit={() => {
-              hasSubmitted.current = true;
-              setStatus("submitting");
-            }}
+            onSubmit={handleSubmit}
             className="animate-fade-in-up mt-10 flex flex-col gap-6 pb-16"
             style={{ animationDelay: "160ms" }}
           >
@@ -305,6 +310,15 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
               })}
             </div>
 
+            {status === "error" && (
+              <p
+                role="alert"
+                className="animate-fade-in-up rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-center text-sm font-medium text-red-500"
+              >
+                {t("submitError")}
+              </p>
+            )}
+
             <button
               type="submit"
               disabled={status === "submitting" || !isFormValid}
@@ -325,17 +339,6 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
           </form>
         </>
       )}
-
-      <iframe
-        name="hidden_iframe"
-        style={{ display: "none" }}
-        title="submit"
-        onLoad={() => {
-          if (hasSubmitted.current) {
-            setStatus("submitted");
-          }
-        }}
-      />
     </main>
   );
 }

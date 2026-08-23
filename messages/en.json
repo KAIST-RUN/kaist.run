@@ -142,6 +142,7 @@
     },
     "submit": "Submit",
     "submitting": "Submitting...",
+    "submitError": "Something went wrong submitting your application. Please try again, or use the Google Form link below.",
     "fallback": "If the submission doesn't go through, please use the <link>Google Form</link> instead.",
     "successTitle": "Application submitted!",
     "successBody": "Thanks for your interest in RUN. We'll get back to you after reviewing your application.",

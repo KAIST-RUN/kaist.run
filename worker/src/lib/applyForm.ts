@@ -81,6 +81,27 @@ export async function getApplyFormConfig(env: Env): Promise<ApplyFormConfig | nu
   return { formId: formRow.form_id, questions: results.map(fromRawQuestion) };
 }
 
+// /apply 페이지는 예전엔 브라우저가 구글 폼에 <iframe target>으로 직접(크로스 오리진)
+// 제출했는데, 그 방식은 CORS 때문에 응답을 전혀 못 읽어서 400이 나도 "제출 완료"로
+// 보였습니다. 그래서 브라우저 → 이 Worker → 구글 폼 순서로 한 단계 거칩니다 —
+// 서버-서버 요청은 CORS 제약이 없어 실제 상태 코드를 읽을 수 있고, 그걸 그대로
+// 성공/실패로 프런트에 알려줄 수 있습니다.
+//
+// entries는 알려진 entry.{entryId} 키만 전달하세요(라우트 쪽에서 이미 걸러서
+// 넘깁니다) — 여긴 그 값을 그대로 구글에 x-www-form-urlencoded로 전달할 뿐입니다.
+export async function submitApplyForm(formId: string, entries: URLSearchParams): Promise<{ ok: boolean; status: number }> {
+  try {
+    const res = await fetch(`https://docs.google.com/forms/d/e/${formId}/formResponse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: entries.toString(),
+    });
+    return { ok: res.ok, status: res.status };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
 export type ConnectResult = {
   total: number; // 이번에 가져온 전체 문항 수
   added: number; // 새로 생긴 문항 수(라벨이 비어있음 — 저장 전엔 배포 안 됨)
