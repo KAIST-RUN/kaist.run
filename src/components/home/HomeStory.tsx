@@ -341,6 +341,19 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
               className="hidden h-8 w-auto object-contain sm:h-11 dark:block"
             />
           </a>
+          <a
+            href="https://www.hudsonrivertrading.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-opacity hover:opacity-70"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/hrt.svg"
+              alt="Hudson River Trading"
+              className="h-8 w-auto object-contain sm:h-11"
+            />
+          </a>
         </div>
       </section>
     </div>
