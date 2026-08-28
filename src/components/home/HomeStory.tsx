@@ -308,52 +308,75 @@ export default function HomeStory({ intro, study, contests, hosting, recruit, ne
 
       {/* 협력 기관 */}
       <section className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 pt-4 pb-16 sm:px-10 sm:pb-24 lg:px-12">
-        <div className="reveal flex flex-wrap items-center justify-center gap-8 sm:gap-10">
-          <a
-            href="https://cs.kaist.ac.kr/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-opacity hover:opacity-70"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/images/kaist_soc.png"
-              alt="KAIST School of Computing"
-              className="h-8 w-auto object-contain sm:h-11"
-            />
-          </a>
-          <a
-            href="https://www.janestreet.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-opacity hover:opacity-70"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/images/jane_street_light.png"
-              alt="Jane Street"
-              className="h-8 w-auto object-contain sm:h-11 dark:hidden"
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/images/jane_street_dark.svg"
-              alt="Jane Street"
-              className="hidden h-8 w-auto object-contain sm:h-11 dark:block"
-            />
-          </a>
-          <a
-            href="https://www.hudsonrivertrading.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-opacity hover:opacity-70"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/images/hrt.svg"
-              alt="Hudson River Trading"
-              className="h-8 w-auto object-contain sm:h-11"
-            />
-          </a>
+        <div className="reveal flex flex-col items-center gap-6 sm:gap-8">
+          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-10">
+            <a
+              href="https://cs.kaist.ac.kr/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-opacity hover:opacity-70"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/kaist_soc.png"
+                alt="KAIST School of Computing"
+                className="h-8 w-auto object-contain sm:h-11"
+              />
+            </a>
+            <a
+              href="https://www.janestreet.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-opacity hover:opacity-70"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/jane_street_2line_light.svg"
+                alt="Jane Street"
+                className="h-11 w-auto object-contain sm:h-14 dark:hidden"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/jane_street_2line_dark.svg"
+                alt="Jane Street"
+                className="hidden h-11 w-auto object-contain sm:h-14 dark:block"
+              />
+            </a>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-10">
+            <a
+              href="https://www.hudsonrivertrading.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-opacity hover:opacity-70"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/hrt.svg"
+                alt="Hudson River Trading"
+                className="h-8 w-auto object-contain sm:h-11"
+              />
+            </a>
+            <a
+              href="https://www.citadelsecurities.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-opacity hover:opacity-70"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/citadel_logo.png"
+                alt="Citadel Securities"
+                className="h-5 w-auto object-contain sm:h-7 dark:hidden"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/citadel_logo_white.png"
+                alt="Citadel Securities"
+                className="hidden h-5 w-auto object-contain sm:h-7 dark:block"
+              />
+            </a>
+          </div>
         </div>
       </section>
     </div>
