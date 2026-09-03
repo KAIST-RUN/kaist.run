@@ -20,14 +20,15 @@ export function parseSemesterSheetName(name: string): { year: number; season: Se
   return { year: Number(m[1]), season: m[2] === "봄" ? "spring" : "fall" };
 }
 
-// 2026-봄(현재 학기) 이전 학기만 이 기능의 대상입니다 — 2026-봄 자체는 이미
-// 정상 경로(디스코드 봇 신청 → 관리자 승인)로 관리되고 있어서 엑셀 일괄 등록
-// 대상이 아닙니다. season 문자열을 그대로 비교하면 "spring" > "fall"이라
-// 틀리므로 listSemesters와 같은 방식(가을=1/봄=0)으로 정렬 키를 만들어 비교합니다.
+// 2026-가을(현재 학기) 이전 학기만 이 기능의 대상입니다 — 2026-봄까지는 이미
+// 끝난 과거 학기라 일괄 등록 대상에 포함하고, 2026-가을은 정상 경로(디스코드
+// 봇 신청 → 관리자 승인)로 관리되고 있어서 제외합니다. season 문자열을 그대로
+// 비교하면 "spring" > "fall"이라 틀리므로 listSemesters와 같은 방식(가을=1/봄=0)
+// 으로 정렬 키를 만들어 비교합니다.
 function semesterSortKey(year: number, season: Season): number {
   return year * 10 + (season === "fall" ? 1 : 0);
 }
-const IMPORT_CUTOFF = semesterSortKey(2026, "spring");
+const IMPORT_CUTOFF = semesterSortKey(2026, "fall");
 
 export function isSemesterImportable(year: number, season: Season): boolean {
   return semesterSortKey(year, season) < IMPORT_CUTOFF;
@@ -45,7 +46,7 @@ export function parseSemesterImportWorkbook(buffer: ArrayBuffer): ParsedSemester
       continue;
     }
     if (!isSemesterImportable(parsed.year, parsed.season)) {
-      skipped.push({ name: sheetName, reason: "2026-봄 이후 학기는 대상이 아님" });
+      skipped.push({ name: sheetName, reason: "2026-가을 이후 학기는 대상이 아님" });
       continue;
     }
 

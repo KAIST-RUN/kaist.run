@@ -1622,7 +1622,7 @@ export function renderSemesterPicker(semesters: SemesterInfo[], error?: string, 
       <p class="bs-note" style="margin-bottom:12px">
         시트 이름이 "2025-봄"처럼 "연도-봄"/"연도-가을" 형식이어야 하고, 1행은 헤더, 2행부터
         학번·신청자·전화번호·이메일 순서로 있어야 합니다. 학번이 일치하는 기존 회원을 찾아
-        그 학기에 곧바로 승인 상태로 추가합니다(전화번호·이메일은 안 씀). 2026-봄 이후
+        그 학기에 곧바로 승인 상태로 추가합니다(전화번호·이메일은 안 씀). 2026-가을 이후
         학기 시트는 건너뜁니다 — 이미 정상 경로로 관리 중이라서요.
       </p>
       <form method="post" action="/members/semesters/import" enctype="multipart/form-data" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
