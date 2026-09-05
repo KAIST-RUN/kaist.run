@@ -105,6 +105,20 @@ export default async function HomePage({
           notices: recentNotices,
         }}
       />
+
+      <p className="pb-6 text-center text-xs opacity-40">
+        Last deployed: {formatDeployTime()}
+      </p>
     </div>
   );
+}
+
+// 정적 export(output: "export")라 이 컴포넌트는 빌드 시점에 한 번 렌더링되어 HTML에
+// 굳어집니다 — 즉 여기서 잡히는 시각이 곧 "마지막 배포 시각"입니다.
+function formatDeployTime(): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date());
 }
