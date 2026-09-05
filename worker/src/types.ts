@@ -31,6 +31,18 @@ export type Env = {
   EMAILS: R2Bucket;
   EMAIL_FORWARD_TO: string; // 지금까지 Gmail로 포워딩하던 그 주소
 
+  // /apply 지원자에게 자동 회신 메일을 보내는 발신 바인딩(Cloudflare Email Sending).
+  // 받은 메일을 넘기기만 하는 EMAIL_FORWARD_TO(Email Routing)와 달리 임의의 주소로
+  // 새 메일을 보낼 수 있습니다. 발신 도메인 온보딩이 선행돼야 합니다 — wrangler.jsonc 참고.
+  SEND_EMAIL: SendEmail;
+
+  // Turnstile(스팸 방지). 사이트 키는 공개값이라 wrangler.jsonc의 vars에 있고,
+  // 시크릿 키만 `wrangler secret put TURNSTILE_SECRET_KEY`로 등록합니다.
+  // 시크릿이 비어 있으면 제출 라우트가 검증을 통째로 건너뜁니다(로컬 개발과,
+  // 키를 아직 등록 안 한 배포에서 지원 폼이 죽지 않게).
+  TURNSTILE_SITE_KEY: string;
+  TURNSTILE_SECRET_KEY: string;
+
   // 공지/아카이브/연락처 콘텐츠 (backstage가 CRUD, 메인 사이트가 빌드 시점에 읽어감).
   CONTENT_DB: D1Database;
 

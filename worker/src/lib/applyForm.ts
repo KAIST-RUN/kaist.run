@@ -22,6 +22,12 @@ export type ApplyFormQuestion = {
   // 빈 문자열이면 검증 없음. 아니면 이 정규식(문자열 그대로, i 플래그로 테스트)에
   // 안 맞는 값을 입력하면 제출을 막습니다. short_answer/paragraph 문항에만 의미가 있음.
   validationPattern: string;
+  // 이 문항의 답이 지원자의 이메일 주소인지. 자동 회신 메일을 어디로 보낼지
+  // 결정하는 유일한 근거라, 전체 문항 중 최대 1개만 true입니다(backstage에서
+  // 라디오로 강제하고 saveApplyForm이 서버에서 재검증). validationPattern과는
+  // 별개 축입니다 — 그쪽은 "입력이 이 형식이어야 한다"는 검증 규칙일 뿐이라
+  // 어느 문항이 수신 주소인지는 알려주지 못합니다.
+  isApplicantEmail: boolean;
   sourceTitle: string;
   labelKo: string;
   labelEn: string;
@@ -31,6 +37,16 @@ export type ApplyFormQuestion = {
 export type ApplyFormConfig = {
   formId: string;
   questions: ApplyFormQuestion[];
+  // 제출 후 지원자에게 보내는 자동 회신 메일 설정. 꺼져 있으면 아무것도 안 보냅니다.
+  replyEnabled: boolean;
+  replySubjectKo: string;
+  replySubjectEn: string;
+  replyIntroKo: string;
+  replyIntroEn: string;
+  // 제출 완료 화면에 뜨는 안내문(개강총회 안내). 비어 있으면 프런트가 자체
+  // i18n 기본 문구를 씁니다.
+  successNoteKo: string;
+  successNoteEn: string;
 };
 
 type RawQuestionRow = {
@@ -39,10 +55,22 @@ type RawQuestionRow = {
   type: QuestionType;
   required: number;
   validation_pattern: string;
+  is_applicant_email: number;
   source_title: string;
   label_ko: string;
   label_en: string;
   choices: string; // JSON
+};
+
+type RawFormRow = {
+  form_id: string;
+  reply_enabled: number;
+  reply_subject_ko: string;
+  reply_subject_en: string;
+  reply_intro_ko: string;
+  reply_intro_en: string;
+  success_note_ko: string;
+  success_note_en: string;
 };
 
 function fromRawQuestion(row: RawQuestionRow): ApplyFormQuestion {
@@ -52,6 +80,7 @@ function fromRawQuestion(row: RawQuestionRow): ApplyFormQuestion {
     type: row.type,
     required: row.required !== 0,
     validationPattern: row.validation_pattern,
+    isApplicantEmail: row.is_applicant_email !== 0,
     sourceTitle: row.source_title,
     labelKo: row.label_ko,
     labelEn: row.label_en,
@@ -71,14 +100,28 @@ function isValidRegex(pattern: string): boolean {
 // apply_form이 아직 한 번도 연결 안 된 상태(id=1 행이 없음)면 null을 돌려줍니다 —
 // 프런트(/apply)는 이걸 "폼 준비 중" 문구로 처리합니다.
 export async function getApplyFormConfig(env: Env): Promise<ApplyFormConfig | null> {
-  const formRow = await env.CONTENT_DB.prepare("SELECT form_id FROM apply_form WHERE id = 1").first<{
-    form_id: string;
-  }>();
+  const formRow = await env.CONTENT_DB.prepare("SELECT * FROM apply_form WHERE id = 1").first<RawFormRow>();
   if (!formRow) return null;
 
   const { results } = await env.CONTENT_DB.prepare("SELECT * FROM apply_form_question ORDER BY position ASC").all<RawQuestionRow>();
 
-  return { formId: formRow.form_id, questions: results.map(fromRawQuestion) };
+  return {
+    formId: formRow.form_id,
+    questions: results.map(fromRawQuestion),
+    replyEnabled: formRow.reply_enabled !== 0,
+    replySubjectKo: formRow.reply_subject_ko,
+    replySubjectEn: formRow.reply_subject_en,
+    replyIntroKo: formRow.reply_intro_ko,
+    replyIntroEn: formRow.reply_intro_en,
+    successNoteKo: formRow.success_note_ko,
+    successNoteEn: formRow.success_note_en,
+  };
+}
+
+// 지원자의 이메일 주소가 담긴 문항. 지정돼 있지 않으면 null이고, 그 경우 호출부는
+// 이메일 검증과 자동 회신을 둘 다 건너뜁니다(지정 전에도 제출은 그대로 되도록).
+export function findApplicantEmailQuestion(config: ApplyFormConfig): ApplyFormQuestion | null {
+  return config.questions.find((q) => q.isApplicantEmail) ?? null;
 }
 
 // /apply 페이지는 예전엔 브라우저가 구글 폼에 <iframe target>으로 직접(크로스 오리진)
@@ -154,13 +197,17 @@ export async function connectApplyForm(env: Env, formIdOrUrl: string): Promise<C
     }
 
     const validationPattern = VALIDATABLE_TYPES.includes(q.type) ? (prev?.validationPattern ?? "") : "";
+    // 이메일 문항 지정도 정규식과 같은 규칙으로 보존합니다 — 단, 단답형이 아니게
+    // 되면 리셋합니다(이메일 주소를 담을 수 있는 유형이 아니므로).
+    const isApplicantEmail = q.type === "short_answer" && prev?.isApplicantEmail === true;
 
     return env.CONTENT_DB.prepare(
-      `INSERT INTO apply_form_question (entry_id, position, type, required, validation_pattern, source_title, label_ko, label_en, choices, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))
+      `INSERT INTO apply_form_question (entry_id, position, type, required, validation_pattern, is_applicant_email, source_title, label_ko, label_en, choices, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'))
        ON CONFLICT (entry_id) DO UPDATE SET
          position = excluded.position, type = excluded.type, required = excluded.required,
-         validation_pattern = excluded.validation_pattern, source_title = excluded.source_title,
+         validation_pattern = excluded.validation_pattern, is_applicant_email = excluded.is_applicant_email,
+         source_title = excluded.source_title,
          choices = excluded.choices, updated_at = datetime('now')`,
     ).bind(
       q.entryId,
@@ -168,6 +215,7 @@ export async function connectApplyForm(env: Env, formIdOrUrl: string): Promise<C
       q.type,
       q.required ? 1 : 0,
       validationPattern,
+      isApplicantEmail ? 1 : 0,
       q.sourceTitle,
       prev?.labelKo ?? "",
       prev?.labelEn ?? "",
@@ -203,9 +251,25 @@ export type SaveQuestionInput = {
   choices: { value: string; labelKo: string; labelEn: string }[];
 };
 
-// 라벨/검증 정규식만 갱신합니다 — entry_id/type/choices의 value(구조)는 절대 안
-// 건드립니다(그건 connectApplyForm만 하는 일).
-export async function saveApplyFormLabels(env: Env, questions: SaveQuestionInput[]): Promise<void> {
+export type SaveApplyFormInput = {
+  questions: SaveQuestionInput[];
+  // 지원자 이메일 문항의 entry ID. 빈 문자열이면 "지정 안 함"이고, 그 상태에선
+  // 제출 라우트가 이메일 검증도 자동 회신도 하지 않습니다.
+  applicantEmailEntryId: string;
+  replyEnabled: boolean;
+  replySubjectKo: string;
+  replySubjectEn: string;
+  replyIntroKo: string;
+  replyIntroEn: string;
+  successNoteKo: string;
+  successNoteEn: string;
+};
+
+// 라벨/검증 정규식/이메일 문항 지정과 회신 메일 설정을 갱신합니다 —
+// entry_id/type/choices의 value(구조)는 절대 안 건드립니다(그건 connectApplyForm만 하는 일).
+export async function saveApplyForm(env: Env, input: SaveApplyFormInput): Promise<void> {
+  const { questions, applicantEmailEntryId } = input;
+
   for (const q of questions) {
     if (!q.labelKo.trim() || !q.labelEn.trim()) {
       throw new ApplyFormValidationError("모든 문항의 한국어/영어 문구를 입력해 주세요.");
@@ -223,6 +287,30 @@ export async function saveApplyFormLabels(env: Env, questions: SaveQuestionInput
   const existing = await getApplyFormConfig(env);
   const existingByEntry = new Map((existing?.questions ?? []).map((q) => [q.entryId, q]));
 
+  // 라디오라 브라우저에서 이미 최대 1개로 제한되지만, 폼은 얼마든지 위조할 수
+  // 있으므로 서버에서 다시 확인합니다(0003 주석이 말하던 "저장 시 서버에서도 재검증").
+  if (applicantEmailEntryId) {
+    const target = existingByEntry.get(applicantEmailEntryId);
+    if (!target) {
+      throw new ApplyFormValidationError("지원자 이메일 문항으로 지정된 문항을 찾을 수 없습니다.");
+    }
+    if (target.type !== "short_answer") {
+      throw new ApplyFormValidationError("지원자 이메일 문항은 단답형 문항이어야 합니다.");
+    }
+  }
+
+  if (input.replyEnabled) {
+    if (!applicantEmailEntryId) {
+      throw new ApplyFormValidationError("자동 회신을 켜려면 지원자 이메일 문항을 먼저 지정해 주세요.");
+    }
+    if (!input.replySubjectKo.trim() || !input.replySubjectEn.trim()) {
+      throw new ApplyFormValidationError("자동 회신 메일의 한국어/영어 제목을 모두 입력해 주세요.");
+    }
+    if (!input.replyIntroKo.trim() || !input.replyIntroEn.trim()) {
+      throw new ApplyFormValidationError("자동 회신 메일의 한국어/영어 서두를 모두 입력해 주세요.");
+    }
+  }
+
   const statements = questions.map((q) => {
     const prev = existingByEntry.get(q.entryId);
     const mergedChoices = (prev?.choices ?? []).map((c) => {
@@ -232,10 +320,36 @@ export async function saveApplyFormLabels(env: Env, questions: SaveQuestionInput
 
     return env.CONTENT_DB.prepare(
       `UPDATE apply_form_question
-       SET label_ko = ?2, label_en = ?3, validation_pattern = ?4, choices = ?5, updated_at = datetime('now')
+       SET label_ko = ?2, label_en = ?3, validation_pattern = ?4, is_applicant_email = ?5,
+           choices = ?6, updated_at = datetime('now')
        WHERE entry_id = ?1`,
-    ).bind(q.entryId, q.labelKo, q.labelEn, q.validationPattern, JSON.stringify(mergedChoices));
+    ).bind(
+      q.entryId,
+      q.labelKo,
+      q.labelEn,
+      q.validationPattern,
+      q.entryId === applicantEmailEntryId ? 1 : 0,
+      JSON.stringify(mergedChoices),
+    );
   });
+
+  statements.push(
+    env.CONTENT_DB.prepare(
+      `UPDATE apply_form
+       SET reply_enabled = ?1, reply_subject_ko = ?2, reply_subject_en = ?3,
+           reply_intro_ko = ?4, reply_intro_en = ?5,
+           success_note_ko = ?6, success_note_en = ?7, updated_at = datetime('now')
+       WHERE id = 1`,
+    ).bind(
+      input.replyEnabled ? 1 : 0,
+      input.replySubjectKo.trim(),
+      input.replySubjectEn.trim(),
+      input.replyIntroKo.trim(),
+      input.replyIntroEn.trim(),
+      input.successNoteKo.trim(),
+      input.successNoteEn.trim(),
+    ),
+  );
 
   await env.CONTENT_DB.batch(statements);
 }

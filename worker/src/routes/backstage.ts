@@ -87,7 +87,7 @@ import {
 import {
   getApplyFormConfig,
   connectApplyForm,
-  saveApplyFormLabels,
+  saveApplyForm,
   ApplyFormValidationError,
   type SaveQuestionInput,
 } from "../lib/applyForm";
@@ -1495,7 +1495,17 @@ backstage.post("/apply", async (c) => {
   }));
 
   try {
-    await saveApplyFormLabels(c.env, questions);
+    await saveApplyForm(c.env, {
+      questions,
+      applicantEmailEntryId: get("applicantEmailEntryId").trim(),
+      replyEnabled: get("replyEnabled") === "1",
+      replySubjectKo: get("replySubjectKo"),
+      replySubjectEn: get("replySubjectEn"),
+      replyIntroKo: get("replyIntroKo"),
+      replyIntroEn: get("replyIntroEn"),
+      successNoteKo: get("successNoteKo"),
+      successNoteEn: get("successNoteEn"),
+    });
   } catch (err) {
     if (err instanceof ApplyFormValidationError) {
       return c.html(renderApplyFormPage(config, { error: err.message }), 400);

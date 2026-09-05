@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import type { ApplyFormConfig, ApplyFormQuestion } from "@/lib/content/applyForm";
 import { submitApplyForm } from "@/lib/apply/submit";
+import TurnstileWidget, { type TurnstileHandle } from "./TurnstileWidget";
 
 type Locale = "ko" | "en";
 
@@ -215,17 +216,33 @@ function questionOptions(q: ApplyFormQuestion, locale: Locale): Option[] {
   return q.choices.map((c) => ({ value: c.value, label: locale === "ko" ? c.labelKo : c.labelEn }));
 }
 
+// 서버가 내려주는 error 코드를 화면 문구로 옮깁니다. 모르는 코드는 기존의
+// 포괄적인 제출 실패 문구로 떨어뜨립니다.
+function errorMessageKey(error: string): "turnstileError" | "invalidEmailError" | "submitError" {
+  if (error === "turnstile_failed") return "turnstileError";
+  if (error === "invalid_email") return "invalidEmailError";
+  return "submitError";
+}
+
 export default function ApplyFormClient({ config, locale }: { config: ApplyFormConfig; locale: Locale }) {
   const t = useTranslations("apply");
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted" | "error">("idle");
+  const [errorKey, setErrorKey] = useState<"turnstileError" | "invalidEmailError" | "submitError">("submitError");
   const formRef = useRef<HTMLFormElement>(null);
   const [isFormValid, setIsFormValid] = useState(false);
+
+  // Turnstile 사이트 키가 설정돼 있을 때만 위젯을 그리고 토큰을 요구합니다 —
+  // 키를 아직 등록하지 않은 상태에서 지원 폼이 통째로 막히면 안 되므로.
+  const needsTurnstile = Boolean(config.turnstileSiteKey);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle | null>(null);
 
   function updateFormValidity() {
     setIsFormValid(formRef.current?.checkValidity() ?? false);
   }
 
   const viewUrl = `https://docs.google.com/forms/d/e/${config.formId}/viewform`;
+  const successNote = (locale === "ko" ? config.successNoteKo : config.successNoteEn) || t("successNote");
 
   // 예전엔 <form target="hidden_iframe">로 구글 폼에 브라우저가 직접 크로스 오리진
   // 제출을 했는데, CORS 때문에 응답을 전혀 못 읽어서 400이 나도 화면엔 "제출
@@ -235,8 +252,22 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
     e.preventDefault();
     if (!formRef.current) return;
     setStatus("submitting");
-    const ok = await submitApplyForm(new FormData(formRef.current));
-    setStatus(ok ? "submitted" : "error");
+
+    // 회신 메일을 어느 언어로 보낼지 서버가 알아야 해서 같이 보냅니다. Worker가
+    // entry.* 이외의 키는 구글 폼으로 넘기지 않으므로 응답 시트에는 안 섞입니다.
+    const formData = new FormData(formRef.current);
+    formData.set("locale", locale);
+
+    const result = await submitApplyForm(formData);
+    if (result.ok) {
+      setStatus("submitted");
+      return;
+    }
+
+    setErrorKey(errorMessageKey(result.error));
+    setStatus("error");
+    // 토큰은 1회용이라, 리셋하지 않으면 재시도가 항상 실패합니다.
+    turnstileRef.current?.reset();
   }
 
   return (
@@ -246,6 +277,9 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
           <span className="text-4xl">🎉</span>
           <h1 className="text-2xl font-bold sm:text-3xl">{t("successTitle")}</h1>
           <p className="max-w-sm text-sm leading-relaxed opacity-70 sm:text-base">{t("successBody")}</p>
+          <p className="mt-2 max-w-sm rounded-2xl border border-black/10 px-5 py-4 text-sm leading-relaxed whitespace-pre-line dark:border-white/15 sm:text-base">
+            {successNote}
+          </p>
           <Link
             href="/"
             className="mt-4 rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 sm:text-base"
@@ -310,18 +344,30 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
               })}
             </div>
 
+            {needsTurnstile && (
+              <div className="flex justify-center">
+                <TurnstileWidget
+                  siteKey={config.turnstileSiteKey}
+                  locale={locale}
+                  onToken={setTurnstileToken}
+                  handleRef={turnstileRef}
+                />
+              </div>
+            )}
+
             {status === "error" && (
               <p
                 role="alert"
                 className="animate-fade-in-up rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-center text-sm font-medium text-red-500"
               >
-                {t("submitError")}
+                {t(errorKey)}
               </p>
             )}
 
             <button
               type="submit"
-              disabled={status === "submitting" || !isFormValid}
+              // checkValidity()는 Turnstile 위젯 상태를 모르므로 토큰 조건을 따로 겁니다.
+              disabled={status === "submitting" || !isFormValid || (needsTurnstile && !turnstileToken)}
               className="mt-2 w-full rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 disabled:opacity-50 sm:text-base"
             >
               {status === "submitting" ? t("submitting") : t("submit")}

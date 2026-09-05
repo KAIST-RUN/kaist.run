@@ -88,12 +88,30 @@
 			"zone_name": "kaist.run"
 		}
 	],
+	// /apply 자동 회신 메일 발송용. 수신자를 제한하는 destination_address /
+	// allowed_destination_addresses를 일부러 넣지 않습니다 — 그걸 넣으면 미리
+	// 등록해 둔 주소로만 보낼 수 있어서, 임의의 지원자에게 회신한다는 목적 자체가
+	// 성립하지 않습니다. 발신 도메인(kaist.run)은 배포 전에 한 번 온보딩해야 합니다:
+	//   npx wrangler email sending enable kaist.run
+	// 그리고 안내되는 SPF/DKIM/DMARC DNS 레코드를 등록하세요. 이건 받은 메일을
+	// Gmail로 넘기는 기존 Email Routing(수신)과는 별개 기능이라 서로 영향이 없습니다.
+	"send_email": [
+		{
+			"name": "SEND_EMAIL"
+		}
+	],
 	// 민감하지 않은 설정값. 민감한 값(시크릿)은 `wrangler secret put`으로 별도 등록합니다.
 	"vars": {
 		"DISCORD_REDIRECT_URI": "https://kaist.run/api/auth/discord/callback",
 		"GOOGLE_SHEET_RANGE": "Sheet1",
 		"EMAIL_FORWARD_TO": "kaist.run@gmail.com",
-		"GITHUB_REPO": "KAIST-RUN/kaist.run"
+		"GITHUB_REPO": "KAIST-RUN/kaist.run",
+		// Turnstile 사이트 키. 공개값이라 시크릿이 아니고, 여기 둔 값을 공개 콘텐츠
+		// API(/api/content/apply-form)가 그대로 실어 보내서 정적 /apply 페이지가
+		// 빌드 시점에 받아갑니다 — 덕분에 GitHub Actions에 환경변수를 넘길 필요가
+		// 없습니다. 짝이 되는 TURNSTILE_SECRET_KEY는 `wrangler secret put`으로.
+		// 비워두면 프런트가 위젯을 안 그리고 서버도 검증을 건너뜁니다.
+		"TURNSTILE_SITE_KEY": "0x4AAAAAAEpkz2tucNPmJvgl"
 	},
 	// RUNFORCE 자동탐색 — "0 * * * *"(매시 정각)는 새 후보를 찾아 큐에 넣고,
 	// "* * * * *"(매분)는 그 큐를 몇 개씩 실제로 계산합니다. worker/src/index.ts의

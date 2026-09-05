@@ -10,9 +10,15 @@ function getApiBase(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 }
 
+// 실패 이유를 화면에서 구분해 보여주기 위해 Worker가 내려주는 error 코드를 그대로
+// 전달합니다("turnstile_failed" | "invalid_email" | "google_rejected" | ...).
+// 네트워크 오류처럼 응답 자체를 못 받은 경우는 "network"입니다.
+export type SubmitResult = { ok: true } | { ok: false; error: string };
+
 // FormData를 그대로 넘기면 됩니다 — 체크박스처럼 같은 name이 여러 번 나오는 필드도
-// URLSearchParams가 그대로 반복 키로 보존합니다.
-export async function submitApplyForm(formData: FormData): Promise<boolean> {
+// URLSearchParams가 그대로 반복 키로 보존합니다. Turnstile 위젯이 폼 안에 심어 두는
+// hidden input(cf-turnstile-response)도 이 경로로 자연히 같이 실려 갑니다.
+export async function submitApplyForm(formData: FormData): Promise<SubmitResult> {
   try {
     const params = new URLSearchParams();
     for (const [key, value] of formData.entries()) {
@@ -25,8 +31,13 @@ export async function submitApplyForm(formData: FormData): Promise<boolean> {
       body: params.toString(),
       signal: AbortSignal.timeout(15000),
     });
-    return res.ok;
+    if (res.ok) return { ok: true };
+
+    // 에러 본문이 JSON이 아니거나(프록시가 끼어든 경우 등) 비어 있어도 화면이
+    // 깨지면 안 되므로, 파싱 실패는 일반 오류로 떨어뜨립니다.
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    return { ok: false, error: body?.error ?? "unknown" };
   } catch {
-    return false;
+    return { ok: false, error: "network" };
   }
 }

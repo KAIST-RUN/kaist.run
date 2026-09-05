@@ -2736,6 +2736,17 @@ function renderApplyQuestion(q: ApplyFormQuestion): string {
         </div>`
       : "";
 
+  // 자동 회신 메일을 어디로 보낼지 정하는 지정입니다. name이 전부 같은 라디오라
+  // 브라우저가 "전체 문항 중 최대 1개"를 자동으로 보장합니다(서버도 저장 시 재검증).
+  // 단답형에만 노출합니다 — 장문형/선택형에 이메일 주소가 들어올 일은 없으므로.
+  const applicantEmailField =
+    q.type === "short_answer"
+      ? `<label class="bs-check" style="margin-top:12px;">
+          <input type="radio" name="applicantEmailEntryId" value="${escapeHtml(q.entryId)}"${q.isApplicantEmail ? " checked" : ""} />
+          <span>이 문항이 지원자 이메일 — 자동 회신을 이 주소로 보냅니다</span>
+        </label>`
+      : "";
+
   const choicesHtml = hasChoices
     ? `<div class="bs-rows" style="margin-top:12px;">
         <div class="bs-row-item" style="opacity:.5;font-size:.75rem;">
@@ -2767,7 +2778,73 @@ function renderApplyQuestion(q: ApplyFormQuestion): string {
       </div>
     </div>
     ${validationField}
+    ${applicantEmailField}
     ${choicesHtml}
+  </div>`;
+}
+
+// 자동 회신 메일 + 제출 완료 안내문 설정. 개강총회 날짜처럼 리크루팅마다 바뀌는
+// 문구가 들어가서 코드가 아니라 여기서 편집합니다.
+function renderApplyReplyCard(config: ApplyFormConfig): string {
+  const hasEmailQuestion = config.questions.some((q) => q.isApplicantEmail);
+
+  return `<div class="bs-card">
+    <p class="bs-card-title">자동 회신 메일</p>
+    <p class="bs-note">제출이 구글 폼에 정상 기록되면 noreply@kaist.run에서 지원자에게 보내는 메일입니다.
+      본문은 아래 서두 + 지원자가 낸 답변 전체로 만들어지고, 언어는 지원자가 폼을 작성한 언어를 따릅니다.
+      여기서 저장한 내용은 재배포 없이 바로 다음 제출부터 반영됩니다.</p>
+    ${
+      hasEmailQuestion
+        ? ""
+        : `<p class="bs-note" style="color:var(--logo-accent);font-weight:700;">아직 지원자 이메일 문항이 지정되지 않았습니다 — 아래 문항 목록에서 단답형 이메일 문항을 하나 골라 주세요. 지정 전에는 회신을 켤 수 없습니다.</p>`
+    }
+    <label class="bs-check" style="margin-top:12px;">
+      <input type="radio" name="applicantEmailEntryId" value=""${hasEmailQuestion ? "" : " checked"} />
+      <span>지원자 이메일 문항 지정 안 함 (회신·이메일 검증 모두 하지 않음)</span>
+    </label>
+    <label class="bs-check" style="margin-top:12px;">
+      <input type="checkbox" name="replyEnabled" value="1"${config.replyEnabled ? " checked" : ""} />
+      <span>자동 회신 보내기</span>
+    </label>
+    <div class="bs-row2" style="margin-top:12px;">
+      <div class="bs-field">
+        <label>메일 제목 (한국어)</label>
+        <input type="text" name="replySubjectKo" value="${escapeHtml(config.replySubjectKo)}" placeholder="예: [KAIST RUN] 가입 신청이 접수되었습니다" />
+      </div>
+      <div class="bs-field">
+        <label>메일 제목 (영어)</label>
+        <input type="text" name="replySubjectEn" value="${escapeHtml(config.replySubjectEn)}" placeholder="e.g. [KAIST RUN] We received your application" />
+      </div>
+    </div>
+    <div class="bs-row2" style="margin-top:10px;">
+      <div class="bs-field">
+        <label>서두 (한국어)</label>
+        <textarea class="bs-autosize" name="replyIntroKo" rows="6" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(config.replyIntroKo)}</textarea>
+        <span class="hint">빈 줄로 문단을 나눕니다. 개강총회 날짜/장소를 여기에 적어 주세요.</span>
+      </div>
+      <div class="bs-field">
+        <label>서두 (영어)</label>
+        <textarea class="bs-autosize" name="replyIntroEn" rows="6" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(config.replyIntroEn)}</textarea>
+        <span class="hint">Blank lines separate paragraphs.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="bs-card">
+    <p class="bs-card-title">제출 완료 화면 안내문</p>
+    <p class="bs-note">지원자가 제출을 마친 직후 화면에 뜨는 문구입니다(개강총회 안내).
+      비워두면 사이트의 기본 문구가 표시됩니다. 이건 정적 페이지에 들어가는 값이라,
+      저장하면 재배포가 걸려 몇 분 뒤에 반영됩니다.</p>
+    <div class="bs-row2" style="margin-top:12px;">
+      <div class="bs-field">
+        <label>한국어</label>
+        <textarea class="bs-autosize" name="successNoteKo" rows="3" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(config.successNoteKo)}</textarea>
+      </div>
+      <div class="bs-field">
+        <label>영어</label>
+        <textarea class="bs-autosize" name="successNoteEn" rows="3" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'">${escapeHtml(config.successNoteEn)}</textarea>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -2827,6 +2904,7 @@ export function renderApplyFormPage(config: ApplyFormConfig | null, options: App
     `
     ${header}
     <form class="bs-form" id="apply-form" method="post" action="/apply">
+      ${renderApplyReplyCard(config)}
       ${questionsHtml}
       <div class="bs-actions bs-actions-end">
         <button type="submit" class="bs-submit" id="apply-save" disabled>저장</button>

@@ -111,8 +111,20 @@ content.get("/bylaws/:slug", async (c) => {
 // notices/archive/contact와 달리 :locale이 없는 단일 엔드포인트입니다 — 문항 구조
 // (순서/유형/entry ID/선택지 값)는 로케일과 무관하게 동일하고 라벨(labelKo/labelEn)만
 // 언어별로 다르므로, 굳이 두 번 fetch할 이유가 없어서 한 번에 둘 다 내려줍니다.
+//
+// 회신 메일 설정(replySubject/replyIntro)은 Worker가 발송 시점에만 쓰는 값이라
+// 여기서 걸러냅니다 — 정적 사이트가 쓰는 건 문항, 완료 화면 안내문, 그리고
+// Turnstile 사이트 키뿐입니다. 사이트 키는 공개값이고 /apply 페이지가 빌드 시점에
+// 이 엔드포인트를 이미 fetch하므로, 여기 실어 보내면 GitHub Actions에 환경변수를
+// 따로 넘길 필요가 없습니다.
 content.get("/apply-form", async (c) => {
   const config = await getApplyFormConfig(c.env);
   if (!config) return c.notFound();
-  return c.json(config);
+  return c.json({
+    formId: config.formId,
+    questions: config.questions,
+    successNoteKo: config.successNoteKo,
+    successNoteEn: config.successNoteEn,
+    turnstileSiteKey: c.env.TURNSTILE_SITE_KEY ?? "",
+  });
 });

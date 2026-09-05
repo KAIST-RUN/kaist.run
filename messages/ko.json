@@ -143,9 +143,12 @@
     "submit": "제출하기",
     "submitting": "제출 중...",
     "submitError": "제출에 실패했습니다. 다시 시도하시거나, 아래 구글 폼 링크를 이용해 주세요.",
+    "turnstileError": "자동 방지 확인에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    "invalidEmailError": "카이스트 이메일(@kaist.ac.kr) 주소를 정확히 입력해 주세요.",
     "fallback": "제출이 되지 않는다면 <link>구글 폼</link>을 이용해 주세요.",
     "successTitle": "신청이 완료되었습니다!",
     "successBody": "RUN에 관심을 가져주셔서 감사합니다. 확인 후 안내해 드리겠습니다.",
+    "successNote": "개강총회에 참석하시면 RUN 회원이 됩니다. 자세한 일정은 작성하신 이메일로 안내해 드립니다.",
     "backHome": "홈으로 돌아가기"
   },
   "bylaws": {

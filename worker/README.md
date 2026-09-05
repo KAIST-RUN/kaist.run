@@ -80,6 +80,7 @@ npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
 npx wrangler secret put GOOGLE_PRIVATE_KEY            # PEM 전체를, 봇 env의 값 그대로(\n 포함) 붙여넣기
 npx wrangler secret put ROSTER_ALL_TIME_SHEET_ID
 npx wrangler secret put ADMIN_SYNC_SECRET             # 아무 임의의 긴 문자열
+npx wrangler secret put TURNSTILE_SECRET_KEY          # /apply 스팸 방지 — 아래 11번 참고
 ```
 
 (`DISCORD_REDIRECT_URI`, `GOOGLE_SHEET_RANGE`, `EMAIL_FORWARD_TO`는 민감하지
@@ -183,6 +184,59 @@ ADMIN_SYNC_SECRET=<4번에서 등록한 값> npm run sync-members
   R2에 원본이 실제로 저장됐는지 직접 확인해볼 수도 있습니다
 - `https://kaist.run/email`로 접속(관리자 계정) → 제목/보낸사람/받는주소/수신일시
   목록이 최신순으로 뜨고, 20건 넘게 있으면 페이지네이션이 동작하는지 확인
+
+## 11. 지원 폼(/apply) 자동 회신 + 스팸 방지
+
+이 둘은 코드 배포만으로는 동작하지 않고, 아래 준비가 끝나야 켜집니다.
+준비 전에도 지원 폼 자체는 지금까지처럼 정상 동작합니다 — 회신과 봇 검증만
+꺼진 상태입니다.
+
+### 11-1. 발신 도메인 온보딩 (자동 회신 메일)
+
+지원자에게 `noreply@kaist.run`으로 회신하려면 Email **Sending**을 켜야 합니다.
+지금까지 쓰던 Email **Routing**(7번, 받은 메일을 Gmail로 넘기는 것)과는 별개
+기능이고 서로 영향을 주지 않습니다 — Routing의 `forward()`는 미리 검증 등록된
+주소로만 보낼 수 있어서 임의의 지원자에게는 쓸 수 없기 때문입니다.
+
+```bash
+npx wrangler email sending enable kaist.run
+```
+
+이어서 안내되는 SPF/DKIM/DMARC DNS 레코드를 등록하세요. 온보딩이 끝나기 전에
+회신을 켜면 발송이 `E_SENDER_NOT_VERIFIED`로 실패합니다. 이 실패는 설계상
+지원자에게 오류로 보이지 않고(구글 폼 기록은 이미 성공했으므로) 로그로만
+남으니, `npx wrangler tail`로 확인하세요.
+
+### 11-2. Turnstile 위젯 만들기 (스팸 방지)
+
+Cloudflare 대시보드 → Turnstile → **Add widget**:
+
+- Widget Mode: **Managed**
+- Hostnames: `kaist.run`, (로컬 테스트를 하려면) `localhost`
+
+발급된 **사이트 키**는 공개값이라 `wrangler.jsonc`의 `vars.TURNSTILE_SITE_KEY`에
+붙여넣고, **시크릿 키**는 4번의 `wrangler secret put TURNSTILE_SECRET_KEY`로
+등록합니다. 사이트 키는 공개 콘텐츠 API(`/api/content/apply-form`)를 타고
+정적 사이트로 전달되므로, 값을 바꾸면 **사이트 재배포가 한 번 필요합니다**.
+
+시크릿 키가 비어 있으면 서버가 검증을 통째로 건너뜁니다(로컬 개발과, 키를 아직
+등록하지 않은 배포에서 지원 폼이 막히지 않도록 한 의도적인 동작). 프로덕션에는
+반드시 등록하세요.
+
+### 11-3. backstage에서 켜기
+
+`backstage.kaist.run/apply`에서:
+
+1. 문항 목록에서 단답형 이메일 문항에 **"이 문항이 지원자 이메일"** 라디오를 지정
+2. **자동 회신 메일** 카드에서 제목/서두를 한국어·영어 모두 채우고 체크박스를 켜기
+3. 저장
+
+서두는 Worker가 발송 시점에 읽으므로 **재배포 없이 다음 제출부터 바로** 반영됩니다.
+같은 화면의 "제출 완료 화면 안내문"은 정적 페이지에 들어가는 값이라 저장 시
+자동으로 재배포가 걸리고 몇 분 뒤 반영됩니다.
+
+> 구글 폼을 **재연결**하면 `entry_id`가 바뀌면서 이메일 문항 지정이 풀릴 수
+> 있습니다. 재연결 후에는 라디오가 그대로인지 꼭 확인하세요.
 
 ## 나중에 고려할 것 (지금은 안 만듦)
 

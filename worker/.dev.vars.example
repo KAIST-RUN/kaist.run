@@ -31,6 +31,14 @@ GOOGLE_SHEET_RANGE=Sheet1
 # /api/admin/migrate-members(1회성 이관) 등 관리용 API 호출 시 쓰는 임의의 긴 문자열
 ADMIN_SYNC_SECRET=
 
+# /apply 지원 폼 스팸 방지(Turnstile)의 시크릿 키입니다. 짝이 되는 사이트 키는
+# 공개값이라 wrangler.jsonc의 vars.TURNSTILE_SITE_KEY에 있습니다.
+# 로컬 테스트용 키: 항상 통과 1x0000000000000000000000000000000AA
+#                   항상 차단 2x0000000000000000000000000000000AA
+# (짝이 되는 테스트 사이트 키는 각각 1x00000000000000000000AA / 2x00000000000000000000AB)
+# 이 값을 비워두면 서버가 Turnstile 검증을 통째로 건너뜁니다 — 프로덕션에는 반드시 등록하세요.
+TURNSTILE_SECRET_KEY=
+
 # EMAIL_FORWARD_TO는 시크릿이 아니라 wrangler.jsonc의 vars에 이미 있어서 보통은
 # 안 채워도 됩니다. 로컬에서 실제 발신 없이 다른 Gmail 주소로 테스트하고 싶을
 # 때만 여기서 덮어쓰세요.
