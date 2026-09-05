@@ -844,7 +844,15 @@ export function renderBackstageErrorPage(title: string, message: string, action?
 export const BACKSTAGE_LOGOUT_ACTION = `<form method="post" action="/logout" style="margin-top:16px"><button type="submit" class="bs-submit">로그아웃하고 다른 계정으로 로그인</button></form>`;
 export const BACKSTAGE_RELOGIN_ACTION = `<a class="bs-new" href="/api/auth/discord">다시 로그인</a>`;
 
-export function renderBackstageHome(member: UserRecord): string {
+// lastDeployedAt: GitHub Actions에서 조회한 마지막 성공 배포 시각(ISO 문자열). 조회
+// 실패(토큰 만료/레이트리밋 등)면 null이고, 그 경우 줄 자체를 숨깁니다 — 배포 상태를
+// 모른다고 홈 화면이 에러로 막힐 이유는 없어서.
+export function renderBackstageHome(member: UserRecord, lastDeployedAt: string | null): string {
+  const deployLine = lastDeployedAt
+    ? `<p class="bs-note" style="margin-top:8px">마지막 배포: ${escapeHtml(
+        new Date(lastDeployedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }),
+      )}</p>`
+    : "";
   return shell(
     "Backstage",
     "home",
@@ -853,6 +861,7 @@ export function renderBackstageHome(member: UserRecord): string {
     <h1>안녕하세요, ${escapeHtml(member.name || "관리자")}님</h1>
     <p class="bs-lead">관리자 권한이 확인되었습니다. 왼쪽 위 메뉴에서 관리할 콘텐츠를 선택하세요.</p>
     <p class="bs-note" style="margin-top:16px">저장하면 D1에 바로 반영되고, GitHub Actions가 자동으로 다시 빌드/배포합니다 (보통 1분 내외 걸려요).</p>
+    ${deployLine}
   `,
   );
 }

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { requireAdmin } from "../lib/authGuard";
 import { clearSessionCookie } from "./auth";
-import { triggerRebuild } from "../lib/githubDeploy";
+import { triggerRebuild, getLastDeployTime } from "../lib/githubDeploy";
 import {
   listNotices,
   getNotice,
@@ -206,7 +206,8 @@ function readArchiveJudges(body: Record<string, unknown>) {
 backstage.get("/", async (c) => {
   const gate = await requireAdmin(c);
   if (!gate.ok) return gate.response;
-  return c.html(renderBackstageHome(gate.member));
+  const lastDeployedAt = await getLastDeployTime(c.env);
+  return c.html(renderBackstageHome(gate.member, lastDeployedAt));
 });
 
 // nav의 로그아웃 버튼(backstageRender.ts의 shell)과 403 페이지의 "로그아웃" 액션이
