@@ -242,7 +242,10 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
   }
 
   const viewUrl = `https://docs.google.com/forms/d/e/${config.formId}/viewform`;
-  const successNote = (locale === "ko" ? config.successNoteKo : config.successNoteEn) || t("successNote");
+  // 제출 완료 화면 안내문은 전적으로 backstage에서 관리합니다(개강총회 날짜처럼
+  // 리크루팅마다 바뀌는 내용이라). 코드에 기본 문구를 두지 않으므로, 관리자가
+  // 아직 채우지 않았으면 이 문단을 아예 그리지 않습니다.
+  const successNote = locale === "ko" ? config.successNoteKo : config.successNoteEn;
 
   // 예전엔 <form target="hidden_iframe">로 구글 폼에 브라우저가 직접 크로스 오리진
   // 제출을 했는데, CORS 때문에 응답을 전혀 못 읽어서 400이 나도 화면엔 "제출
@@ -276,10 +279,9 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
         <div className="animate-fade-in-up flex flex-1 flex-col items-center justify-center gap-4 py-24 text-center">
           <span className="text-4xl">🎉</span>
           <h1 className="text-2xl font-bold sm:text-3xl">{t("successTitle")}</h1>
-          <p className="max-w-sm text-sm leading-relaxed opacity-70 sm:text-base">{t("successBody")}</p>
-          <p className="mt-2 max-w-sm rounded-2xl border border-black/10 px-5 py-4 text-sm leading-relaxed whitespace-pre-line dark:border-white/15 sm:text-base">
-            {successNote}
-          </p>
+          {successNote && (
+            <p className="max-w-sm text-sm leading-relaxed whitespace-pre-line opacity-70 sm:text-base">{successNote}</p>
+          )}
           <Link
             href="/"
             className="mt-4 rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-80 sm:text-base"

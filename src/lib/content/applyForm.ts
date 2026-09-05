@@ -25,8 +25,8 @@ export type ApplyFormQuestion = {
 export type ApplyFormConfig = {
   formId: string;
   questions: ApplyFormQuestion[];
-  // 제출 완료 화면에 뜨는 안내문(개강총회 안내). backstage에서 편집하고, 빈
-  // 문자열이면 messages/{ko,en}.json의 apply.successNote 기본 문구를 씁니다.
+  // 제출 완료 화면에 뜨는 안내문(개강총회 안내). 전적으로 backstage에서 관리하며,
+  // 코드에 기본 문구가 없습니다 — 비어 있으면 그 문단을 아예 그리지 않습니다.
   successNoteKo: string;
   successNoteEn: string;
   // Turnstile 사이트 키(공개값). Worker의 vars에서 이 페이로드로 실려 옵니다 —

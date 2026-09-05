@@ -1,6 +1,13 @@
 import type { Env } from "../types";
 import type { ApplyFormConfig, ApplyFormQuestion } from "./applyForm";
 import { escapeHtml, formatKstDateTime } from "./emailRender";
+import {
+  LOGO_CONTENT_ID,
+  LOGO_DISPLAY_WIDTH,
+  LOGO_FILENAME,
+  LOGO_MIME_TYPE,
+  logoPngBytes,
+} from "./applyReplyLogo";
 
 // /apply 제출이 구글 폼에 정상 기록된 뒤 지원자에게 보내는 자동 회신 메일입니다.
 //
@@ -74,7 +81,14 @@ function introToHtml(intro: string): string {
     .join("");
 }
 
-export type BuiltEmail = { subject: string; html: string; text: string };
+export type BuiltEmail = {
+  subject: string;
+  html: string;
+  text: string;
+  // 머리말 로고. cid로 본문에서 참조하는 인라인 첨부라, 본문과 항상 같이 다녀야
+  // 합니다(따로 두면 참조가 깨져 빈 이미지가 뜹니다).
+  attachments: EmailAttachment[];
+};
 
 export function buildApplyReplyEmail(
   config: ApplyFormConfig,
@@ -103,7 +117,7 @@ export function buildApplyReplyEmail(
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:12px;border:1px solid #e6e6e8;">
     <tr>
       <td style="padding:28px 28px 8px;">
-        <p style="margin:0 0 20px;font-size:20px;font-weight:700;color:#2fae19;">KAIST RUN</p>
+        <img src="cid:${LOGO_CONTENT_ID}" alt="KAIST RUN" width="${LOGO_DISPLAY_WIDTH}" style="display:block;width:${LOGO_DISPLAY_WIDTH}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;margin:0 0 20px;" />
         <div style="font-size:14px;line-height:1.7;color:#222222;">${introToHtml(intro)}</div>
       </td>
     </tr>
@@ -138,7 +152,20 @@ export function buildApplyReplyEmail(
     t.footer,
   ].join("\n");
 
-  return { subject, html, text };
+  return {
+    subject,
+    html,
+    text,
+    attachments: [
+      {
+        disposition: "inline",
+        contentId: LOGO_CONTENT_ID,
+        filename: LOGO_FILENAME,
+        type: LOGO_MIME_TYPE,
+        content: logoPngBytes(),
+      },
+    ],
+  };
 }
 
 // 발송 자체는 여기서 끝냅니다 — 실패해도 던지지 않고 로그만 남깁니다. 이 함수는
@@ -153,6 +180,7 @@ export async function sendApplyReply(env: Env, to: string, email: BuiltEmail): P
       subject: email.subject,
       html: email.html,
       text: email.text,
+      attachments: email.attachments,
     });
   } catch (err) {
     // 발신 도메인 온보딩(wrangler email sending enable kaist.run)이 안 끝났으면

@@ -147,8 +147,6 @@
     "invalidEmailError": "Please enter a valid KAIST email address (@kaist.ac.kr).",
     "fallback": "If the submission doesn't go through, please use the <link>Google Form</link> instead.",
     "successTitle": "Application submitted!",
-    "successBody": "Thanks for your interest in RUN. We'll get back to you after reviewing your application.",
-    "successNote": "Attend the first club meeting to become a RUN member. We'll email you the details at the address you provided.",
     "backHome": "Back to home"
   },
   "bylaws": {
