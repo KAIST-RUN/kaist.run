@@ -958,6 +958,10 @@ export type RunforceLeaderboardEntry = {
   uid: string;
   name: string | null;
   avatarUrl: string | null;
+  studentId: string | null;
+  email: string | null;
+  phone: string | null;
+  discordId: string;
   totalScore: number;
   contestsCounted: number;
 };
@@ -967,6 +971,10 @@ export type RunforceLeaderboardEntry = {
 export const RUNFORCE_LEADERBOARD_EXPORT_COLUMNS: CsvColumn<RunforceLeaderboardEntry>[] = [
   { key: "uid", label: "UID", value: (e) => e.uid },
   { key: "name", label: "이름", value: (e) => e.name },
+  { key: "studentId", label: "학번", value: (e) => e.studentId },
+  { key: "email", label: "이메일", value: (e) => e.email },
+  { key: "phone", label: "전화번호", value: (e) => e.phone },
+  { key: "discordId", label: "Discord ID", value: (e) => e.discordId },
   { key: "totalScore", label: "총점", value: (e) => formatRunforceDisplay(e.totalScore) },
   { key: "contestsCounted", label: "참가 대회 수", value: (e) => e.contestsCounted },
 ];
@@ -975,11 +983,19 @@ export const RUNFORCE_LEADERBOARD_EXPORT_COLUMNS: CsvColumn<RunforceLeaderboardE
 // 총점 0으로 포함합니다(시상 대상 명단 전체를 봐야 하므로).
 export async function getRunforceLeaderboard(env: Env): Promise<RunforceLeaderboardEntry[]> {
   const { results } = await env.CONTENT_DB.prepare(
-    `SELECT u.uid, u.name, u.avatar_url
+    `SELECT u.uid, u.name, u.avatar_url, u.student_id, u.email, u.phone, u.discord_id
      FROM users u
      JOIN semester_membership sm ON sm.uid = u.uid AND sm.status = 'approved'
      JOIN semesters s ON s.year = sm.year AND s.season = sm.season AND s.is_current = 1`,
-  ).all<{ uid: string; name: string | null; avatar_url: string | null }>();
+  ).all<{
+    uid: string;
+    name: string | null;
+    avatar_url: string | null;
+    student_id: string | null;
+    email: string | null;
+    phone: string | null;
+    discord_id: string;
+  }>();
 
   const breakdownByUid = await computeEffectiveBreakdown(env);
 
@@ -989,6 +1005,10 @@ export async function getRunforceLeaderboard(env: Env): Promise<RunforceLeaderbo
       uid: u.uid,
       name: u.name,
       avatarUrl: u.avatar_url,
+      studentId: u.student_id,
+      email: u.email,
+      phone: u.phone,
+      discordId: u.discord_id,
       totalScore: rows.reduce((sum, r) => sum + r.score, 0),
       contestsCounted: rows.filter((r) => r.participated).length,
     };
