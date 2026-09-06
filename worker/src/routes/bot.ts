@@ -14,6 +14,7 @@ import {
 } from "../lib/members";
 import { requestSemesterMembership, getUserSemesters, listAllSemesterDiscordIds, SemesterError } from "../lib/semesters";
 import { completeAtCoderContest, listPendingAtCoderContests, RunforceError, type AtCoderPendingEntry } from "../lib/runforce";
+import { appendBotLogs, clampBotLogLines } from "../lib/botLogs";
 
 // 외부 디스코드 봇이 "신규 회원가입"/"학기별 활동회원 등록"을 처리할 때 부르는 API입니다.
 // 봇은 지금까지 구글 스프레드시트를 직접 편집해왔는데, 이제 원천이 D1로 옮겨오면서
@@ -163,6 +164,26 @@ bot.get("/members", async (c) => {
 // 모든(열린) 학기 각각의 소속(승인된) 디스코드 ID 목록.
 bot.get("/semesters", async (c) => {
   return c.json(await listAllSemesterDiscordIds(c.env));
+});
+
+// ---------- 봇 런타임 로그 수신 ----------
+// 봇이 평시 30초 주기로 배치 전송하고, 크래시/종료 직전엔 즉시 한 번 더 시도합니다
+// (초당 요청 수는 매우 낮음). backstage에서만 보여주고(routes/backstage.ts), 여기선
+// 그대로 저장만 합니다 — 줄마다 이미 타임스탬프가 붙어 있어 추가 파싱이 불필요합니다.
+bot.post("/logs", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== "object" || !Array.isArray((body as Record<string, unknown>).lines)) {
+    return c.json({ error: "lines 배열이 필요합니다." }, 400);
+  }
+  const lines = (body as Record<string, unknown>).lines as unknown[];
+  if (!lines.every((l) => typeof l === "string")) {
+    return c.json({ error: "lines는 문자열 배열이어야 합니다." }, 400);
+  }
+
+  await appendBotLogs(c.env, clampBotLogLines(lines as string[]));
+  // 봇 쪽이 항상 response.json()을 호출하므로 빈 바디/204는 에러가 납니다 — 파싱 가능한
+  // JSON을 반드시 돌려줘야 합니다.
+  return c.json({});
 });
 
 // ---------- RUNFORCE: AtCoder 순위표 중계 ----------

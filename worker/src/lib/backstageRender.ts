@@ -17,6 +17,7 @@ import type {
   BylawsRevisionHistory,
 } from "./content";
 import type { UploadedFile } from "./uploads";
+import { BOT_LOG_RETENTION_DAYS, type BotLogRow } from "./botLogs";
 import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
 import {
   formatRunforceDisplay,
@@ -208,6 +209,7 @@ const FORM_STYLE = `
   .bs-list .meta a:hover { opacity: 1; }
   .bs-list .pin { color: var(--logo-accent); font-weight: 700; margin-right: 6px; }
   .empty { opacity: 0.5; padding: 20px 6px; font-size: 0.9rem; }
+  .bs-bot-logs { overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem; line-height: 1.6; background: rgba(128,128,128,.06); border: 1px solid rgba(128,128,128,.15); border-radius: 10px; padding: 16px; }
 
   .bs-new { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none; color: var(--bg); background: var(--logo-primary); transition: opacity .15s; }
   .bs-new:hover { opacity: 0.85; }
@@ -811,6 +813,7 @@ export function shell(title: string, active: string, bodyHtml: string): string {
       <a href="/members"${active === "members" ? ' class="active"' : ""}>회원 명단${PENDING_APPROVALS_BADGE_MARKER}</a>
       ${navLink("/runforce", "RUNFORCE", active === "runforce")}
       ${navLink("/email", "이메일", active === "email")}
+      ${navLink("/bot-logs", "봇 로그", active === "bot-logs")}
       ${drawerLogout}
     </div>
   `;
@@ -3465,5 +3468,34 @@ export function renderBackstageEmailPage(id: string, email: Email, state: EmailN
     email.subject || "(제목 없음)",
     "email",
     `<p class="bs-eyebrow">Backstage</p>${renderEmailPageBody(id, email, state)}`,
+  );
+}
+
+// ---------- 봇 로그 (backstage 서브탭) ----------
+// 디스코드 봇이 POST /api/bot/logs로 보낸 줄을 최신순으로 보여줍니다. 줄 자체는 봇이
+// 이미 타임스탬프를 붙여 완성한 텍스트라 그대로 보여주지만, 외부 API 에러 메시지 등
+// 우리가 전적으로 통제하지 못하는 텍스트가 섞일 수 있어 escapeHtml은 반드시 거칩니다.
+export function renderBackstageBotLogs(rows: BotLogRow[], hasMore: boolean): string {
+  const body =
+    rows.length === 0
+      ? `<p class="empty">수신된 로그가 없습니다.</p>`
+      : `<pre class="bs-bot-logs">${rows.map((r) => escapeHtml(r.line)).join("\n")}</pre>`;
+
+  // 최신순으로 보여주고, "다음 페이지"는 이 페이지에서 가장 오래된(=마지막) 행의 id보다
+  // 이전 것들 — listBotLogs가 "id < beforeId"로 조회하므로 여기 넘기는 값은 항상
+  // 마지막 행의 id입니다.
+  const oldestId = rows[rows.length - 1]?.id;
+  const pager = hasMore && oldestId !== undefined ? `<div class="pager"><a href="/bot-logs?before=${oldestId}">이전 로그 더 보기 →</a></div>` : "";
+
+  return shell(
+    "봇 로그",
+    "bot-logs",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>봇 로그</h1>
+    <p class="bs-lead">디스코드 봇이 보낸 최근 로그입니다 (최신순, 최대 ${BOT_LOG_RETENTION_DAYS}일 보관 후 자동 삭제).</p>
+    ${body}
+    ${pager}
+  `,
   );
 }

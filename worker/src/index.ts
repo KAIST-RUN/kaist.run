@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import PostalMime from "postal-mime";
 import type { Env } from "./types";
 import { purgeExpiredSessions } from "./lib/session";
+import { purgeOldBotLogs } from "./lib/botLogs";
 import { auth } from "./routes/auth";
 import { me } from "./routes/me";
 import { admin } from "./routes/admin";
@@ -115,6 +116,11 @@ export default {
     ctx.waitUntil(
       purgeExpiredSessions(env).catch((err) => {
         console.error("만료 세션 정리 실패", err);
+      }),
+    );
+    ctx.waitUntil(
+      purgeOldBotLogs(env).catch((err) => {
+        console.error("봇 로그 보관기간 정리 실패", err);
       }),
     );
   },

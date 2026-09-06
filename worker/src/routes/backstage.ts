@@ -3,6 +3,7 @@ import type { Env } from "../types";
 import { requireAdmin } from "../lib/authGuard";
 import { clearSessionCookie } from "./auth";
 import { triggerRebuild, getLastDeployTime } from "../lib/githubDeploy";
+import { listBotLogs } from "../lib/botLogs";
 import {
   listNotices,
   getNotice,
@@ -118,6 +119,7 @@ import {
   renderRunforceSettings,
   renderRunforceContestDetail,
   renderRunforceLeaderboard,
+  renderBackstageBotLogs,
   type NoticeFormData,
 } from "../lib/backstageRender";
 import { renderErrorPage } from "../lib/emailRender";
@@ -1586,4 +1588,25 @@ backstage.post("/uploads/:key/delete", async (c) => {
   await deleteUpload(c.env, c.req.param("key"));
 
   return c.redirect("/uploads");
+});
+
+// ---------- 봇 로그 ----------
+// 디스코드 봇(별도 저장소)이 POST /api/bot/logs로 보낸 런타임 로그를 훑어보는 화면.
+// requireAdmin이라 backstage 로그인 세션 기준 admin만 볼 수 있고, 봇 쪽 인증(x-bot-secret)과는
+// 완전히 별개입니다.
+
+const BOT_LOGS_PAGE_SIZE = 200;
+
+backstage.get("/bot-logs", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const beforeParam = c.req.query("before");
+  const beforeId = beforeParam ? Number.parseInt(beforeParam, 10) : undefined;
+  const { rows, hasMore } = await listBotLogs(c.env, {
+    limit: BOT_LOGS_PAGE_SIZE,
+    beforeId: Number.isFinite(beforeId) ? beforeId : undefined,
+  });
+
+  return c.html(renderBackstageBotLogs(rows, hasMore));
 });
