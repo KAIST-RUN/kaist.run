@@ -15,18 +15,30 @@ const MAX_LINE_LENGTH = 4000;
 // 이 기간에 별다른 근거는 없고, 나중에 저장 용량이 부담되면 이 상수만 줄이면 됩니다.
 export const BOT_LOG_RETENTION_DAYS = 7;
 
+// 시크릿이 유출되면 요청 빈도 제한이 없어(x-bot-secret만 맞으면 통과) 이 엔드포인트를
+// 반복 호출해 7일 안에도 테이블을 계속 채울 수 있습니다. 요청 빈도 대신 "테이블 전체
+// 행 수"에 절대 상한을 둬서, 호출 빈도와 무관하게 저장 용량 자체가 무한정 늘 수 없게
+// 막습니다 — 줄당 최대 4000자(MAX_LINE_LENGTH)를 곱해도 최악 수십 MB 수준이라
+// D1 한도에 전혀 위협이 안 되는 선입니다. 정상 사용(30초 배치)에선 7일치가 이 훨씬
+// 아래에서 자연히 순환하므로 평소엔 절대 걸리지 않습니다.
+const MAX_BOT_LOG_ROWS = 10000;
+
 export function clampBotLogLines(lines: string[]): string[] {
   return lines.slice(0, MAX_LINES_PER_REQUEST).map((line) => (line.length > MAX_LINE_LENGTH ? `${line.slice(0, MAX_LINE_LENGTH)}…` : line));
 }
 
-// 한 번의 D1 왕복으로 전부 넣습니다 — INSERT 여러 건을 batch()로 보내면 요청 수만큼
-// 왕복이 늘지만, 하나의 다중 VALUES INSERT는 줄이 몇백 개여도 왕복 1회로 끝납니다.
+// 한 번의 D1 왕복으로 전부 넣고, 같은 batch(원자적 트랜잭션)로 상한 초과분(가장 오래된
+// 것부터)을 지웁니다. 상한 밑이면(대부분의 경우) 서브쿼리가 NULL을 돌려주고
+// "id < NULL"은 항상 거짓이라 DELETE가 아무것도 안 지우고 조용히 끝납니다.
 export async function appendBotLogs(env: Env, lines: string[]): Promise<void> {
   if (lines.length === 0) return;
   const placeholders = lines.map((_, i) => `(?${i + 1})`).join(", ");
-  await env.CONTENT_DB.prepare(`INSERT INTO bot_logs (line) VALUES ${placeholders}`)
-    .bind(...lines)
-    .run();
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare(`INSERT INTO bot_logs (line) VALUES ${placeholders}`).bind(...lines),
+    env.CONTENT_DB.prepare(
+      `DELETE FROM bot_logs WHERE id < (SELECT id FROM bot_logs ORDER BY id DESC LIMIT 1 OFFSET ?1)`,
+    ).bind(MAX_BOT_LOG_ROWS - 1),
+  ]);
 }
 
 export type BotLogRow = { id: number; line: string; receivedAt: string };
