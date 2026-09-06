@@ -209,7 +209,10 @@ const FORM_STYLE = `
   .bs-list .meta a:hover { opacity: 1; }
   .bs-list .pin { color: var(--logo-accent); font-weight: 700; margin-right: 6px; }
   .empty { opacity: 0.5; padding: 20px 6px; font-size: 0.9rem; }
-  .bs-bot-logs { overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem; line-height: 1.6; background: rgba(128,128,128,.06); border: 1px solid rgba(128,128,128,.15); border-radius: 10px; padding: 16px; }
+  /* max-height + overflow-y: 로그 한 줄이 아주 길면 wrap되면서 페이지 자체가 끝없이
+     늘어질 수 있어서(스크롤 성능/체감 렉 문제), 터미널처럼 고정 높이 박스 안에서만
+     스크롤되게 가둡니다. */
+  .bs-bot-logs { max-height: 70vh; overflow-y: auto; overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem; line-height: 1.6; background: rgba(128,128,128,.06); border: 1px solid rgba(128,128,128,.15); border-radius: 10px; padding: 16px; }
 
   .bs-new { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none; color: var(--bg); background: var(--logo-primary); transition: opacity .15s; }
   .bs-new:hover { opacity: 0.85; }

@@ -1595,7 +1595,10 @@ backstage.post("/uploads/:key/delete", async (c) => {
 // requireAdmin이라 backstage 로그인 세션 기준 admin만 볼 수 있고, 봇 쪽 인증(x-bot-secret)과는
 // 완전히 별개입니다.
 
-const BOT_LOGS_PAGE_SIZE = 200;
+// 한 페이지당 줄 수 — 줄당 최대 4000자(botLogs.ts::clampBotLogLines)까지 갈 수 있어서,
+// 너무 크게 잡으면 페이지 하나의 응답 크기/렌더링 부담이 커집니다. 더 보고 싶으면
+// "이전 로그 더 보기"로 이어서 불러옵니다.
+const BOT_LOGS_PAGE_SIZE = 100;
 
 backstage.get("/bot-logs", async (c) => {
   const gate = await requireAdmin(c);
