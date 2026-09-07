@@ -17,7 +17,7 @@ import type {
   BylawsRevisionHistory,
 } from "./content";
 import type { UploadedFile } from "./uploads";
-import { BOT_LOG_RETENTION_DAYS, type BotLogRow } from "./botLogs";
+import { BOT_LOG_RETENTION_DAYS, formatBotLogLineForDisplay, type BotLogRow } from "./botLogs";
 import type { ApplyFormConfig, ApplyFormQuestion, ConnectResult } from "./applyForm";
 import {
   formatRunforceDisplay,
@@ -3482,7 +3482,7 @@ export function renderBackstageBotLogs(rows: BotLogRow[], hasMore: boolean): str
   const body =
     rows.length === 0
       ? `<p class="empty">수신된 로그가 없습니다.</p>`
-      : `<pre class="bs-bot-logs">${rows.map((r) => escapeHtml(r.line)).join("\n")}</pre>`;
+      : `<pre class="bs-bot-logs">${rows.map((r) => escapeHtml(formatBotLogLineForDisplay(r.line))).join("\n")}</pre>`;
 
   // 최신순으로 보여주고, "다음 페이지"는 이 페이지에서 가장 오래된(=마지막) 행의 id보다
   // 이전 것들 — listBotLogs가 "id < beforeId"로 조회하므로 여기 넘기는 값은 항상

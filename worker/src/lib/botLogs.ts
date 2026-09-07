@@ -43,6 +43,42 @@ export async function appendBotLogs(env: Env, lines: string[]): Promise<void> {
 
 export type BotLogRow = { id: number; line: string; receivedAt: string };
 
+// 봇이 찍는 타임스탬프(UTC ISO 8601, 예: "2026-09-07T04:43:11.606Z")를 표시할 때만
+// KST로 바꿔줍니다 — 저장된 line 자체는 절대 안 건드립니다(원본 그대로 보관해야
+// 나중에 봇 쪽 로그와 대조할 때 혼선이 없음). 매치 안 되는 줄(타임스탬프가 다른
+// 형식이거나 아예 없는 줄)은 원문 그대로 반환합니다.
+//
+// 보안 참고: 이 함수는 렌더링 파이프라인에서 escapeHtml보다 먼저 호출되므로(원본
+// 텍스트를 대상으로 정규식 치환) 여기서 만드는 대체 문자열(숫자·"-"·":"·공백·"KST"만)
+// 자체엔 HTML 메타문자가 없어 안전하지만, 그 뒤에도 항상 escapeHtml을 거쳐야 합니다
+// (매치되지 않은 나머지 원문에 외부 API 에러 메시지 등 우리가 통제 못하는 텍스트가
+// 섞여 있을 수 있음). 정규식 자체도 중첩/모호한 수량자가 없어 ReDoS 우려가 없고,
+// 입력은 이미 줄당 최대 4000자로 잘려 있어(MAX_LINE_LENGTH) 매치 비용도 항상 상한이 있습니다.
+const ISO_UTC_TIMESTAMP = /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{1,6})?Z/g;
+
+export function formatBotLogLineForDisplay(line: string): string {
+  return line.replace(ISO_UTC_TIMESTAMP, (match, base: string, frac: string | undefined) => {
+    const d = new Date(`${base}${frac ?? ""}Z`);
+    if (Number.isNaN(d.getTime())) return match; // 파싱 실패 시 원문 그대로(안전한 폴백)
+
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(d);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+    // 밀리초는 타임존 변환과 무관(오프셋이 초 단위 이상이라 소수부는 그대로 유지)이라
+    // 원본 조각(frac)을 그대로 이어붙입니다. "KST" 표기는 UTC였던 원본과 헷갈리지
+    // 않게 하기 위함입니다.
+    return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}${frac ?? ""} KST`;
+  });
+}
+
 // backstage 로그 뷰어용 — 최신순, 단순 ?before=id 커서 페이지네이션(총 개수를 셀
 // 필요가 없어 COUNT 쿼리 없이 "다음 페이지 있음" 여부만 limit+1로 확인합니다).
 export async function listBotLogs(env: Env, opts: { limit: number; beforeId?: number }): Promise<{ rows: BotLogRow[]; hasMore: boolean }> {
