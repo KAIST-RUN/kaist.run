@@ -225,6 +225,8 @@
         "codeforces": "Codeforces",
         "atcoder": "AtCoder",
         "doj": "DOJ",
+        "qoj": "QOJ",
+        "jungol": "Jungol",
         "empty": "No handles registered.",
         "edit": "Edit coding handles",
         "placeholder": "Enter handle",

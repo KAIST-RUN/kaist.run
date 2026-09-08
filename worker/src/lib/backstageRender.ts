@@ -1442,6 +1442,8 @@ export type UserFormData = {
   codeforces: string;
   atcoder: string;
   doj: string;
+  qoj: string;
+  jungol: string;
   isAdmin: boolean;
   isHonoraryMember: boolean;
 };
@@ -1459,6 +1461,8 @@ export function userRowToFormData(user: UserRecord): UserFormData {
     codeforces: user.codeforces ?? "",
     atcoder: user.atcoder ?? "",
     doj: user.doj ?? "",
+    qoj: user.qoj ?? "",
+    jungol: user.jungol ?? "",
     isAdmin: user.role === "admin",
     isHonoraryMember: user.isHonoraryMember,
   };
@@ -1526,6 +1530,16 @@ export function renderUserForm(mode: "new" | "edit", data: UserFormData, semeste
           <div class="bs-field">
             <label>DOJ</label>
             <input type="text" name="doj" value="${escapeHtml(data.doj)}" />
+          </div>
+        </div>
+        <div class="bs-row2" style="margin-top:18px">
+          <div class="bs-field">
+            <label>QOJ</label>
+            <input type="text" name="qoj" value="${escapeHtml(data.qoj)}" />
+          </div>
+          <div class="bs-field">
+            <label>정올</label>
+            <input type="text" name="jungol" value="${escapeHtml(data.jungol)}" />
           </div>
         </div>
       </div>

@@ -13,10 +13,10 @@ function seasonRank(season: "spring" | "fall"): number {
   return season === "fall" ? 1 : 0;
 }
 
-type HandleKey = "solvedAc" | "codeforces" | "atcoder" | "doj";
+type HandleKey = "solvedAc" | "codeforces" | "atcoder" | "doj" | "qoj" | "jungol";
 
-// solved.ac/Codeforces/AtCoder/DOJ 핸들 — 본인이 직접 볼 수도, 연필 아이콘으로 바로
-// 고칠 수도 있습니다(이름/이메일/학번과 달리 신원 정보가 아니라서 본인 수정 허용 —
+// solved.ac/Codeforces/AtCoder/DOJ/QOJ/정올 핸들 — 본인이 직접 볼 수도, 연필 아이콘으로
+// 바로 고칠 수도 있습니다(이름/이메일/학번과 달리 신원 정보가 아니라서 본인 수정 허용 —
 // worker/src/routes/me.ts의 POST /handles 참고). 저장 성공 시 useCurrentUser().refetch()로
 // 카드 전체(마이페이지 공유 상태)를 최신화합니다.
 function HandlesRow({ user }: { user: CurrentUser }) {
@@ -28,6 +28,8 @@ function HandlesRow({ user }: { user: CurrentUser }) {
     codeforces: user.codeforces ?? "",
     atcoder: user.atcoder ?? "",
     doj: user.doj ?? "",
+    qoj: user.qoj ?? "",
+    jungol: user.jungol ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
@@ -37,10 +39,19 @@ function HandlesRow({ user }: { user: CurrentUser }) {
     { key: "codeforces", label: t("codeforces") },
     { key: "atcoder", label: t("atcoder") },
     { key: "doj", label: t("doj") },
+    { key: "qoj", label: t("qoj") },
+    { key: "jungol", label: t("jungol") },
   ];
 
   function startEdit() {
-    setValues({ solvedAc: user.solvedAc ?? "", codeforces: user.codeforces ?? "", atcoder: user.atcoder ?? "", doj: user.doj ?? "" });
+    setValues({
+      solvedAc: user.solvedAc ?? "",
+      codeforces: user.codeforces ?? "",
+      atcoder: user.atcoder ?? "",
+      doj: user.doj ?? "",
+      qoj: user.qoj ?? "",
+      jungol: user.jungol ?? "",
+    });
     setError(false);
     setEditing(true);
   }
