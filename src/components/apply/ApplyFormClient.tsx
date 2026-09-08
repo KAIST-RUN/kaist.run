@@ -224,6 +224,22 @@ function errorMessageKey(error: string): "turnstileError" | "invalidEmailError" 
   return "submitError";
 }
 
+// 구글 폼의 프리필 링크 형식(entry.{id}=값)으로 지금까지 입력한 값을 그대로
+// 실어 보냅니다 — 우리 폼의 input name이 이미 entry.{id}라(fieldName 참고),
+// FormData 키를 그대로 쿼리 파라미터로 옮기면 됩니다. 체크박스처럼 같은 name이
+// 여러 번 나오면 URLSearchParams.append가 알아서 entry.id=a&entry.id=b로
+// 반복해 줘서 구글 폼도 다중 선택으로 인식합니다.
+function buildPrefillUrl(formId: string, form: HTMLFormElement): string {
+  const formData = new FormData(form);
+  const params = new URLSearchParams();
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("entry.") || typeof value !== "string" || value === "") continue;
+    params.append(key, value);
+  }
+  const query = params.toString();
+  return `https://docs.google.com/forms/d/e/${formId}/viewform${query ? `?${query}` : ""}`;
+}
+
 export default function ApplyFormClient({ config, locale }: { config: ApplyFormConfig; locale: Locale }) {
   const t = useTranslations("apply");
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted" | "error">("idle");
@@ -237,11 +253,15 @@ export default function ApplyFormClient({ config, locale }: { config: ApplyFormC
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileHandle | null>(null);
 
+  // 실패 시 기댈 안전망인 구글 폼 링크를 지금까지 입력한 값으로 계속 채워둡니다 —
+  // 그래야 정말 실패했을 때 그 값 그대로 눌러서 넘어갈 수 있습니다(buildPrefillUrl 참고).
+  const [viewUrl, setViewUrl] = useState(`https://docs.google.com/forms/d/e/${config.formId}/viewform`);
+
   function updateFormValidity() {
     setIsFormValid(formRef.current?.checkValidity() ?? false);
+    if (formRef.current) setViewUrl(buildPrefillUrl(config.formId, formRef.current));
   }
 
-  const viewUrl = `https://docs.google.com/forms/d/e/${config.formId}/viewform`;
   // 제출 완료 화면 안내문은 전적으로 backstage에서 관리합니다(개강총회 날짜처럼
   // 리크루팅마다 바뀌는 내용이라). 코드에 기본 문구를 두지 않으므로, 관리자가
   // 아직 채우지 않았으면 이 문단을 아예 그리지 않습니다.
