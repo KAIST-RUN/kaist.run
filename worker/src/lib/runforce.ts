@@ -156,6 +156,10 @@ export type RunforceContestRow = {
   // AtCoder거나 판별 불가/합쳐진 라운드면 division은 항상 null.
   division: RunforceDivision | null;
   pairedContestId: string | null; // 짝지어진 다른 runforce_contests.id, 없으면 null
+  // NULL이면 현재 시즌 소속(아직 아카이빙 안 됨). 값이 있으면 그 시즌으로 마감되어
+  // listTargetContests(=현재 시즌 목록)에는 안 나오지만, id로 직접 조회하는 상세/CSV는
+  // 그대로 됩니다 — archiveCurrentRunforceSeason 참고.
+  seasonId: string | null;
 };
 
 // 개최 순서 가중치가 붙은 대회. weightIndex는 "지금 등록된 대회들을 개최 시각 순으로 줄
@@ -180,6 +184,7 @@ type RawContestRow = {
   participant_count_snapshot: number;
   division: RunforceDivision | null;
   paired_contest_id: string | null;
+  season_id: string | null;
 };
 
 function toContestRow(row: RawContestRow): RunforceContestRow {
@@ -195,16 +200,28 @@ function toContestRow(row: RawContestRow): RunforceContestRow {
     participantCount: row.participant_count_snapshot,
     division: row.division,
     pairedContestId: row.paired_contest_id,
+    seasonId: row.season_id,
   };
 }
 
 const CONTEST_ROW_SELECT =
-  "SELECT id, platform, contest_id, contest_name, start_time_ms, source, added_by_name, added_at, participant_count_snapshot, division, paired_contest_id FROM runforce_contests";
+  "SELECT id, platform, contest_id, contest_name, start_time_ms, source, added_by_name, added_at, participant_count_snapshot, division, paired_contest_id, season_id FROM runforce_contests";
+
+// 특정 시즌(seasonId=null이면 "현재 시즌") 소속 대회만 개최 순서 가중치를 붙여 돌려줍니다.
+// 가중치는 그 시즌 안에서의 순서이므로, 시즌마다 따로 1번부터 매겨집니다.
+export async function listContestsForSeason(env: Env, seasonId: string | null): Promise<RunforceContestSummary[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `${CONTEST_ROW_SELECT} WHERE season_id ${seasonId === null ? "IS NULL" : "= ?1"} ORDER BY start_time_ms DESC`,
+  )
+    .bind(...(seasonId === null ? [] : [seasonId]))
+    .all<RawContestRow>();
+  return assignWeights(results.map(toContestRow));
+}
 
 // 목록은 항상 개최 순서 가중치가 붙은 상태로 나갑니다(화면/집계 양쪽 다 이걸 씁니다).
+// "현재 시즌"(아직 아카이빙 안 된 대회) 전용 — 과거 시즌은 listContestsForSeason을 씁니다.
 export async function listTargetContests(env: Env): Promise<RunforceContestSummary[]> {
-  const { results } = await env.CONTENT_DB.prepare(`${CONTEST_ROW_SELECT} ORDER BY start_time_ms DESC`).all<RawContestRow>();
-  return assignWeights(results.map(toContestRow));
+  return listContestsForSeason(env, null);
 }
 
 async function getTargetContestByPlatformId(env: Env, platform: RunforcePlatform, contestId: string): Promise<RunforceContestRow | null> {
@@ -744,9 +761,15 @@ export type RunforceContestDetail = RunforceContestSummary & { rows: RunforceRan
 // null로만 나오고(행 자체는 남아있음 — 다른 회원 순위에 영향 없음), 그마저도 uid만으로
 // 식별 가능하니 참고용으로 표시합니다.
 export async function getTargetContestDetail(env: Env, contestRowId: string): Promise<RunforceContestDetail | null> {
-  // 가중치는 "지금 등록된 대회 전체의 개최 순서"에서 나오므로 이 대회 한 행만 읽어선
-  // 알 수 없습니다 — 목록을 통째로 가져와서 그 안에서 찾습니다.
-  const contests = await listTargetContests(env);
+  // 가중치는 "같은 시즌에 등록된 대회 전체의 개최 순서"에서 나오므로 이 대회 한 행만
+  // 읽어선 알 수 없습니다 — 먼저 이 대회가 어느 시즌 소속인지(NULL=현재 시즌) 확인한 뒤,
+  // 그 시즌 목록을 통째로 가져와서 그 안에서 찾습니다. 아카이빙된 대회도 이렇게 자기
+  // 시즌 안에서의 순서로 가중치가 나와야 과거 상세 페이지 점수가 그 시즌 리더보드와
+  // 맞습니다(listTargetContests만 썼다면 아카이빙 후 현재 시즌 목록에서 못 찾아 항상
+  // null이 됐을 것입니다).
+  const own = await getTargetContestById(env, contestRowId);
+  if (!own) return null;
+  const contests = await listContestsForSeason(env, own.seasonId);
   const contest = contests.find((c) => c.id === contestRowId);
   if (!contest) return null;
 
@@ -1023,6 +1046,152 @@ export async function getMemberRunforce(env: Env, uid: string): Promise<{ total:
   const breakdown = (breakdownByUid.get(uid) ?? []).sort((a, b) => b.startTimeMs - a.startTimeMs);
   const total = breakdown.reduce((sum, b) => sum + b.score, 0);
   return { total, breakdown };
+}
+
+// ---------- 시즌 아카이빙 ----------
+// 시즌이 끝나면 "지금 등록된 대회 전체"를 다음 시즌으로 넘기지 않고 여기서 마감합니다.
+// 대회/결과 원본(runforce_contests/runforce_results)은 지우지 않고 season_id만 채워서
+// 보존합니다 — 그래야 대회 상세 페이지·CSV export가 아카이빙 후에도 그대로 동작합니다
+// (getTargetContestDetail 참고). 최종 순위표만은 지금(아카이빙 시점)의 멤버십 기준으로
+// 한 번 계산해 runforce_season_leaderboard에 스냅샷으로 저장합니다 — 나중에 다시
+// 계산하면 그새 학기 소속이 바뀐 회원 때문에 값이 달라질 수 있어서입니다.
+
+export type RunforceSeason = {
+  id: string;
+  name: string | null;
+  rangeStartDate: string | null;
+  rangeEndDate: string | null;
+  archivedAt: string;
+  archivedByName: string | null;
+};
+
+type RawSeasonRow = {
+  id: string;
+  name: string | null;
+  range_start_date: string | null;
+  range_end_date: string | null;
+  archived_at: string;
+  archived_by_name: string | null;
+};
+
+function toSeasonRow(row: RawSeasonRow): RunforceSeason {
+  return {
+    id: row.id,
+    name: row.name,
+    rangeStartDate: row.range_start_date,
+    rangeEndDate: row.range_end_date,
+    archivedAt: row.archived_at,
+    archivedByName: row.archived_by_name,
+  };
+}
+
+export async function listRunforceSeasons(env: Env): Promise<RunforceSeason[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    "SELECT id, name, range_start_date, range_end_date, archived_at, archived_by_name FROM runforce_seasons ORDER BY archived_at DESC",
+  ).all<RawSeasonRow>();
+  return results.map(toSeasonRow);
+}
+
+export async function getRunforceSeason(env: Env, id: string): Promise<RunforceSeason | null> {
+  const row = await env.CONTENT_DB.prepare(
+    "SELECT id, name, range_start_date, range_end_date, archived_at, archived_by_name FROM runforce_seasons WHERE id = ?1",
+  )
+    .bind(id)
+    .first<RawSeasonRow>();
+  return row ? toSeasonRow(row) : null;
+}
+
+export type RunforceSeasonLeaderboardEntry = {
+  uid: string;
+  nameSnapshot: string | null;
+  totalScore: number;
+  contestsCounted: number;
+};
+
+// RUNFORCE_LEADERBOARD_EXPORT_COLUMNS(아래)와 같은 방식으로 라우트/렌더가 공유합니다.
+export const RUNFORCE_SEASON_LEADERBOARD_EXPORT_COLUMNS: CsvColumn<RunforceSeasonLeaderboardEntry>[] = [
+  { key: "uid", label: "UID", value: (e) => e.uid },
+  { key: "name", label: "이름", value: (e) => e.nameSnapshot },
+  { key: "totalScore", label: "총점", value: (e) => formatRunforceDisplay(e.totalScore) },
+  { key: "contestsCounted", label: "참가 대회 수", value: (e) => e.contestsCounted },
+];
+
+export async function getRunforceSeasonLeaderboard(env: Env, seasonId: string): Promise<RunforceSeasonLeaderboardEntry[]> {
+  const { results } = await env.CONTENT_DB.prepare(
+    `SELECT uid, name_snapshot, total_score, contests_counted FROM runforce_season_leaderboard
+     WHERE season_id = ?1 ORDER BY total_score DESC`,
+  )
+    .bind(seasonId)
+    .all<{ uid: string; name_snapshot: string | null; total_score: number; contests_counted: number }>();
+  return results.map((r) => ({ uid: r.uid, nameSnapshot: r.name_snapshot, totalScore: r.total_score, contestsCounted: r.contests_counted }));
+}
+
+// 현재 시즌을 마감합니다: (1) 지금 리더보드를 스냅샷으로 얼려서 저장, (2) 지금 등록된
+// 대회 전부를 이 시즌으로 태그(season_id 채움 — 삭제 아님), (3) 다음 시즌을 의식적으로
+// 새로 설정하도록 시즌명/날짜범위를 비우고 자동탐색을 끕니다. 순서가 중요합니다 —
+// 리더보드는 반드시 태그하기 "전에" 계산해야 합니다(계산 자체는 season_id와 무관하게
+// 항상 "현재 시즌" 기준이라 순서를 바꿔도 결과는 같지만, 굳이 나중에 계산할 이유가
+// 없어서 먼저 합니다).
+export async function archiveCurrentRunforceSeason(env: Env, archivedByName: string | null): Promise<{ seasonId: string }> {
+  const currentContests = await listTargetContests(env);
+  if (currentContests.length === 0) {
+    throw new RunforceError("아카이빙할 대회가 없습니다 — 현재 시즌에 등록된 대회가 하나도 없습니다.");
+  }
+
+  const leaderboard = await getRunforceLeaderboard(env);
+  const config = await getRunforceConfig(env);
+  const seasonId = crypto.randomUUID();
+
+  const statements = [
+    env.CONTENT_DB.prepare(
+      `INSERT INTO runforce_seasons (id, name, range_start_date, range_end_date, archived_by_name)
+       VALUES (?1, ?2, ?3, ?4, ?5)`,
+    ).bind(seasonId, config.seasonName, config.rangeStartDate, config.rangeEndDate, archivedByName),
+    ...leaderboard.map((e) =>
+      env.CONTENT_DB.prepare(
+        `INSERT INTO runforce_season_leaderboard (season_id, uid, name_snapshot, total_score, contests_counted)
+         VALUES (?1, ?2, ?3, ?4, ?5)`,
+      ).bind(seasonId, e.uid, e.name, e.totalScore, e.contestsCounted),
+    ),
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET season_id = ?1 WHERE season_id IS NULL").bind(seasonId),
+    env.CONTENT_DB.prepare(
+      `UPDATE runforce_config SET season_name = NULL, range_start_date = NULL, range_end_date = NULL,
+         auto_discovery_enabled = 0, updated_at = datetime('now') WHERE id = 1`,
+    ),
+  ];
+  await env.CONTENT_DB.batch(statements);
+
+  return { seasonId };
+}
+
+// 아카이빙된 시즌을 다시 "현재 시즌"으로 되돌립니다 — 잘못 아카이빙했거나 그 시즌을
+// 이어서 계속하고 싶을 때 씁니다. 지금 이미 진행 중인 현재 시즌 대회가 있으면 두
+// 시즌의 대회가 구분 없이 섞여버리므로(둘 다 season_id가 NULL이 됨) 막습니다 — 먼저
+// 지금 시즌을 아카이빙(또는 초기화)한 뒤에 불러오도록 안내합니다. 복원 후에는
+// runforce_seasons/runforce_season_leaderboard의 스냅샷을 지웁니다 — 다시 현재
+// 시즌이 된 이상 "과거 시즌" 목록에 남아있으면 혼란스럽고, 리더보드는 언제든
+// getRunforceLeaderboard로 다시 계산할 수 있어서 스냅샷을 유지할 이유가 없습니다.
+// 아카이빙 시점의 auto_discovery_enabled 값은 저장해두지 않으므로(껐다는 사실만
+// 남음) 복원 후에도 꺼진 채로 두고, 필요하면 관리자가 설정에서 다시 켭니다.
+export async function restoreRunforceSeason(env: Env, seasonId: string): Promise<void> {
+  const season = await getRunforceSeason(env, seasonId);
+  if (!season) {
+    throw new RunforceError("존재하지 않는 시즌입니다.");
+  }
+
+  const currentContests = await listTargetContests(env);
+  if (currentContests.length > 0) {
+    throw new RunforceError("지금 진행 중인 시즌에 이미 대회가 있어 불러올 수 없습니다 — 먼저 현재 시즌을 아카이빙하거나 초기화하세요.");
+  }
+
+  await env.CONTENT_DB.batch([
+    env.CONTENT_DB.prepare("UPDATE runforce_contests SET season_id = NULL WHERE season_id = ?1").bind(seasonId),
+    env.CONTENT_DB.prepare(
+      `UPDATE runforce_config SET season_name = ?1, range_start_date = ?2, range_end_date = ?3, updated_at = datetime('now') WHERE id = 1`,
+    ).bind(season.name, season.rangeStartDate, season.rangeEndDate),
+    env.CONTENT_DB.prepare("DELETE FROM runforce_season_leaderboard WHERE season_id = ?1").bind(seasonId),
+    env.CONTENT_DB.prepare("DELETE FROM runforce_seasons WHERE id = ?1").bind(seasonId),
+  ]);
 }
 
 // ---------- 자동탐색 큐 (크론이 호출) ----------

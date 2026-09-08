@@ -84,6 +84,13 @@ import {
   type RunforcePlatform,
   RUNFORCE_LEADERBOARD_EXPORT_COLUMNS,
   RUNFORCE_CONTEST_EXPORT_COLUMNS,
+  listRunforceSeasons,
+  getRunforceSeason,
+  getRunforceSeasonLeaderboard,
+  listContestsForSeason,
+  archiveCurrentRunforceSeason,
+  restoreRunforceSeason,
+  RUNFORCE_SEASON_LEADERBOARD_EXPORT_COLUMNS,
 } from "../lib/runforce";
 import {
   getApplyFormConfig,
@@ -119,6 +126,8 @@ import {
   renderRunforceSettings,
   renderRunforceContestDetail,
   renderRunforceLeaderboard,
+  renderRunforceSeasonList,
+  renderRunforceSeasonDetail,
   renderBackstageBotLogs,
   type NoticeFormData,
 } from "../lib/backstageRender";
@@ -1128,6 +1137,87 @@ backstage.get("/runforce/leaderboard/export.csv", async (c) => {
       "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
   });
+});
+
+// ---------- 시즌 아카이빙 ----------
+
+backstage.get("/runforce/seasons", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const seasons = await listRunforceSeasons(c.env);
+  return c.html(renderRunforceSeasonList(seasons));
+});
+
+backstage.get("/runforce/seasons/:id", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const id = c.req.param("id");
+  const season = await getRunforceSeason(c.env, id);
+  if (!season) return c.notFound();
+
+  const [leaderboard, contests] = await Promise.all([getRunforceSeasonLeaderboard(c.env, id), listContestsForSeason(c.env, id)]);
+  return c.html(renderRunforceSeasonDetail(season, leaderboard, contests));
+});
+
+// 아카이빙된 시즌을 다시 현재 시즌으로 되돌립니다(restoreRunforceSeason 참고) — 지금
+// 이미 현재 시즌에 대회가 있으면 실패하므로, 그 경우 시즌 상세 페이지에 에러 메시지와
+// 함께 다시 그립니다.
+backstage.post("/runforce/seasons/:id/restore", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const id = c.req.param("id");
+  try {
+    await restoreRunforceSeason(c.env, id);
+    return c.redirect("/runforce");
+  } catch (err) {
+    const season = await getRunforceSeason(c.env, id);
+    if (!season) return c.notFound();
+    const message = err instanceof RunforceError ? err.message : "시즌 불러오기에 실패했습니다.";
+    const [leaderboard, contests] = await Promise.all([getRunforceSeasonLeaderboard(c.env, id), listContestsForSeason(c.env, id)]);
+    return c.html(renderRunforceSeasonDetail(season, leaderboard, contests, message), 400);
+  }
+});
+
+backstage.get("/runforce/seasons/:id/export.csv", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  const id = c.req.param("id");
+  const season = await getRunforceSeason(c.env, id);
+  if (!season) return c.notFound();
+
+  const entries = await getRunforceSeasonLeaderboard(c.env, id);
+  const requestedCols = c.req.queries("cols");
+  const columns = selectCsvColumns(RUNFORCE_SEASON_LEADERBOARD_EXPORT_COLUMNS, requestedCols);
+  const csv = toCsvDocumentFromColumns(columns, entries);
+  const filename = `runforce-season-${id}.csv`;
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    },
+  });
+});
+
+// 현재 시즌을 마감하고 새 시즌을 위해 설정을 비웁니다 — 대회/결과는 지우지 않고
+// season_id로 태그만 하므로(archiveCurrentRunforceSeason 참고) /runforce/reset과
+// 달리 되돌릴 수 없는 삭제는 아니지만, 시즌명/날짜/자동탐색이 초기화되는 건 맞아서
+// 클라이언트 confirm으로 한 번 더 확인합니다.
+backstage.post("/runforce/seasons/archive", async (c) => {
+  const gate = await requireAdmin(c);
+  if (!gate.ok) return gate.response;
+
+  try {
+    const { seasonId } = await archiveCurrentRunforceSeason(c.env, gate.member.name);
+    return c.redirect(`/runforce/seasons/${seasonId}`);
+  } catch (err) {
+    const message = err instanceof RunforceError ? err.message : "시즌 아카이빙에 실패했습니다.";
+    const [config, contests] = await Promise.all([getRunforceConfig(c.env), listTargetContests(c.env)]);
+    return c.html(renderRunforceSettings(config, contests, message), 400);
+  }
 });
 
 backstage.get("/runforce/:contestId", async (c) => {

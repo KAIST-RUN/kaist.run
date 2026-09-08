@@ -26,6 +26,7 @@ import {
   runforceWeightMultiplier,
   RUNFORCE_LEADERBOARD_EXPORT_COLUMNS,
   RUNFORCE_CONTEST_EXPORT_COLUMNS,
+  RUNFORCE_SEASON_LEADERBOARD_EXPORT_COLUMNS,
   type AtCoderPendingEntry,
   type RunforceDiscoveryQueueEntry,
   type ContestGroup,
@@ -35,6 +36,8 @@ import {
   type RunforceLeaderboardEntry,
   type RunforcePlatform,
   type RunforceRankedRow,
+  type RunforceSeason,
+  type RunforceSeasonLeaderboardEntry,
 } from "./runforce";
 
 const FORM_STYLE = `
@@ -3030,10 +3033,11 @@ function runforceWeightLabel(weightIndex: number): string {
   return `${weightIndex}번째 개최 · ×${multiplier} · 만점 ${formatRunforceDisplay(runforceMaxScoreFor(weightIndex))}`;
 }
 
-function runforceSubnav(active: "targets" | "leaderboard"): string {
+function runforceSubnav(active: "targets" | "leaderboard" | "seasons"): string {
   return `<div class="bs-subnav">
     <a href="/runforce"${active === "targets" ? ' class="active"' : ""}>대상 대회</a>
     <a href="/runforce/leaderboard"${active === "leaderboard" ? ' class="active"' : ""}>리더보드</a>
+    <a href="/runforce/seasons"${active === "seasons" ? ' class="active"' : ""}>과거 시즌</a>
   </div>`;
 }
 
@@ -3251,6 +3255,19 @@ export function renderRunforceSettings(
 
     ${queueCard}
 
+    <div class="bs-card">
+      <p class="bs-card-title">시즌 아카이빙</p>
+      <p class="bs-note" style="margin-bottom:12px">
+        지금 등록된 대회 ${contests.length}개를 이번 시즌으로 마감하고 최종 순위표를 저장합니다.
+        대회·결과 자체는 지워지지 않아서(대회 상세·CSV는 <a href="/runforce/seasons">과거 시즌</a>에서
+        계속 조회 가능) 전체 초기화(아래)와는 다릅니다 — 대신 시즌명·날짜범위·자동탐색 설정은
+        비워지므로 다음 시즌을 새로 설정해야 합니다.
+      </p>
+      <form method="post" action="/runforce/seasons/archive" onsubmit="return confirm('현재 등록된 ${contests.length}개 대회를 이 시즌으로 마감하고 최종 순위표를 저장할까요? 대회·결과는 안 지워지지만, 시즌명/날짜/자동탐색 설정은 초기화됩니다.')">
+        <button type="submit" class="bs-submit">현재 시즌 아카이빙</button>
+      </form>
+    </div>
+
     <div class="bs-danger-zone">
       <p class="bs-card-title">전체 초기화</p>
       <p class="bs-note" style="margin-bottom:12px">
@@ -3403,19 +3420,24 @@ export function renderRunforceContestDetail(
   );
 }
 
-export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): string {
-  // 총점이 같으면 순위도 같게(표준 경기 순위) — 동점자 다음 순위는 인원수만큼
-  // 건너뜁니다(예: 공동 1위가 둘이면 다음은 3위). entries는 이미 totalScore DESC로
-  // 정렬돼서 들어옵니다(getRunforceLeaderboard).
+// 총점이 같으면 순위도 같게(표준 경기 순위) — 동점자 다음 순위는 인원수만큼 건너뜁니다
+// (예: 공동 1위가 둘이면 다음은 3위). entries는 이미 totalScore DESC로 정렬돼서
+// 들어와야 합니다(getRunforceLeaderboard/getRunforceSeasonLeaderboard). 현재 리더보드와
+// 과거 시즌 리더보드가 이 계산을 공유합니다.
+function computeStandardRanks(scores: number[]): number[] {
   let lastScore: number | null = null;
   let lastRank = 0;
-  const ranks = entries.map((e, idx) => {
-    if (lastScore === null || e.totalScore !== lastScore) {
+  return scores.map((score, idx) => {
+    if (lastScore === null || score !== lastScore) {
       lastRank = idx + 1;
-      lastScore = e.totalScore;
+      lastScore = score;
     }
     return lastRank;
   });
+}
+
+export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): string {
+  const ranks = computeStandardRanks(entries.map((e) => e.totalScore));
 
   const rows = entries
     .map(
@@ -3450,6 +3472,113 @@ export function renderRunforceLeaderboard(entries: RunforceLeaderboardEntry[]): 
       </table>
     </div>`
     }
+  `,
+  );
+}
+
+// ---------- RUNFORCE: 과거 시즌 ----------
+
+export function renderRunforceSeasonList(seasons: RunforceSeason[]): string {
+  const list =
+    seasons.length === 0
+      ? `<p class="empty">아직 아카이빙된 시즌이 없습니다 — 대상 대회 탭에서 "현재 시즌 아카이빙"으로 마감할 수 있습니다.</p>`
+      : `<ul class="bs-list">
+          ${seasons
+            .map(
+              (s) => `<li>
+                <a class="title" href="/runforce/seasons/${encodeURIComponent(s.id)}">${escapeHtml(s.name || "(이름 없는 시즌)")}</a>
+                <span class="meta">
+                  ${s.rangeStartDate && s.rangeEndDate ? `${escapeHtml(s.rangeStartDate)} ~ ${escapeHtml(s.rangeEndDate)} · ` : ""}
+                  ${escapeHtml(formatKstDateTime(parseD1DateTime(s.archivedAt)))} 마감${s.archivedByName ? ` · ${escapeHtml(s.archivedByName)}` : ""}
+                </span>
+              </li>`,
+            )
+            .join("\n")}
+        </ul>`;
+
+  return shell(
+    "RUNFORCE 과거 시즌",
+    "runforce",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>RUNFORCE</h1>
+    ${runforceSubnav("seasons")}
+    ${list}
+  `,
+  );
+}
+
+// 과거 시즌 하나의 최종 순위표 + 그 시즌에 쓰인 대회 목록(읽기전용 — 삭제/페어링
+// 버튼 없음, 이름을 누르면 기존 대회 상세 페이지로 그대로 이동해 CSV까지 받을 수
+// 있습니다. getTargetContestDetail이 season_id로 가중치를 다시 계산해주므로 여기서
+// 따로 처리할 게 없습니다).
+export function renderRunforceSeasonDetail(
+  season: RunforceSeason,
+  leaderboard: RunforceSeasonLeaderboardEntry[],
+  contests: RunforceContestSummary[],
+  error?: string,
+): string {
+  const ranks = computeStandardRanks(leaderboard.map((e) => e.totalScore));
+  const rows = leaderboard
+    .map(
+      (e, idx) => `<tr>
+        <td class="num center">${ranks[idx]}</td>
+        <td class="center">${escapeHtml(e.nameSnapshot || "(이름 없음)")}</td>
+        <td class="num center">${formatRunforceDisplay(e.totalScore)}</td>
+        <td class="num center">${e.contestsCounted}</td>
+      </tr>`,
+    )
+    .join("\n");
+
+  const contestList =
+    contests.length === 0
+      ? `<p class="empty">이 시즌에 등록된 대회가 없습니다.</p>`
+      : `<ul class="bs-list">
+          ${contests
+            .map(
+              (c) => `<li>
+                <a class="title" href="/runforce/${encodeURIComponent(c.id)}">[${PLATFORM_LABEL[c.platform]}] ${escapeHtml(c.contestName)}</a>
+                <span class="meta">${escapeHtml(formatKstDateTime(c.startTimeMs))} · ${runforceWeightLabel(c.weightIndex)}</span>
+              </li>`,
+            )
+            .join("\n")}
+        </ul>`;
+
+  return shell(
+    season.name || "RUNFORCE 시즌",
+    "runforce",
+    `
+    <p class="bs-eyebrow">Backstage</p>
+    <h1>${escapeHtml(season.name || "(이름 없는 시즌)")}</h1>
+    ${runforceSubnav("seasons")}
+    <p class="bs-note" style="margin-bottom:16px">
+      <a href="/runforce/seasons" class="bs-cancel">← 과거 시즌 목록</a> ·
+      ${season.rangeStartDate && season.rangeEndDate ? `${escapeHtml(season.rangeStartDate)} ~ ${escapeHtml(season.rangeEndDate)} · ` : ""}
+      ${escapeHtml(formatKstDateTime(parseD1DateTime(season.archivedAt)))} 마감${season.archivedByName ? ` · ${escapeHtml(season.archivedByName)}` : ""}
+    </p>
+
+    ${error ? `<p class="bs-error">${escapeHtml(error)}</p>` : ""}
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      ${renderCsvExportButton(`csv-dialog-season-${encodeURIComponent(season.id)}`, `/runforce/seasons/${encodeURIComponent(season.id)}/export.csv`, "순위표 CSV 다운로드", RUNFORCE_SEASON_LEADERBOARD_EXPORT_COLUMNS)}
+      <form method="post" action="/runforce/seasons/${encodeURIComponent(season.id)}/restore" onsubmit="return confirm('이 시즌을 다시 현재 시즌으로 불러올까요? 지금 진행 중인 시즌에 대회가 있으면 실패합니다.')">
+        <button type="submit" class="bs-submit">이 시즌 불러오기</button>
+      </form>
+    </div>
+
+    ${
+      leaderboard.length === 0
+        ? `<p class="empty">저장된 순위표가 없습니다.</p>`
+        : `<div class="bs-table-wrap">
+      <table class="bs-table">
+        <thead><tr><th class="center">순위</th><th class="center">이름</th><th class="center">총점</th><th class="center">참가 대회 수</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`
+    }
+
+    <p class="bs-card-title" style="margin-top:24px">이 시즌 대회 (${contests.length})</p>
+    ${contestList}
   `,
   );
 }
