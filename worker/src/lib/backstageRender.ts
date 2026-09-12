@@ -212,6 +212,11 @@ const FORM_STYLE = `
   .bs-list .meta a:hover { opacity: 1; }
   .bs-list .pin { color: var(--logo-accent); font-weight: 700; margin-right: 6px; }
   .empty { opacity: 0.5; padding: 20px 6px; font-size: 0.9rem; }
+  /* 승인 대기 목록 정렬 토글(PENDING_SORT_SCRIPT) — 링크가 아니라 버튼이라(리로드 없이
+     클라이언트에서 재정렬) 기본 버튼 스타일을 지우고 링크처럼 보이게 합니다. */
+  .bs-sort-btn { background: none; border: none; padding: 0; font: inherit; color: inherit; opacity: 0.6; cursor: pointer; text-decoration: underline; }
+  .bs-sort-btn:hover { opacity: 0.85; }
+  .bs-sort-btn.active { opacity: 1; font-weight: 700; text-decoration: none; cursor: default; }
   /* max-height + overflow-y: 로그 한 줄이 아주 길면 wrap되면서 페이지 자체가 끝없이
      늘어질 수 있어서(스크롤 성능/체감 렉 문제), 터미널처럼 고정 높이 박스 안에서만
      스크롤되게 가둡니다. */
@@ -1677,10 +1682,18 @@ function parseD1DateTime(value: string): number {
 
 // extraMeta: 승인 대기 목록에서 요청 시각을 보여주기 위한 선택 항목 — 요청 시각순
 // 정렬을 추가하면서, 정렬 기준이 화면에도 보여야 관리자가 헷갈리지 않아서 같이 넣습니다.
-function semesterMemberRowHtml(m: SemesterMemberRow, action: string, extraMeta?: string): string {
+// sortKeys: 클라이언트 정렬용 data-* 속성(name/requested-at) — 지정하면 li에 심어서
+// PENDING_SORT_SCRIPT가 페이지 새로고침 없이 그 자리에서 재정렬합니다.
+function semesterMemberRowHtml(
+  m: SemesterMemberRow,
+  action: string,
+  extraMeta?: string,
+  sortKeys?: { name: string; requestedAtMs: number },
+): string {
   const metaParts = [m.studentId, m.email, `Discord ${m.discordId}`].filter((v): v is string => Boolean(v));
   const meta = [...metaParts.map((p) => escapeHtml(p)), ...(extraMeta ? [extraMeta] : [])].join(" · ");
-  return `<li>
+  const dataAttrs = sortKeys ? ` data-name="${escapeHtml(sortKeys.name)}" data-requested-at="${sortKeys.requestedAtMs}"` : "";
+  return `<li${dataAttrs}>
     ${memberAvatarHtml(m.avatarUrl)}
     <div class="bs-member-body">
       <div class="bs-member-main">
@@ -1692,25 +1705,38 @@ function semesterMemberRowHtml(m: SemesterMemberRow, action: string, extraMeta?:
   </li>`;
 }
 
-// 승인 대기 목록 정렬 기준 — 기본은 "요청 시각 역순"(나중에 신청한 사람이 위)이라,
-// 관리자가 최근 들어온 신청부터 처리할 수 있습니다. "이름"을 고르면 그것도 역순
-// (ㅎ→ㄱ)으로 보여줍니다 — 요청대로 두 기준 다 역순입니다.
-export type PendingSort = "requestedAt" | "name";
+// 승인 대기 목록 정렬 토글 — "이름순"(오름차순)과 "승인 요청 시간순"(최신 신청이 위)을
+// 페이지 리로드 없이 그 자리에서 바꿔 보여줍니다(PENDING_SORT_SCRIPT). 서버는 항상
+// 요청 시각 최신순으로 1차 렌더링하고, 그 뒤 전환은 순수 클라이언트 DOM 재정렬입니다
+// — 정렬값(data-name/data-requested-at)이 이미 각 li에 있어 추가 요청이 필요 없습니다.
+const PENDING_SORT_SCRIPT = `
+  document.querySelectorAll("[data-pending-sort-btn]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var key = btn.getAttribute("data-pending-sort-btn");
+      var list = document.getElementById("pending-member-list");
+      if (!list) return;
 
-function sortPendingMembers(pending: SemesterMemberRow[], sort: PendingSort): SemesterMemberRow[] {
-  const sorted = [...pending];
-  if (sort === "name") {
-    sorted.sort((a, b) => (b.name ?? "").localeCompare(a.name ?? "", "ko"));
-  } else {
-    sorted.sort((a, b) => parseD1DateTime(b.requestedAt) - parseD1DateTime(a.requestedAt));
-  }
-  return sorted;
-}
+      var items = Array.prototype.slice.call(list.children);
+      items.sort(function (a, b) {
+        if (key === "name") return (a.getAttribute("data-name") || "").localeCompare(b.getAttribute("data-name") || "", "ko");
+        return Number(b.getAttribute("data-requested-at")) - Number(a.getAttribute("data-requested-at"));
+      });
+      items.forEach(function (li) { list.appendChild(li); });
 
-function pendingSortToggle(base: string, active: PendingSort): string {
-  const link = (sort: PendingSort, label: string) =>
-    sort === active ? `<strong>${label}</strong>` : `<a href="${base}?pendingSort=${sort}">${label}</a>`;
-  return `<p class="bs-note" style="margin:8px 0 0">정렬: ${link("requestedAt", "승인 요청 시간순(역순)")} · ${link("name", "이름순(역순)")}</p>`;
+      document.querySelectorAll("[data-pending-sort-btn]").forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+    });
+  });
+`;
+
+function pendingSortToggle(): string {
+  return `<p class="bs-note bs-pending-sort" style="margin:8px 0 0">
+    정렬:
+    <button type="button" class="bs-sort-btn active" data-pending-sort-btn="requestedAt">승인 요청 시간순(최신순)</button>
+    ·
+    <button type="button" class="bs-sort-btn" data-pending-sort-btn="name">이름순</button>
+  </p>`;
 }
 
 export function renderSemesterRoster(
@@ -1719,11 +1745,11 @@ export function renderSemesterRoster(
   isCurrent: boolean,
   members: SemesterMemberRow[],
   error?: string,
-  pendingSort: PendingSort = "requestedAt",
 ): string {
-  const pending = sortPendingMembers(
-    members.filter((m) => m.status === "pending"),
-    pendingSort,
+  // 서버 첫 렌더링은 항상 요청 시각 최신순 — JS가 꺼져 있어도(또는 로드 전) 가장
+  // 실용적인 기본값이 보이게 합니다. 이후 정렬 전환은 전부 클라이언트에서 처리합니다.
+  const pending = [...members.filter((m) => m.status === "pending")].sort(
+    (a, b) => parseD1DateTime(b.requestedAt) - parseD1DateTime(a.requestedAt),
   );
   const approved = members.filter((m) => m.status === "approved");
   const base = `/members/semesters/${year}/${season}`;
@@ -1731,7 +1757,7 @@ export function renderSemesterRoster(
   const pendingHtml =
     pending.length === 0
       ? `<p class="empty">승인 대기 중인 요청이 없습니다.</p>`
-      : `<ul class="bs-member-list">
+      : `<ul class="bs-member-list" id="pending-member-list">
           ${pending
             .map((m) =>
               semesterMemberRowHtml(
@@ -1741,6 +1767,7 @@ export function renderSemesterRoster(
                   <form method="post" action="${base}/reject"><input type="hidden" name="uid" value="${escapeHtml(m.uid)}" /><button type="submit" class="bs-danger">거부</button></form>
                 </div>`,
                 `신청: ${escapeHtml(formatKstDateTime(parseD1DateTime(m.requestedAt)))}`,
+                { name: m.name ?? "", requestedAtMs: parseD1DateTime(m.requestedAt) },
               ),
             )
             .join("\n")}
@@ -1801,7 +1828,7 @@ export function renderSemesterRoster(
     </div>
 
     <p class="bs-card-title" style="margin-top:24px">승인 대기 중 (${pending.length})</p>
-    ${pendingSortToggle(base, pendingSort)}
+    ${pendingSortToggle()}
     ${pendingHtml}
 
     <p class="bs-card-title" style="margin-top:24px">승인됨 (${approved.length})</p>
@@ -1812,6 +1839,7 @@ export function renderSemesterRoster(
         <button type="submit" class="bs-danger">이 학기 삭제</button>
       </form>
     </div>
+    <script>${PENDING_SORT_SCRIPT}</script>
   `,
   );
 }
