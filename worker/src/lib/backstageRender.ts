@@ -214,9 +214,10 @@ const FORM_STYLE = `
   .empty { opacity: 0.5; padding: 20px 6px; font-size: 0.9rem; }
   /* 승인 대기 목록 정렬 토글(PENDING_SORT_SCRIPT) — 링크가 아니라 버튼이라(리로드 없이
      클라이언트에서 재정렬) 기본 버튼 스타일을 지우고 링크처럼 보이게 합니다. */
-  .bs-sort-btn { background: none; border: none; padding: 0; font: inherit; color: inherit; opacity: 0.6; cursor: pointer; text-decoration: underline; }
-  .bs-sort-btn:hover { opacity: 0.85; }
-  .bs-sort-btn.active { opacity: 1; font-weight: 700; text-decoration: none; cursor: default; }
+  /* 승인 대기 정렬 토글(PENDING_SORT_SCRIPT) — 버튼 하나가 현재 정렬 기준을 라벨로
+     보여주고 클릭할 때마다 시간순/이름순으로 순환합니다. */
+  .bs-sort-btn { background: none; border: 1px dashed rgba(128,128,128,.4); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 0.85rem; color: inherit; opacity: 0.75; cursor: pointer; }
+  .bs-sort-btn:hover { opacity: 1; background: rgba(128,128,128,.08); }
   /* max-height + overflow-y: 로그 한 줄이 아주 길면 wrap되면서 페이지 자체가 끝없이
      늘어질 수 있어서(스크롤 성능/체감 렉 문제), 터미널처럼 고정 높이 박스 안에서만
      스크롤되게 가둡니다. */
@@ -1705,38 +1706,49 @@ function semesterMemberRowHtml(
   </li>`;
 }
 
-// 승인 대기 목록 정렬 토글 — "이름순"(오름차순)과 "승인 요청 시간순"(최신 신청이 위)을
-// 페이지 리로드 없이 그 자리에서 바꿔 보여줍니다(PENDING_SORT_SCRIPT). 서버는 항상
-// 요청 시각 최신순으로 1차 렌더링하고, 그 뒤 전환은 순수 클라이언트 DOM 재정렬입니다
-// — 정렬값(data-name/data-requested-at)이 이미 각 li에 있어 추가 요청이 필요 없습니다.
-const PENDING_SORT_SCRIPT = `
-  document.querySelectorAll("[data-pending-sort-btn]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var key = btn.getAttribute("data-pending-sort-btn");
-      var list = document.getElementById("pending-member-list");
-      if (!list) return;
+// 승인 대기 목록 정렬 토글 — 버튼 하나가 "지금 어떤 기준으로 정렬돼 있는지"를 그대로
+// 라벨로 보여주고, 클릭할 때마다 시간순↔이름순으로 순환합니다(양쪽을 나란히 두고
+// 고르는 방식이 아니라 상태 하나만 표시). 페이지 리로드 없이 클라이언트에서 그 자리
+// DOM 재정렬만 합니다 — 정렬값(data-name/data-requested-at)이 이미 각 li에 있어
+// 추가 요청이 필요 없습니다.
+const PENDING_SORT_LABEL: Record<"requestedAt" | "name", string> = {
+  requestedAt: "정렬: 승인 요청 시간순(최신순)",
+  name: "정렬: 이름순",
+};
 
+const PENDING_SORT_SCRIPT = `
+  (function () {
+    var labels = ${JSON.stringify(PENDING_SORT_LABEL)};
+    var btn = document.getElementById("pending-sort-toggle");
+    var list = document.getElementById("pending-member-list");
+    if (!btn || !list) return;
+
+    function applySort(key) {
       var items = Array.prototype.slice.call(list.children);
       items.sort(function (a, b) {
         if (key === "name") return (a.getAttribute("data-name") || "").localeCompare(b.getAttribute("data-name") || "", "ko");
         return Number(b.getAttribute("data-requested-at")) - Number(a.getAttribute("data-requested-at"));
       });
       items.forEach(function (li) { list.appendChild(li); });
+      btn.textContent = labels[key];
+      btn.setAttribute("data-current-sort", key);
+    }
 
-      document.querySelectorAll("[data-pending-sort-btn]").forEach(function (b) {
-        b.classList.toggle("active", b === btn);
-      });
+    btn.addEventListener("click", function () {
+      var next = btn.getAttribute("data-current-sort") === "requestedAt" ? "name" : "requestedAt";
+      applySort(next);
     });
-  });
+  })();
 `;
 
 function pendingSortToggle(): string {
-  return `<p class="bs-note bs-pending-sort" style="margin:8px 0 0">
-    정렬:
-    <button type="button" class="bs-sort-btn active" data-pending-sort-btn="requestedAt">승인 요청 시간순(최신순)</button>
-    ·
-    <button type="button" class="bs-sort-btn" data-pending-sort-btn="name">이름순</button>
-  </p>`;
+  return `<button
+    type="button"
+    id="pending-sort-toggle"
+    class="bs-sort-btn"
+    data-current-sort="requestedAt"
+    style="display:block;margin:12px 0 16px;"
+  >${escapeHtml(PENDING_SORT_LABEL.requestedAt)}</button>`;
 }
 
 export function renderSemesterRoster(
