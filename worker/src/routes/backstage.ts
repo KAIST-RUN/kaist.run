@@ -874,7 +874,8 @@ backstage.get("/members/semesters/:year/:season", async (c) => {
   const isCurrent = semesters.some((s) => s.year === year && s.season === season && s.isCurrent);
   if (!semesters.some((s) => s.year === year && s.season === season)) return c.notFound();
 
-  return c.html(renderSemesterRoster(year, season, isCurrent, members));
+  const pendingSort = c.req.query("pendingSort") === "name" ? "name" : "requestedAt";
+  return c.html(renderSemesterRoster(year, season, isCurrent, members, undefined, pendingSort));
 });
 
 backstage.get("/members/semesters/:year/:season/export.csv", async (c) => {

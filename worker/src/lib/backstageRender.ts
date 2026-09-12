@@ -1675,18 +1675,42 @@ function parseD1DateTime(value: string): number {
   return new Date(`${value.replace(" ", "T")}Z`).getTime();
 }
 
-function semesterMemberRowHtml(m: SemesterMemberRow, action: string): string {
+// extraMeta: 승인 대기 목록에서 요청 시각을 보여주기 위한 선택 항목 — 요청 시각순
+// 정렬을 추가하면서, 정렬 기준이 화면에도 보여야 관리자가 헷갈리지 않아서 같이 넣습니다.
+function semesterMemberRowHtml(m: SemesterMemberRow, action: string, extraMeta?: string): string {
   const metaParts = [m.studentId, m.email, `Discord ${m.discordId}`].filter((v): v is string => Boolean(v));
+  const meta = [...metaParts.map((p) => escapeHtml(p)), ...(extraMeta ? [extraMeta] : [])].join(" · ");
   return `<li>
     ${memberAvatarHtml(m.avatarUrl)}
     <div class="bs-member-body">
       <div class="bs-member-main">
         <span class="name">${escapeHtml(m.name || "(이름 없음)")}</span>
       </div>
-      <div class="meta">${metaParts.map((p) => escapeHtml(p)).join(" · ")}</div>
+      <div class="meta">${meta}</div>
     </div>
     ${action}
   </li>`;
+}
+
+// 승인 대기 목록 정렬 기준 — 기본은 "요청 시각 역순"(나중에 신청한 사람이 위)이라,
+// 관리자가 최근 들어온 신청부터 처리할 수 있습니다. "이름"을 고르면 그것도 역순
+// (ㅎ→ㄱ)으로 보여줍니다 — 요청대로 두 기준 다 역순입니다.
+export type PendingSort = "requestedAt" | "name";
+
+function sortPendingMembers(pending: SemesterMemberRow[], sort: PendingSort): SemesterMemberRow[] {
+  const sorted = [...pending];
+  if (sort === "name") {
+    sorted.sort((a, b) => (b.name ?? "").localeCompare(a.name ?? "", "ko"));
+  } else {
+    sorted.sort((a, b) => parseD1DateTime(b.requestedAt) - parseD1DateTime(a.requestedAt));
+  }
+  return sorted;
+}
+
+function pendingSortToggle(base: string, active: PendingSort): string {
+  const link = (sort: PendingSort, label: string) =>
+    sort === active ? `<strong>${label}</strong>` : `<a href="${base}?pendingSort=${sort}">${label}</a>`;
+  return `<p class="bs-note" style="margin:8px 0 0">정렬: ${link("requestedAt", "승인 요청 시간순(역순)")} · ${link("name", "이름순(역순)")}</p>`;
 }
 
 export function renderSemesterRoster(
@@ -1695,8 +1719,12 @@ export function renderSemesterRoster(
   isCurrent: boolean,
   members: SemesterMemberRow[],
   error?: string,
+  pendingSort: PendingSort = "requestedAt",
 ): string {
-  const pending = members.filter((m) => m.status === "pending");
+  const pending = sortPendingMembers(
+    members.filter((m) => m.status === "pending"),
+    pendingSort,
+  );
   const approved = members.filter((m) => m.status === "approved");
   const base = `/members/semesters/${year}/${season}`;
 
@@ -1712,6 +1740,7 @@ export function renderSemesterRoster(
                   <form method="post" action="${base}/approve"><input type="hidden" name="uid" value="${escapeHtml(m.uid)}" /><button type="submit" class="bs-submit">승인</button></form>
                   <form method="post" action="${base}/reject"><input type="hidden" name="uid" value="${escapeHtml(m.uid)}" /><button type="submit" class="bs-danger">거부</button></form>
                 </div>`,
+                `신청: ${escapeHtml(formatKstDateTime(parseD1DateTime(m.requestedAt)))}`,
               ),
             )
             .join("\n")}
@@ -1772,6 +1801,7 @@ export function renderSemesterRoster(
     </div>
 
     <p class="bs-card-title" style="margin-top:24px">승인 대기 중 (${pending.length})</p>
+    ${pendingSortToggle(base, pendingSort)}
     ${pendingHtml}
 
     <p class="bs-card-title" style="margin-top:24px">승인됨 (${approved.length})</p>
