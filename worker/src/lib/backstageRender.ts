@@ -1742,11 +1742,9 @@ const PENDING_SORT_SCRIPT = `
 `;
 
 function pendingSortToggle(): string {
-  return `<div style="display:flex;justify-content:flex-end;margin:12px 0 16px;">
-    <button type="button" id="pending-sort-toggle" class="bs-sort-btn" data-current-sort="requestedAt">
-      ${escapeHtml(PENDING_SORT_LABEL.requestedAt)}
-    </button>
-  </div>`;
+  return `<button type="button" id="pending-sort-toggle" class="bs-sort-btn" data-current-sort="requestedAt">
+    ${escapeHtml(PENDING_SORT_LABEL.requestedAt)}
+  </button>`;
 }
 
 export function renderSemesterRoster(
@@ -1837,8 +1835,10 @@ export function renderSemesterRoster(
       <p class="bs-note" style="margin-top:8px">이름/Discord ID가 정확히 일치하는 기존 유저 한 명을 찾아 곧바로 승인 처리합니다.</p>
     </div>
 
-    <p class="bs-card-title" style="margin-top:24px">승인 대기 중 (${pending.length})</p>
-    ${pendingSortToggle()}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:24px;margin-bottom:16px;">
+      <p class="bs-card-title" style="margin:0;">승인 대기 중 (${pending.length})</p>
+      ${pendingSortToggle()}
+    </div>
     ${pendingHtml}
 
     <p class="bs-card-title" style="margin-top:24px">승인됨 (${approved.length})</p>
