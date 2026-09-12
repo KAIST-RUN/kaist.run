@@ -1712,8 +1712,8 @@ function semesterMemberRowHtml(
 // DOM 재정렬만 합니다 — 정렬값(data-name/data-requested-at)이 이미 각 li에 있어
 // 추가 요청이 필요 없습니다.
 const PENDING_SORT_LABEL: Record<"requestedAt" | "name", string> = {
-  requestedAt: "정렬: 승인 요청 시간순(최신순)",
-  name: "정렬: 이름순",
+  requestedAt: "시간",
+  name: "이름",
 };
 
 const PENDING_SORT_SCRIPT = `
@@ -1742,13 +1742,11 @@ const PENDING_SORT_SCRIPT = `
 `;
 
 function pendingSortToggle(): string {
-  return `<button
-    type="button"
-    id="pending-sort-toggle"
-    class="bs-sort-btn"
-    data-current-sort="requestedAt"
-    style="display:block;margin:12px 0 16px;"
-  >${escapeHtml(PENDING_SORT_LABEL.requestedAt)}</button>`;
+  return `<div style="display:flex;justify-content:flex-end;margin:12px 0 16px;">
+    <button type="button" id="pending-sort-toggle" class="bs-sort-btn" data-current-sort="requestedAt">
+      ${escapeHtml(PENDING_SORT_LABEL.requestedAt)}
+    </button>
+  </div>`;
 }
 
 export function renderSemesterRoster(
