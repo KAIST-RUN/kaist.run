@@ -59,7 +59,7 @@ export default {
     let viewUrl: string | null = null;
     try {
       const raw = await new Response(message.raw).arrayBuffer();
-      const id = await storeRawEmail(env, raw);
+      const id = await storeRawEmail(env, raw, message.headers.get("Message-ID"));
       // backstage.kaist.run specifically (not ALLOWED_ORIGINS[0]/kaist.run) — same
       // page either host (see routes/email.ts::isBackstageHost), but this way the
       // "View Full Email" button opens it inside the backstage nav shell.

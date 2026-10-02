@@ -16,11 +16,15 @@ function keyForId(id: string): string {
   return `${EMAIL_KEY_PREFIX}${id}${EMAIL_KEY_SUFFIX}`;
 }
 
-// 원본 이메일(.eml, raw MIME)을 R2에 저장하고 새 id를 돌려줍니다.
-export async function storeRawEmail(env: Env, raw: ArrayBuffer): Promise<string> {
+// 사이트 URL용 id와 원본 Message-ID는 별개입니다. 원본 헤더는 .eml에도
+// 남지만, 원문을 내려받지 않고 비교할 수 있도록 R2 메타데이터에도 보관합니다.
+// Gmail로 전달하기 전이므로 Gmail 내부 id/IMAP UID는 여기서 알 수 없습니다.
+export async function storeRawEmail(env: Env, raw: ArrayBuffer, messageId?: string | null): Promise<string> {
   const id = randomEmailId();
+  const originalMessageId = messageId?.trim();
   await env.EMAILS.put(keyForId(id), raw, {
     httpMetadata: { contentType: "message/rfc822" },
+    ...(originalMessageId ? { customMetadata: { messageId: originalMessageId } } : {}),
   });
   return id;
 }
