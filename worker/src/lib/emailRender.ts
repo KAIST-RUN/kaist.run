@@ -126,8 +126,10 @@ const PAGE_STYLE = `
   .attachments { margin-top: 20px; font-size: 0.875rem; }
   .attachments ul { padding-left: 20px; }
   .email-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(128,128,128,.25); }
-  .email-list li { border-bottom: 1px solid rgba(128,128,128,.25); }
-  .email-list a { display: flex; flex-direction: column; gap: 2px; padding: 14px 4px; text-decoration: none; color: inherit; }
+  .email-list li { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(128,128,128,.25); }
+  .email-list a { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 14px 4px; text-decoration: none; color: inherit; }
+  .email-list .email-handled { display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 10px 4px; cursor: pointer; }
+  .email-handled input { width: 18px; height: 18px; accent-color: var(--logo-primary); }
   .email-list a:hover { background: rgba(128,128,128,.08); }
   .email-list .subject { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .email-list .note-badge { font-size: 1.3em; }
@@ -294,6 +296,8 @@ export function renderEmailPageBody(id: string, email: Email, state: EmailNoteSt
       <dt>보낸 사람</dt><dd>${escapeHtml(formatAddress(email.from))}</dd>
       <dt>받는 사람</dt><dd>${escapeHtml(formatAddressList(email.to))}</dd>
       <dt>날짜</dt><dd>${escapeHtml(email.date || "-")}</dd>
+      <dt>사이트 메일 ID</dt><dd style="overflow-wrap:anywhere"><code>${escapeHtml(id)}</code></dd>
+      <dt>원본 Message-ID</dt><dd style="overflow-wrap:anywhere">${email.messageId?.trim() ? `<code>${escapeHtml(email.messageId.trim())}</code>` : "원본 메일에 없음"}</dd>
     </dl>
     <div class="toolbar">
       <a href="/email/${safeId}/raw">원본 .eml 다운로드</a>
@@ -366,7 +370,7 @@ export function renderEmailListBody(
                 <span class="addrs">${escapeHtml(item.from)} → ${escapeHtml(item.to)}</span>
                 <span class="date">${noteBadge}${handledBadge}${escapeHtml(formatKstDateTime(item.receivedAt))}</span>
               </div>
-            </a></li>`;
+            </a><label class="email-handled"><input type="checkbox" data-email-id="${safeId}" aria-label="${escapeHtml(item.subject)} 처리 완료" ${state?.handled ? "checked" : ""}></label></li>`;
           })
           .join("\n")}
       </ul>`
@@ -387,7 +391,32 @@ export function renderEmailListBody(
     ${info.hasNext ? `<a href="${emailListHref(info.page + 1, info.filter)}">다음 →</a>` : `<span class="disabled">다음 →</span>`}
   </div>`;
 
-  return `<h1>받은 메일함</h1>${tabs}${rows}${pager}`;
+  return `<h1>받은 메일함</h1>${tabs}<p id="email-status" role="status" aria-live="polite"></p>${rows}${pager}
+    <script>
+      document.querySelectorAll('.email-handled input').forEach(function (checkbox) {
+        checkbox.addEventListener('change', async function () {
+          var checked = checkbox.checked;
+          checkbox.disabled = true;
+          var status = document.getElementById('email-status');
+          status.textContent = '저장 중…';
+          try {
+            var response = await fetch('/email/' + encodeURIComponent(checkbox.dataset.emailId) + '/handled', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ handled: checked ? '1' : '0' })
+            });
+            if (!response.ok || !(response.headers.get('content-type') || '').includes('application/json')) throw new Error();
+            var result = await response.json();
+            if (!result.ok) throw new Error();
+            window.location.reload();
+          } catch (_) {
+            checkbox.checked = !checked;
+            checkbox.disabled = false;
+            status.textContent = '저장하지 못했습니다. 로그인 상태와 연결을 확인하고 다시 시도해주세요.';
+          }
+        });
+      });
+    </script>`;
 }
 
 export function renderEmailListPage(

@@ -3,7 +3,7 @@ import PostalMime from "postal-mime";
 import type { Env } from "../types";
 import { requireSession } from "../lib/authGuard";
 import { getRawEmail } from "../lib/emailStore";
-import { listEmailIndex, listEmailNoteStates, getEmailNoteState, setEmailNoteState } from "../lib/emailIndex";
+import { listEmailIndex, listEmailNoteStates, getEmailNoteState, setEmailNoteState, setEmailHandled } from "../lib/emailIndex";
 import { renderEmailPage, renderEmailListPage, renderErrorPage, type EmailFilter } from "../lib/emailRender";
 import { renderBackstageEmailList, renderBackstageEmailPage, PENDING_APPROVALS_BADGE_MARKER } from "../lib/backstageRender";
 import { hasPendingApprovals } from "../lib/semesters";
@@ -140,6 +140,20 @@ email.post("/:id/note", async (c) => {
   await setEmailNoteState(c.env, id, note, handled);
 
   return c.redirect(handled ? "/email" : `/email/${id}`);
+});
+
+email.post("/:id/handled", async (c) => {
+  const gate = await requireAdmin(c);
+  if (gate) return gate;
+  if (c.req.header("Origin") !== new URL(c.req.url).origin) return c.text("잘못된 요청입니다.", 403);
+
+  const id = c.req.param("id");
+  if (!/^[a-f0-9]{24}$/.test(id)) return c.notFound();
+  if (!(await c.env.EMAILS.head(`emails/${id}.eml`))) return c.notFound();
+  const body = await c.req.parseBody();
+  if (body.handled !== "0" && body.handled !== "1") return c.text("잘못된 처리 상태입니다.", 400);
+  await setEmailHandled(c.env, id, body.handled === "1");
+  return c.json({ ok: true });
 });
 
 email.get("/:id/raw", async (c) => {

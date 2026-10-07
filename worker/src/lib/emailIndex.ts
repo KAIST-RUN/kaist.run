@@ -143,3 +143,11 @@ export async function setEmailNoteState(env: Env, emailId: string, note: string,
     .bind(emailId, trimmed, handled ? 1 : 0)
     .run();
 }
+
+// 목록에서 상태만 바꿀 때는 상세 화면에서 작성한 메모를 덮어쓰지 않습니다.
+export async function setEmailHandled(env: Env, emailId: string, handled: boolean): Promise<void> {
+  await env.CONTENT_DB.prepare(
+    `INSERT INTO email_notes (email_id, note, handled, updated_at) VALUES (?1, '', ?2, datetime('now'))
+     ON CONFLICT (email_id) DO UPDATE SET handled = excluded.handled, updated_at = excluded.updated_at`,
+  ).bind(emailId, handled ? 1 : 0).run();
+}

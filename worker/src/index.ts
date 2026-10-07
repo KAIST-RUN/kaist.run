@@ -55,8 +55,9 @@ export default {
     // 뷰어용 저장(원본 버퍼링 포함) 과정에서 무엇이 실패하든 — R2 한도 초과든,
     // 스트림을 읽다가 나는 오류든 — 기존 Gmail 포워딩(→ 다른 Discord 봇의 알림)은
     // 항상 그대로 이어져야 하므로, 이 블록 전체를 감싸서 실패는 로그만 남기고
-    // 넘어갑니다. message.forward()는 try/catch 밖에서 무조건 실행됩니다.
+    // 넘어갑니다. 저장 실패 여부와 관계없이 Gmail 전달은 시도합니다.
     let viewUrl: string | null = null;
+    let archived = false;
     try {
       const raw = await new Response(message.raw).arrayBuffer();
       const id = await storeRawEmail(env, raw, message.headers.get("Message-ID"));
@@ -78,6 +79,7 @@ export default {
           to: formatAddressList(parsed.to),
           receivedAt: Date.now(),
         });
+        archived = true;
       } catch (err) {
         console.error(`Failed to index email ${id} for the list view`, err);
       }
@@ -86,7 +88,19 @@ export default {
     }
 
     const headers = viewUrl ? new Headers({ "X-Kaist-Run-Email-Url": viewUrl }) : undefined;
-    await message.forward(env.EMAIL_FORWARD_TO, headers);
+    try {
+      await message.forward(env.EMAIL_FORWARD_TO, headers);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      // 인증 차단은 같은 메일을 재시도해도 해결되지 않습니다. 원본과 목록이
+      // 모두 저장된 경우에는 수신 성공으로 끝내 재전송/중복 저장을 유발하지 않습니다.
+      // 저장 실패나 다른 전달 오류는 그대로 전파해 복구 가능한 메일을 잃지 않습니다.
+      if (archived && reason.trim().toLowerCase() === "non-authenticated emails cannot be forwarded") {
+        console.warn("Email archived without forwarding: sender authentication required", { viewUrl });
+        return;
+      }
+      throw error;
+    }
   },
 
   // wrangler.jsonc의 triggers.crons에 두 스케줄이 있습니다 — event.cron으로 구분합니다:
