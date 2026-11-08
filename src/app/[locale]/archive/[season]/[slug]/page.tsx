@@ -10,6 +10,7 @@ import {
 } from "@/lib/content/archive";
 import { markdownToHtml } from "@/lib/markdown";
 import { withBasePath } from "@/lib/basePath";
+import { formatUpdatedAt, updatedAtDateTime } from "@/lib/content/formatUpdatedAt";
 
 export async function generateStaticParams() {
   const bySeason = await Promise.all(
@@ -46,7 +47,6 @@ export default async function ArchiveEntryPage({
       </Link>
       <h1 className="mt-4 text-2xl font-bold sm:text-3xl">{entry.title}</h1>
       <p className="mt-1 text-xs opacity-60 sm:text-sm">{entry.date}</p>
-
       {entry.resources && entry.resources.length > 0 && (
         <div className="mt-6 flex flex-col gap-2">
           <span className="text-sm font-medium opacity-70">{t("resources")}</span>
@@ -97,6 +97,11 @@ export default async function ArchiveEntryPage({
         className="prose prose-neutral mt-8 max-w-none sm:prose-lg dark:prose-invert"
         dangerouslySetInnerHTML={{ __html: html }}
       />
+      <p className="mt-8 text-right text-xs opacity-50 sm:text-sm">
+        <time dateTime={updatedAtDateTime(entry.updated_at)}>
+          {t("edited", { date: formatUpdatedAt(entry.updated_at) })}
+        </time>
+      </p>
     </main>
   );
 }

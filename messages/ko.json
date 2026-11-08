@@ -115,7 +115,8 @@
     "title": "공지사항",
     "empty": "등록된 공지사항이 없습니다.",
     "back": "목록으로",
-    "readMore": "자세히 보기"
+    "readMore": "자세히 보기",
+    "edited": "수정: {date} (KST)"
   },
   "archive": {
     "title": "대회 아카이브",
@@ -125,7 +126,8 @@
     "resources": "자료",
     "judges": "온라인 저지",
     "empty": "등록된 대회가 없습니다.",
-    "back": "목록으로"
+    "back": "목록으로",
+    "edited": "수정: {date} (KST)"
   },
   "footer": {
     "rights": "KAIST RUN. All rights reserved."

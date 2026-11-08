@@ -5,6 +5,7 @@ export type NoticeFrontmatter = {
   title: string;
   date: string;
   pinned?: boolean;
+  updated_at: string;
 };
 
 export type NoticeSummary = NoticeFrontmatter & { slug: string };
@@ -16,6 +17,7 @@ type ApiNotice = {
   date: string;
   pinned: boolean;
   content: string;
+  updated_at: string;
 };
 
 // D1의 listNotices()가 이미 pinned DESC, date DESC로 정렬해서 내려줍니다.

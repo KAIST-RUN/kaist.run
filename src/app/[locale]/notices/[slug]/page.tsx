@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { getAllNoticeSlugs, getNoticeBySlug } from "@/lib/content/notices";
+import { formatUpdatedAt, updatedAtDateTime } from "@/lib/content/formatUpdatedAt";
 import { markdownToHtml } from "@/lib/markdown";
 
 export async function generateStaticParams({ params }: { params: { locale: string } }) {
@@ -34,6 +35,11 @@ export default async function NoticeDetailPage({
         className="prose prose-neutral mt-8 max-w-none sm:prose-lg dark:prose-invert"
         dangerouslySetInnerHTML={{ __html: html }}
       />
+      <p className="mt-8 text-right text-xs opacity-50 sm:text-sm">
+        <time dateTime={updatedAtDateTime(notice.updated_at)}>
+          {t("edited", { date: formatUpdatedAt(notice.updated_at) })}
+        </time>
+      </p>
     </main>
   );
 }

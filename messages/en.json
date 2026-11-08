@@ -115,7 +115,8 @@
     "title": "Notices",
     "empty": "No notices yet.",
     "back": "Back to list",
-    "readMore": "Read more"
+    "readMore": "Read more",
+    "edited": "Edited: {date} (KST)"
   },
   "archive": {
     "title": "Contest Archive",
@@ -125,7 +126,8 @@
     "resources": "Resources",
     "judges": "Online Judges",
     "empty": "No contests yet.",
-    "back": "Back to list"
+    "back": "Back to list",
+    "edited": "Edited: {date} (KST)"
   },
   "footer": {
     "rights": "KAIST RUN. All rights reserved."

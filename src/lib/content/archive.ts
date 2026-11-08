@@ -20,6 +20,7 @@ export type ArchiveFrontmatter = {
   season: Season;
   year: number;
   date: string;
+  updated_at: string;
   resources?: ArchiveResource[];
   judges?: ArchiveJudge[];
 };
@@ -33,6 +34,7 @@ type ApiArchiveEntry = {
   title: string;
   year: number;
   date: string;
+  updated_at: string;
   resources: ArchiveResource[];
   judges: ArchiveJudge[];
   content: string;
